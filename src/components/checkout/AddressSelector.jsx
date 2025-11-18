@@ -7,7 +7,7 @@ import {
   checkHasAddress,
   formatFullAddress,
   validateAddressData 
-} from '../../services/addressService';
+} from '../../services/buyer/addressService';
 import { useToast } from '../../context/ToastContext';
 
 const AddressSelector = ({ onAddressSelect, selectedAddressId = null }) => {
@@ -36,34 +36,36 @@ const AddressSelector = ({ onAddressSelect, selectedAddressId = null }) => {
   const loadAddresses = async () => {
     try {
       setLoading(true);
+      console.log('📥 Loading user addresses...');
+      
       const response = await getUserAddresses();
+      
+      console.log('✅ Address response:', response);
       
       if (response && response.success && response.data) {
         const addressList = Array.isArray(response.data) ? response.data : [response.data];
+        
+        console.log('✅ Loaded addresses:', addressList.length);
         setAddresses(addressList);
         
         // Tự động chọn địa chỉ default nếu có
-        // Backend trả về "default" không phải "isDefault"
         const defaultAddr = addressList.find(addr => addr.default || addr.isDefault);
         if (defaultAddr && onAddressSelect) {
           const defaultIndex = addressList.indexOf(defaultAddr);
+          console.log('✅ Auto-selected default address:', defaultAddr);
           onAddressSelect(defaultAddr, defaultIndex);
         }
       } else {
+        console.log('ℹ️ No addresses found');
         setAddresses([]);
       }
     } catch (err) {
-      console.error('Error loading addresses:', err);
-      console.log('Error message:', err.response?.data?.error || err.response?.data?.message);
+      console.error('❌ Error loading addresses:', err);
+      console.error('❌ Error response:', err.response?.data);
       
-      // Không hiển thị error nếu user chưa có địa chỉ (400/404)
-      if (err.response?.status === 400 || err.response?.status === 404) {
-        console.log('User chưa có địa chỉ, hiển thị form thêm mới');
-        setAddresses([]);
-      } else if (err.response?.status !== 401) {
-        console.warn('Could not load addresses');
-        setAddresses([]);
-      }
+      // addressService đã handle 400/404 → return empty array
+      // Nên không cần check lại ở đây
+      setAddresses([]);
     } finally {
       setLoading(false);
     }

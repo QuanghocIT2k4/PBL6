@@ -98,19 +98,29 @@ const StoreLayout = ({ children }) => {
                             </div>
                             <div>
                               <p className="text-sm font-medium">{branch.name}</p>
-                              <p className="text-xs text-gray-500">{branch.address}</p>
+                              <p className="text-xs text-gray-500">
+                                {typeof branch.address === 'string' 
+                                  ? branch.address 
+                                  : (branch.address?.homeAddress || branch.address?.suggestedName || '') + 
+                                    (branch.address?.ward ? `, ${branch.address.ward}` : '') +
+                                    (branch.address?.province ? `, ${branch.address.province}` : '')
+                                }
+                              </p>
                             </div>
                           </div>
                         </button>
                       ))}
                     </div>
-                    <div className="p-3 border-t border-gray-200">
+                    <div className="p-3 border-t border-gray-200 space-y-2">
                       <Link
                         to="/store-dashboard/management"
-                        className="text-sm text-green-600 hover:text-green-700 font-medium"
+                        className="flex items-center justify-center gap-2 w-full px-3 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white text-sm font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all shadow-sm hover:shadow-md"
                         onClick={() => setShowStoreSwitcher(false)}
                       >
-                        + Quản lý chi nhánh
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/>
+                        </svg>
+                        Thêm store mới
                       </Link>
                     </div>
                   </div>

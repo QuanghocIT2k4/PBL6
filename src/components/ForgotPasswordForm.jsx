@@ -1,30 +1,45 @@
 import { useState } from 'react';
-import * as authService from '../services/authService';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import * as authService from '../services/common/authService';
+import Input from './ui/Input';
+import Button from './ui/Button';
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email('Email không hợp lệ').min(1, 'Email là bắt buộc')
+});
 
 const ForgotPasswordForm = ({ onBackToLogin }) => {
-  const [email, setEmail] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [generalError, setGeneralError] = useState('');
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+    getValues
+  } = useForm({
+    resolver: zodResolver(forgotPasswordSchema),
+    defaultValues: {
+      email: ''
+    }
+  });
+
+  const onSubmit = async (data) => {
+    setGeneralError('');
     
-    // ✅ Gọi API forgot password
-    const result = await authService.forgotPassword(email);
+    const result = await authService.forgotPassword(data.email);
     
     if (result.success) {
       setIsSubmitted(true);
     } else {
-      setError(result.error || 'Không thể gửi email. Vui lòng thử lại.');
+      setGeneralError(result.error || 'Không thể gửi email. Vui lòng thử lại.');
     }
-    
-    setLoading(false);
   };
 
   if (isSubmitted) {
+    const email = getValues('email');
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8">
@@ -64,39 +79,31 @@ const ForgotPasswordForm = ({ onBackToLogin }) => {
           </p>
         </div>
         
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
           {/* Error Message */}
-          {error && (
+          {generalError && (
             <div className="bg-red-50 border border-red-300 text-red-800 px-4 py-3 rounded-md text-sm">
-              {error}
+              {generalError}
             </div>
           )}
 
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-              Email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={loading}
-              className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100"
-              placeholder="Nhập email của bạn"
-            />
-          </div>
+          <Input
+            {...register('email')}
+            type="email"
+            label="Email"
+            placeholder="Nhập email của bạn"
+            error={errors.email?.message}
+            disabled={isSubmitting}
+          />
 
           <div>
-            <button
+            <Button
               type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150 ease-in-out disabled:bg-gray-400 disabled:cursor-not-allowed"
+              loading={isSubmitting}
+              className="w-full"
             >
-              {loading ? 'Đang gửi...' : 'Gửi link reset mật khẩu'}
-            </button>
+              Gửi link reset mật khẩu
+            </Button>
           </div>
 
           <div className="text-center">

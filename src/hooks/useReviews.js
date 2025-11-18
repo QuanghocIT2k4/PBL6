@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { reviewService } from '../services/reviewService';
+import { reviewService } from '../services/buyer/reviewService';
 
 export const useReviews = (productId) => {
   const [reviews, setReviews] = useState([]);

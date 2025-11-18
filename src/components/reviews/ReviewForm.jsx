@@ -1,61 +1,80 @@
 import { useState, useEffect } from 'react';
-import { createReview, updateReview } from '../../services/reviewService';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { createReview, updateReview } from '../../services/buyer/reviewService';
 import { useToast } from '../../context/ToastContext';
 
+const reviewSchema = z.object({
+  rating: z.number().min(1, 'Vui lòng chọn số sao đánh giá').max(5),
+  comment: z.string().min(10, 'Nhận xét phải có ít nhất 10 ký tự').trim(),
+  images: z.array(z.string().url('URL hình ảnh không hợp lệ')).max(5, 'Tối đa 5 hình ảnh').optional().default([])
+});
+
 /**
- * ReviewForm Component
- * Form for creating or editing a review
+ * ReviewForm Component - REDESIGNED
+ * Beautiful, modern form for creating or editing reviews
  */
 const ReviewForm = ({ productVariantId, orderId, existingReview = null, onSuccess, onCancel }) => {
   const { success, error: showError } = useToast();
-  const [rating, setRating] = useState(existingReview?.rating || 5);
-  const [comment, setComment] = useState(existingReview?.comment || '');
-  const [images, setImages] = useState(existingReview?.images || []);
   const [hoveredRating, setHoveredRating] = useState(0);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+    setValue,
+    watch,
+    reset
+  } = useForm({
+    resolver: zodResolver(reviewSchema),
+    defaultValues: {
+      rating: existingReview?.rating || 0,
+      comment: existingReview?.comment || '',
+      images: existingReview?.images || []
+    }
+  });
+
+  const rating = watch('rating');
+  const comment = watch('comment');
+  const images = watch('images');
 
   // Update form when existingReview changes
   useEffect(() => {
     if (existingReview) {
-      setRating(existingReview.rating);
-      setComment(existingReview.comment || '');
-      setImages(existingReview.images || []);
+      reset({
+        rating: existingReview.rating,
+        comment: existingReview.comment || '',
+        images: existingReview.images || []
+      });
     }
-  }, [existingReview]);
+  }, [existingReview, reset]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  // Rating labels
+  const ratingLabels = {
+    1: 'Rất không hài lòng',
+    2: 'Không hài lòng',
+    3: 'Bình thường',
+    4: 'Hài lòng',
+    5: 'Rất hài lòng'
+  };
 
-    if (rating < 1 || rating > 5) {
-      showError('Vui lòng chọn số sao đánh giá');
-      return;
-    }
-
-    // ✅ Validate comment - Backend yêu cầu comment bắt buộc
-    const trimmedComment = comment.trim();
-    if (!trimmedComment) {
-      showError('Vui lòng nhập nhận xét về sản phẩm');
-      return;
-    }
-
-    // ✅ Validate required fields for new review - Backend yêu cầu productVariantId và orderId bắt buộc
+  const onSubmit = async (data) => {
     if (!existingReview) {
       if (!productVariantId) {
         showError('Thiếu thông tin sản phẩm. Vui lòng thử lại.');
         return;
       }
       if (!orderId) {
-        showError('Vui lòng đánh giá từ trang đơn hàng của bạn. Bạn chỉ có thể đánh giá sản phẩm đã mua.');
+        showError('Vui lòng đánh giá từ trang đơn hàng của bạn.');
         return;
       }
     }
 
-    setIsSubmitting(true);
-
     const reviewData = {
-      rating,
-      comment: trimmedComment,
-      images,
+      rating: data.rating,
+      comment: data.comment.trim(),
+      images: data.images || [],
       ...((!existingReview && productVariantId) && { productVariantId }),
       ...((!existingReview && orderId) && { orderId }),
     };
@@ -63,187 +82,203 @@ const ReviewForm = ({ productVariantId, orderId, existingReview = null, onSucces
     try {
       let result;
       if (existingReview) {
-        // Update existing review
         result = await updateReview(existingReview.id, reviewData);
       } else {
-        // Create new review
         result = await createReview(reviewData);
       }
 
       if (result.success) {
-        success(result.message);
+        success(result.message || 'Đánh giá thành công!');
         onSuccess && onSuccess(result.data);
         
-        // Reset form if creating new
         if (!existingReview) {
-          setRating(5);
-          setComment('');
-          setImages([]);
+          reset({
+            rating: 0,
+            comment: '',
+            images: []
+          });
         }
       } else {
-        showError(result.error || 'Không thể gửi đánh giá. Vui lòng thử lại.');
+        showError(result.error || 'Không thể gửi đánh giá');
       }
     } catch (error) {
-      console.error('Error in handleSubmit:', error);
-      // Try to extract error message from API response
-      const errorMessage = error?.response?.data?.error || error?.message || 'Đã có lỗi xảy ra, vui lòng thử lại';
-      showError(errorMessage);
-    } finally {
-      setIsSubmitting(false);
+      showError('Đã xảy ra lỗi khi gửi đánh giá');
     }
   };
 
-  const handleImageUpload = (e) => {
-    const files = Array.from(e.target.files);
-    
-    // TODO: Upload images to server and get URLs
-    // For now, just create preview URLs
-    const newImageUrls = files.map(file => URL.createObjectURL(file));
-    setImages([...images, ...newImageUrls].slice(0, 5)); // Max 5 images
-    
-    showError('Chức năng upload ảnh đang được phát triển. Vui lòng paste URL ảnh vào textarea.');
+  const handleImageUrlAdd = () => {
+    const url = prompt('Nhập URL hình ảnh:');
+    if (url && url.trim()) {
+      const currentImages = images || [];
+      if (currentImages.length >= 5) {
+        showError('Tối đa 5 hình ảnh');
+        return;
+      }
+      setValue('images', [...currentImages, url.trim()]);
+    }
   };
 
-  const removeImage = (index) => {
-    setImages(images.filter((_, i) => i !== index));
+  const handleImageRemove = (index) => {
+    const currentImages = images || [];
+    setValue('images', currentImages.filter((_, i) => i !== index));
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Rating */}
-      <div>
-        <label className="block text-sm font-medium text-gray-900 mb-2">
-          Đánh giá của bạn <span className="text-red-500">*</span>
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      {/* Rating Section */}
+      <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-100">
+        <label className="block text-lg font-bold text-gray-900 mb-4">
+          Đánh giá của bạn
         </label>
-        <div className="flex items-center space-x-2">
+        
+        {/* Star Rating */}
+        <div className="flex items-center justify-center gap-3 mb-4">
           {[1, 2, 3, 4, 5].map((star) => (
             <button
               key={star}
               type="button"
-              onClick={() => setRating(star)}
+              onClick={() => setValue('rating', star)}
               onMouseEnter={() => setHoveredRating(star)}
               onMouseLeave={() => setHoveredRating(0)}
-              className="focus:outline-none transition-transform hover:scale-110"
+              className="transition-all duration-200 transform hover:scale-110"
             >
               <svg
-                className={`w-10 h-10 ${
+                className={`w-12 h-12 ${
                   star <= (hoveredRating || rating)
-                    ? 'text-yellow-400'
+                    ? 'text-yellow-400 fill-yellow-400'
                     : 'text-gray-300'
                 }`}
-                fill="currentColor"
-                viewBox="0 0 20 20"
+                fill={star <= (hoveredRating || rating) ? 'currentColor' : 'none'}
+                stroke="currentColor"
+                viewBox="0 0 24 24"
               >
-                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="1.5"
+                  d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
+                />
               </svg>
             </button>
           ))}
-          <span className="ml-2 text-lg font-semibold text-gray-900">
-            {rating === 5 && '🤩 Tuyệt vời'}
-            {rating === 4 && '😊 Hài lòng'}
-            {rating === 3 && '😐 Bình thường'}
-            {rating === 2 && '😕 Không hài lòng'}
-            {rating === 1 && '😠 Rất tệ'}
-          </span>
         </div>
-      </div>
 
-      {/* Comment */}
-      <div>
-        <label htmlFor="comment" className="block text-sm font-medium text-gray-900 mb-2">
-          Nhận xét của bạn <span className="text-red-500">*</span>
-        </label>
-        <textarea
-          id="comment"
-          rows={5}
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-          placeholder="Chia sẻ trải nghiệm của bạn về sản phẩm này... (bắt buộc)"
-          required
-        />
-        <p className="mt-1 text-sm text-gray-500">
-          {comment.length}/1000 ký tự
-        </p>
-      </div>
-
-      {/* Images */}
-      <div>
-        <label className="block text-sm font-medium text-gray-900 mb-2">
-          Thêm hình ảnh (tùy chọn)
-        </label>
-        
-        {/* Image Previews */}
-        {images.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-3">
-            {images.map((image, index) => (
-              <div key={index} className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200">
-                <img
-                  src={image}
-                  alt={`Preview ${index + 1}`}
-                  className="w-full h-full object-cover"
-                />
-                <button
-                  type="button"
-                  onClick={() => removeImage(index)}
-                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Upload Button */}
-        {images.length < 5 && (
-          <div className="flex items-center space-x-4">
-            <label className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer inline-flex items-center space-x-2">
-              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              <span className="text-sm font-medium text-gray-700">Thêm ảnh</span>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handleImageUpload}
-                className="hidden"
-              />
-            </label>
-            <p className="text-sm text-gray-500">
-              Tối đa 5 ảnh ({5 - images.length} ảnh còn lại)
+        {/* Rating Label */}
+        {rating > 0 && (
+          <div className="text-center">
+            <p className="text-2xl font-bold text-blue-600 mb-1">
+              {ratingLabels[rating]}
+            </p>
+            <p className="text-sm text-gray-600">
+              {rating} / 5 sao
             </p>
           </div>
         )}
       </div>
 
+      {/* Comment Section */}
+      <div>
+        <label className="block text-sm font-bold text-gray-900 mb-3">
+          Nhận xét của bạn <span className="text-red-500">*</span>
+        </label>
+        <textarea
+          {...register('comment')}
+          rows={5}
+          className={`w-full px-4 py-3 border-2 rounded-xl focus:ring-2 transition-all resize-none ${
+            errors.comment ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
+          }`}
+          placeholder="Chia sẻ cảm nhận của bạn về sản phẩm này... (Bắt buộc)"
+          disabled={isSubmitting}
+        />
+        {errors.comment && (
+          <p className="mt-1 text-sm text-red-600">{errors.comment.message}</p>
+        )}
+        <div className="flex items-center justify-between mt-2">
+          <p className="text-xs text-gray-500">
+            Tối thiểu 10 ký tự
+          </p>
+          <p className={`text-xs ${comment.length >= 10 ? 'text-green-600' : 'text-gray-400'}`}>
+            {comment.length} ký tự
+          </p>
+        </div>
+      </div>
+
+      {/* Images Section */}
+      <div>
+        <label className="block text-sm font-bold text-gray-900 mb-3">
+          Hình ảnh (Tùy chọn)
+        </label>
+        
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-3">
+          {(images || []).map((img, index) => (
+            <div key={index} className="relative group aspect-square">
+              <img
+                src={img}
+                alt={`Review ${index + 1}`}
+                className="w-full h-full object-cover rounded-lg border-2 border-gray-200"
+              />
+              <button
+                type="button"
+                onClick={() => handleImageRemove(index)}
+                className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ))}
+          
+          {(images || []).length < 5 && (
+            <button
+              type="button"
+              onClick={handleImageUrlAdd}
+              className="aspect-square border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all flex flex-col items-center justify-center text-gray-400 hover:text-blue-500"
+            >
+              <svg className="w-8 h-8 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span className="text-xs font-medium">Thêm ảnh</span>
+            </button>
+          )}
+        </div>
+        
+        <p className="text-xs text-gray-500">
+          Tối đa 5 hình ảnh. Click "Thêm ảnh" để thêm URL hình ảnh.
+        </p>
+      </div>
+
       {/* Action Buttons */}
-      <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
+      <div className="flex items-center gap-3 pt-4 border-t border-gray-200">
         {onCancel && (
           <button
             type="button"
             onClick={onCancel}
             disabled={isSubmitting}
-            className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all disabled:opacity-50"
           >
             Hủy
           </button>
         )}
+        
         <button
           type="submit"
-          disabled={isSubmitting || rating < 1}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+          disabled={isSubmitting || rating === 0 || !comment.trim()}
+          className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-bold hover:from-blue-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
         >
-          {isSubmitting && (
-            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
+          {isSubmitting ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Đang gửi...
+            </span>
+          ) : (
+            <span>
+              {existingReview ? 'Cập nhật đánh giá' : '✍️ Gửi đánh giá'}
+            </span>
           )}
-          <span>{existingReview ? 'Cập nhật' : 'Gửi đánh giá'}</span>
         </button>
       </div>
     </form>
@@ -251,4 +286,3 @@ const ReviewForm = ({ productVariantId, orderId, existingReview = null, onSucces
 };
 
 export default ReviewForm;
-

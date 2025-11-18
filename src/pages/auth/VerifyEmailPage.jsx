@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import * as authService from '../../services/authService';
+import * as authService from '../../services/common/authService';
 import Button from '../../components/ui/Button';
 
 const VerifyEmailPage = () => {

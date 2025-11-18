@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { getStoresByOwnerId } from '../services/storeService';
+import { getStoresByOwnerId } from '../services/common/storeService';
 import { useAuth } from './AuthContext';
 
 const StoreContext = createContext();

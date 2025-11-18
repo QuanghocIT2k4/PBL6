@@ -1,5 +1,5 @@
 import useSWR, { useSWRConfig } from 'swr';
-import { getCategories, getProductVariantsByCategory, searchProductVariants } from '../services/productService';
+import { getCategories, getProductVariantsByCategory, searchProductVariants } from '../services/common/productService';
 
 /**
  * ✅ SWR Fetcher cho Products - DÙNG PRODUCT VARIANTS TRỰC TIẾP

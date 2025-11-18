@@ -1,225 +1,250 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import useSWR from 'swr';
+import { Link } from 'react-router-dom';
+import { getPendingStores } from '../../services/admin/adminStoreService';
+import { getPendingProducts } from '../../services/admin/adminProductService';
+import { getPendingVariants } from '../../services/admin/adminVariantService';
+import { getAllUsers } from '../../services/admin/adminUserService';
+import { getAllPromotions } from '../../services/admin/adminPromotionService';
 
 const AdminDashboard = () => {
-  const [stats, setStats] = useState({
-    pendingStores: 12,
-    pendingProducts: 45,
-    pendingVariants: 23,
-    totalStores: 156,
-    newComplaints: 8,
-    pendingReports: 5,
-    totalUsers: 1247,
-    totalOrders: 8934
-  });
+  // Fetch summary data
+  const { data: pendingStoresData } = useSWR(
+    'admin-pending-stores-count',
+    () => getPendingStores({ page: 0, size: 1 }),
+    { revalidateOnFocus: false }
+  );
 
-  const [recentActivities, setRecentActivities] = useState([
-    {
-      id: 1,
-      type: 'store_approval',
-      message: 'Store "TechPro Store" đã được duyệt',
-      time: '2 phút trước',
-      status: 'success'
-    },
-    {
-      id: 2,
-      type: 'product_rejection',
-      message: 'Sản phẩm "iPhone 15 Pro" bị từ chối - Thiếu thông tin',
-      time: '15 phút trước',
-      status: 'warning'
-    },
-    {
-      id: 3,
-      type: 'complaint',
-      message: 'Khiếu nại mới từ khách hàng về đơn hàng #ORD-1234',
-      time: '1 giờ trước',
-      status: 'error'
-    },
-    {
-      id: 4,
-      type: 'variant_approval',
-      message: 'Biến thể "128GB - Màu đen" đã được duyệt',
-      time: '2 giờ trước',
-      status: 'success'
-    },
-    {
-      id: 5,
-      type: 'report',
-      message: 'Báo cáo vi phạm từ store "ABC Shop"',
-      time: '3 giờ trước',
-      status: 'warning'
-    }
-  ]);
+  const { data: pendingProductsData } = useSWR(
+    'admin-pending-products-count',
+    () => getPendingProducts({ page: 0, size: 1 }),
+    { revalidateOnFocus: false }
+  );
 
-  const getActivityIcon = (type) => {
-    switch (type) {
-      case 'store_approval':
-        return '🏪';
-      case 'product_rejection':
-        return '📦';
-      case 'complaint':
-        return '⚠️';
-      case 'variant_approval':
-        return '🔧';
-      case 'report':
-        return '📊';
-      default:
-        return '📋';
-    }
-  };
+  const { data: pendingVariantsData } = useSWR(
+    'admin-pending-variants-count',
+    () => getPendingVariants({ page: 0, size: 1 }),
+    { revalidateOnFocus: false }
+  );
 
-  const getActivityColor = (status) => {
-    switch (status) {
-      case 'success':
-        return 'text-green-600 bg-green-100';
-      case 'warning':
-        return 'text-yellow-600 bg-yellow-100';
-      case 'error':
-        return 'text-red-600 bg-red-100';
-      default:
-        return 'text-gray-600 bg-gray-100';
-    }
-  };
+  const { data: usersData } = useSWR(
+    'admin-users-count',
+    () => getAllUsers({ page: 0, size: 1 }),
+    { revalidateOnFocus: false }
+  );
+
+  const { data: promotionsData } = useSWR(
+    'admin-promotions-count',
+    () => getAllPromotions({ page: 0, size: 1 }),
+    { revalidateOnFocus: false }
+  );
+
+  const pendingStoresCount = pendingStoresData?.data?.totalElements || 0;
+  const pendingProductsCount = pendingProductsData?.data?.totalElements || 0;
+  const pendingVariantsCount = pendingVariantsData?.data?.totalElements || 0;
+  const totalUsersCount = usersData?.data?.totalElements || 0;
+  const totalPromotionsCount = promotionsData?.data?.totalElements || 0;
 
   return (
-    <div className="space-y-6">
+    <div className="p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-            <p className="text-gray-600 mt-1">Quản lý và giám sát hệ thống</p>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="text-sm text-gray-500">
-              Cập nhật lần cuối: {new Date().toLocaleString('vi-VN')}
+        <div className="bg-gradient-to-r from-slate-100 to-gray-100 rounded-2xl p-6">
+          <div className="bg-white rounded-2xl p-8 shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-gradient-to-br from-slate-600 to-slate-700 rounded-2xl flex items-center justify-center shadow-lg">
+                <span className="text-4xl">👑</span>
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold mb-2">
+                  <span className="text-slate-700">Admin</span> <span className="text-slate-600">Dashboard</span>
+                </h1>
+                <p className="text-gray-600 text-base">Tổng quan hệ thống E-Commerce</p>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Store chờ duyệt</p>
-                <p className="text-3xl font-bold text-yellow-600">{stats.pendingStores}</p>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+          {/* Pending Stores */}
+          <Link
+            to="/admin-dashboard/stores"
+            className="bg-white rounded-xl p-6 border-2 border-gray-200 hover:shadow-xl transition-all hover:border-yellow-300"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center">
+                <span className="text-3xl">🏪</span>
               </div>
-              <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-                <span className="text-2xl">🏪</span>
-              </div>
+              <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-bold">
+                Chờ duyệt
+              </span>
             </div>
-            <div className="mt-4">
-              <span className="text-sm text-yellow-600 font-medium">Cần xử lý ngay</span>
-            </div>
-          </div>
+            <h3 className="text-gray-600 text-sm font-medium mb-2">Cửa hàng chờ duyệt</h3>
+            <p className="text-4xl font-bold text-gray-900">{pendingStoresCount}</p>
+            <p className="text-xs text-gray-500 mt-2">Cần xét duyệt</p>
+          </Link>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Sản phẩm chờ duyệt</p>
-                <p className="text-3xl font-bold text-blue-600">{stats.pendingProducts}</p>
+          {/* Pending Products */}
+          <Link
+            to="/admin-dashboard/products"
+            className="bg-white rounded-xl p-6 border-2 border-gray-200 hover:shadow-xl transition-all hover:border-blue-300"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                <span className="text-3xl">📦</span>
               </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <span className="text-2xl">📦</span>
-              </div>
+              <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-bold">
+                Chờ duyệt
+              </span>
             </div>
-            <div className="mt-4">
-              <span className="text-sm text-blue-600 font-medium">Cần kiểm tra</span>
-            </div>
-          </div>
+            <h3 className="text-gray-600 text-sm font-medium mb-2">Sản phẩm chờ duyệt</h3>
+            <p className="text-4xl font-bold text-gray-900">{pendingProductsCount}</p>
+            <p className="text-xs text-gray-500 mt-2">Cần xét duyệt</p>
+          </Link>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Khiếu nại mới</p>
-                <p className="text-3xl font-bold text-red-600">{stats.newComplaints}</p>
+          {/* Pending Variants */}
+          <Link
+            to="/admin-dashboard/products"
+            className="bg-white rounded-xl p-6 border-2 border-gray-200 hover:shadow-xl transition-all hover:border-indigo-300"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
+                <span className="text-3xl">🎨</span>
               </div>
-              <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                <span className="text-2xl">⚠️</span>
-              </div>
+              <span className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-xs font-bold">
+                Chờ duyệt
+              </span>
             </div>
-            <div className="mt-4">
-              <span className="text-sm text-red-600 font-medium">Cần xử lý khẩn cấp</span>
-            </div>
-          </div>
+            <h3 className="text-gray-600 text-sm font-medium mb-2">Biến thể chờ duyệt</h3>
+            <p className="text-4xl font-bold text-gray-900">{pendingVariantsCount}</p>
+            <p className="text-xs text-gray-500 mt-2">Cần xét duyệt</p>
+          </Link>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Tổng Store</p>
-                <p className="text-3xl font-bold text-green-600">{stats.totalStores}</p>
+          {/* Total Users */}
+          <Link
+            to="/admin-dashboard/users"
+            className="bg-white rounded-xl p-6 border-2 border-gray-200 hover:shadow-xl transition-all hover:border-purple-300"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                <span className="text-3xl">👥</span>
               </div>
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <span className="text-2xl">✅</span>
-              </div>
+              <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-bold">
+                Tổng số
+              </span>
             </div>
-            <div className="mt-4">
-              <span className="text-sm text-green-600 font-medium">Đang hoạt động</span>
-            </div>
-          </div>
-        </div>
+            <h3 className="text-gray-600 text-sm font-medium mb-2">Người dùng</h3>
+            <p className="text-4xl font-bold text-gray-900">{totalUsersCount}</p>
+            <p className="text-xs text-gray-500 mt-2">Đã đăng ký</p>
+          </Link>
 
-        {/* Recent Activities */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">Hoạt động gần đây</h2>
-            <p className="text-gray-600 mt-1">Các hoạt động quản lý mới nhất</p>
-          </div>
-          <div className="p-6">
-            <div className="space-y-4">
-              {recentActivities.map((activity) => (
-                <div key={activity.id} className="flex items-start gap-4 p-4 rounded-lg hover:bg-gray-50 transition-colors">
-                  <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                    <span className="text-lg">{getActivityIcon(activity.type)}</span>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-gray-900 font-medium">{activity.message}</p>
-                    <p className="text-sm text-gray-500 mt-1">{activity.time}</p>
-                  </div>
-                  <div className={`px-3 py-1 rounded-full text-xs font-medium ${getActivityColor(activity.status)}`}>
-                    {activity.status === 'success' ? 'Thành công' : 
-                     activity.status === 'warning' ? 'Cảnh báo' : 'Lỗi'}
-                  </div>
-                </div>
-              ))}
+          {/* Total Promotions */}
+          <Link
+            to="/admin-dashboard/promotions"
+            className="bg-white rounded-xl p-6 border-2 border-gray-200 hover:shadow-xl transition-all hover:border-orange-300"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
+                <span className="text-3xl">🎁</span>
+              </div>
+              <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-bold">
+                Tổng số
+              </span>
             </div>
-          </div>
+            <h3 className="text-gray-600 text-sm font-medium mb-2">Khuyến mãi</h3>
+            <p className="text-4xl font-bold text-gray-900">{totalPromotionsCount}</p>
+            <p className="text-xs text-gray-500 mt-2">Đã tạo</p>
+          </Link>
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Duyệt Store</h3>
-            <p className="text-gray-600 mb-4">Kiểm tra và duyệt các store đang chờ</p>
-            <button className="w-full bg-yellow-600 text-white py-2 px-4 rounded-lg hover:bg-yellow-700 transition-colors">
-              Xem Store chờ duyệt
-            </button>
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Thao tác nhanh</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link
+              to="/admin-dashboard/stores"
+              className="flex items-center gap-4 p-5 bg-gradient-to-br from-yellow-50 to-amber-50 rounded-xl hover:shadow-lg transition-all border-2 border-transparent hover:border-yellow-300"
+            >
+              <div className="w-14 h-14 bg-yellow-100 rounded-xl flex items-center justify-center">
+                <span className="text-3xl">🏪</span>
+              </div>
+              <div>
+                <p className="font-bold text-gray-900">Duyệt cửa hàng</p>
+                <p className="text-sm text-gray-600">{pendingStoresCount} chờ duyệt</p>
+              </div>
+            </Link>
+
+            <Link
+              to="/admin-dashboard/products"
+              className="flex items-center gap-4 p-5 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl hover:shadow-lg transition-all border-2 border-transparent hover:border-blue-300"
+            >
+              <div className="w-14 h-14 bg-blue-100 rounded-xl flex items-center justify-center">
+                <span className="text-3xl">📦</span>
+              </div>
+              <div>
+                <p className="font-bold text-gray-900">Duyệt sản phẩm</p>
+                <p className="text-sm text-gray-600">{pendingProductsCount + pendingVariantsCount} chờ duyệt</p>
+              </div>
+            </Link>
+
+            <Link
+              to="/admin-dashboard/users"
+              className="flex items-center gap-4 p-5 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl hover:shadow-lg transition-all border-2 border-transparent hover:border-purple-300"
+            >
+              <div className="w-14 h-14 bg-purple-100 rounded-xl flex items-center justify-center">
+                <span className="text-3xl">👥</span>
+              </div>
+              <div>
+                <p className="font-bold text-gray-900">Quản lý người dùng</p>
+                <p className="text-sm text-gray-600">{totalUsersCount} người dùng</p>
+              </div>
+            </Link>
+
+            <Link
+              to="/admin-dashboard/promotions"
+              className="flex items-center gap-4 p-5 bg-gradient-to-br from-orange-50 to-red-50 rounded-xl hover:shadow-lg transition-all border-2 border-transparent hover:border-orange-300"
+            >
+              <div className="w-14 h-14 bg-orange-100 rounded-xl flex items-center justify-center">
+                <span className="text-3xl">🎁</span>
+              </div>
+              <div>
+                <p className="font-bold text-gray-900">Khuyến mãi</p>
+                <p className="text-sm text-gray-600">{totalPromotionsCount} khuyến mãi</p>
+              </div>
+            </Link>
+          </div>
+        </div>
+
+        {/* System Info */}
+        <div className="bg-gradient-to-br from-gray-50 to-slate-50 rounded-xl border-2 border-gray-200 p-8">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="w-16 h-16 bg-gradient-to-br from-gray-700 to-slate-700 rounded-xl flex items-center justify-center">
+              <span className="text-3xl">⚙️</span>
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Thông tin hệ thống</h2>
+              <p className="text-gray-600">E-Commerce Platform Admin Panel</p>
+            </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Duyệt Sản phẩm</h3>
-            <p className="text-gray-600 mb-4">Kiểm tra và duyệt các sản phẩm mới</p>
-            <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
-              Xem Sản phẩm chờ duyệt
-            </button>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Xử lý Khiếu nại</h3>
-            <p className="text-gray-600 mb-4">Xem và xử lý các khiếu nại từ khách hàng</p>
-            <button className="w-full bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors">
-              Xem Khiếu nại
-            </button>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Báo cáo Vi phạm</h3>
-            <p className="text-gray-600 mb-4">Xem và xử lý các báo cáo vi phạm</p>
-            <button className="w-full bg-orange-600 text-white py-2 px-4 rounded-lg hover:bg-orange-700 transition-colors">
-              Xem Báo cáo
-            </button>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white rounded-xl p-6 border border-gray-200">
+              <p className="text-sm text-gray-600 mb-2">Tổng cửa hàng chờ duyệt</p>
+              <p className="text-3xl font-bold text-yellow-600">{pendingStoresCount}</p>
+            </div>
+            <div className="bg-white rounded-xl p-6 border border-gray-200">
+              <p className="text-sm text-gray-600 mb-2">Tổng sản phẩm chờ duyệt</p>
+              <p className="text-3xl font-bold text-blue-600">{pendingProductsCount + pendingVariantsCount}</p>
+            </div>
+            <div className="bg-white rounded-xl p-6 border border-gray-200">
+              <p className="text-sm text-gray-600 mb-2">Tổng người dùng</p>
+              <p className="text-3xl font-bold text-purple-600">{totalUsersCount}</p>
+            </div>
           </div>
         </div>
       </div>
+    </div>
   );
 };
 

@@ -1,5 +1,5 @@
 import useSWR from 'swr';
-import { searchProductVariants, getCategories } from '../services/productService';
+import { searchProductVariants, getCategories } from '../services/common/productService';
 
 /**
  * ✅ SWR Fetcher cho Search

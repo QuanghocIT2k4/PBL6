@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { userService } from '../services/userService';
-import * as authService from '../services/authService';
+import { userService } from '../services/admin/userService';
+import * as authService from '../services/common/authService';
 import { useAuth } from '../context/AuthContext';
-import { createOrder as createOrderAPI, getMyOrders } from '../services/orderService';
-import { clearCart } from '../services/cartService';
+import { createOrder as createOrderAPI, getMyOrders } from '../services/buyer/orderService';
+import { clearCart } from '../services/buyer/cartService';
 
 export const useProfile = () => {
   const { user } = useAuth();
@@ -112,8 +112,7 @@ export const useProfile = () => {
     if (!user?.id) return;
     
     try {
-      // ✅ Dùng orderService.getMyOrders() thay vì userService (mock)
-      const { getMyOrders } = await import('../services/orderService');
+      // ✅ Dùng orderService.getMyOrders() - đã import ở đầu file
       const response = await getMyOrders();
       
       if (response.data) {

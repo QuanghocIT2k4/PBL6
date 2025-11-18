@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import OrderCard from './OrderCard';
-import { getMyOrders, cancelOrder } from '../../services/orderService';
+import { getMyOrders, cancelOrder } from '../../services/buyer/orderService';
 import { useToast } from '../../context/ToastContext';
+import { confirmCancelOrder } from '../../utils/sweetalert';
 
 /**
  * OrderList Component
  * Displays list of user's orders with filtering and pagination
  */
-const OrderList = ({ onReview }) => {
+const OrderList = () => {
   const { success, error: showError } = useToast();
   const [currentPage, setCurrentPage] = useState(0);
   const [statusFilter, setStatusFilter] = useState(null);
@@ -34,13 +35,20 @@ const OrderList = ({ onReview }) => {
 
   // Handle cancel order
   const handleCancel = async (order) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn hủy đơn hàng #${order.orderNumber || order.id.slice(-8)}?`)) {
-      return;
-    }
+    const confirmed = await confirmCancelOrder(`#${order.orderNumber || order.id.slice(-8)}`);
+    if (!confirmed) return;
 
     const result = await cancelOrder(order.id);
     if (result.success) {
-      success(result.message);
+      // Check if order was paid
+      const isPaid = order.paymentStatus === 'PAID' || order.payment?.status === 'PAID';
+      
+      if (isPaid) {
+        success('Đơn hàng đã được hủy. Tiền sẽ được hoàn lại vào tài khoản ngân hàng của bạn trong 1-3 ngày làm việc.');
+      } else {
+        success(result.message);
+      }
+      
       mutate(); // Refresh orders list
     } else {
       showError(result.error);
@@ -52,7 +60,7 @@ const OrderList = ({ onReview }) => {
     { value: null, label: 'Tất cả', icon: '📋' },
     { value: 'PENDING', label: 'Chờ xác nhận', icon: '⏳' },
     { value: 'CONFIRMED', label: 'Đã xác nhận', icon: '✓' },
-    { value: 'SHIPPED', label: 'Đang giao', icon: '🚚' },
+    { value: 'SHIPPING', label: 'Đang giao', icon: '🚚' },
     { value: 'DELIVERED', label: 'Đã giao', icon: '✅' },
     { value: 'CANCELLED', label: 'Đã hủy', icon: '❌' },
   ];
@@ -75,10 +83,10 @@ const OrderList = ({ onReview }) => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Status Filter Tabs */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <div className="flex items-center space-x-2 overflow-x-auto">
+    <div className="space-y-4">
+      {/* Status Filter Tabs - Shopee Style */}
+      <div className="bg-white border border-gray-200 rounded-lg">
+        <div className="flex items-center border-b border-gray-200 overflow-x-auto">
           {statusFilters.map((filter) => (
             <button
               key={filter.value || 'all'}
@@ -86,14 +94,17 @@ const OrderList = ({ onReview }) => {
                 setStatusFilter(filter.value);
                 setCurrentPage(0);
               }}
-              className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`flex-shrink-0 px-6 py-3 text-sm font-medium transition-colors relative ${
                 statusFilter === filter.value
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'text-blue-600'
+                  : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               <span className="mr-2">{filter.icon}</span>
               {filter.label}
+              {statusFilter === filter.value && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
+              )}
             </button>
           ))}
         </div>
@@ -138,7 +149,7 @@ const OrderList = ({ onReview }) => {
                 key={order.id}
                 order={order}
                 onCancel={handleCancel}
-                onReview={onReview}
+                onRefresh={mutate}
               />
             ))}
           </div>

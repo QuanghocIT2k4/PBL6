@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 import MainLayout from '../../layouts/MainLayout';
-import { getStoreById as getStoreByIdAPI } from '../../services/storeService';
-import { getProductVariantsByStore } from '../../services/productService';
+import { getStoreById as getStoreByIdAPI } from '../../services/common/storeService';
+import { getProductVariantsByStore } from '../../services/common/productService';
 import { useToast } from '../../context/ToastContext';
 import { getFullImageUrl } from '../../utils/imageUtils';
 

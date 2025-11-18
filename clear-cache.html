@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Cache</title>
+</head>
+<body>
+    <h1>Clearing cache...</h1>
+    <script>
+        localStorage.clear();
+        sessionStorage.clear();
+        alert('Cache cleared! Redirecting to app...');
+        window.location.href = '/store-dashboard/orders';
+    </script>
+</body>
+</html>

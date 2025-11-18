@@ -1,4 +1,5 @@
 import { useState, memo } from 'react';
+import { motion } from 'framer-motion';
 import ProductSkeleton from './ProductSkeleton';
 
 const ProductSection = memo(({ 
@@ -25,6 +26,32 @@ const ProductSection = memo(({
   const headerMargin = compact ? 'mb-4' : 'mb-12';
   const titleSize = compact ? 'text-2xl' : 'text-2xl';
 
+  // ✅ Framer Motion animations
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+        delayChildren: 0.1
+      }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20, scale: 0.95 },
+    show: { 
+      opacity: 1, 
+      y: 0, 
+      scale: 1,
+      transition: {
+        type: "spring",
+        stiffness: 300,
+        damping: 24
+      }
+    }
+  };
+
   return (
     <section className={`${sectionPadding} ${backgroundColor}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -48,13 +75,25 @@ const ProductSection = memo(({
           /* ✅ SKELETON LOADING - Hiển thị placeholder mượt mà */
           <ProductSkeleton count={5} />
         ) : (
-          /* Grid sản phẩm */
-          <div className={`grid grid-cols-2 sm:grid-cols-3 ${columns} gap-4`}>
+          /* Grid sản phẩm với Framer Motion */
+          <motion.div 
+            className={`grid grid-cols-2 sm:grid-cols-3 ${columns} gap-4`}
+            variants={containerVariants}
+            initial="hidden"
+            animate="show"
+          >
             {products.map((product, index) => (
-              <div 
+              <motion.div 
                 key={product.id || index} 
+                variants={itemVariants}
+                whileHover={{ 
+                  scale: 1.05, 
+                  y: -8,
+                  transition: { type: "spring", stiffness: 400, damping: 17 }
+                }}
+                whileTap={{ scale: 0.98 }}
                 onClick={() => onProductClick?.(product)}
-                className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer group hover:scale-105 hover:-translate-y-1"
+                className="bg-white rounded-lg shadow-md overflow-hidden cursor-pointer group"
               >
                 {/* Ảnh sản phẩm */}
                 <div className="relative overflow-hidden">
@@ -137,17 +176,19 @@ const ProductSection = memo(({
                   
                   {/* Button xem chi tiết */}
                   <div className="mt-2">
-                    <button 
+                    <motion.button 
                       onClick={(e) => handleViewDetail(e, product)}
-                      className="w-full bg-blue-600 text-white py-1.5 rounded-md hover:bg-blue-700 transition-all duration-300 text-xs font-medium"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="w-full bg-blue-600 text-white py-1.5 rounded-md hover:bg-blue-700 text-xs font-medium"
                     >
                       Xem chi tiết
-                    </button>
+                    </motion.button>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         )}
       </div>
     </section>

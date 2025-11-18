@@ -100,10 +100,19 @@ const StoreSidebar = () => {
             <span className="w-4 h-4 flex items-center justify-center leading-none">🏪</span>
             <span>{currentStore.storeName || currentStore.name}</span>
           </p>
-          <p className="flex items-center gap-1">
-            <span className="w-4 h-4 flex items-center justify-center leading-none">📍</span>
-            <span>{currentStore.name}</span>
-          </p>
+          {currentStore.address && (
+            <p className="flex items-center gap-1">
+              <span className="w-4 h-4 flex items-center justify-center leading-none">📍</span>
+              <span>
+                {typeof currentStore.address === 'string' 
+                  ? currentStore.address 
+                  : (currentStore.address?.homeAddress || currentStore.address?.suggestedName || '') + 
+                    (currentStore.address?.ward ? `, ${currentStore.address.ward}` : '') +
+                    (currentStore.address?.province ? `, ${currentStore.address.province}` : '')
+                }
+              </span>
+            </p>
+          )}
           <p className="flex items-center gap-1">
             <span className="w-4 h-4 flex items-center justify-center leading-none">📧</span>
             <span>{currentStore.email}</span>
@@ -115,7 +124,7 @@ const StoreSidebar = () => {
           <p className="flex items-center gap-1">
             <span className="w-4 h-4 flex items-center justify-center leading-none">⭐</span>
             <span>
-              {currentStore.stats.averageRating > 0 
+              {currentStore.stats?.averageRating > 0 
                 ? `${currentStore.stats.averageRating}/5 (${currentStore.stats.totalReviews} khách hàng)`
                 : 'Chưa có đánh giá'
               }
@@ -136,19 +145,19 @@ const StoreSidebar = () => {
         <h4 className="text-gray-300 text-xs font-medium mb-3">THỐNG KÊ NHANH</h4>
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div className="bg-gray-600 rounded p-2">
-            <div className="text-green-400 font-bold">{currentStore.stats.totalProducts}</div>
+            <div className="text-green-400 font-bold">{currentStore.stats?.totalProducts || 0}</div>
             <div className="text-gray-300">Sản phẩm</div>
           </div>
           <div className="bg-gray-600 rounded p-2">
-            <div className="text-blue-400 font-bold">{currentStore.stats.totalOrders}</div>
+            <div className="text-blue-400 font-bold">{currentStore.stats?.totalOrders || 0}</div>
             <div className="text-gray-300">Đơn hàng</div>
           </div>
           <div className="bg-gray-600 rounded p-2">
-            <div className="text-yellow-400 font-bold">{currentStore.stats.averageRating > 0 ? `${currentStore.stats.averageRating}/5` : '0/5'}</div>
+            <div className="text-yellow-400 font-bold">{currentStore.stats?.averageRating > 0 ? `${currentStore.stats.averageRating}/5` : '0/5'}</div>
             <div className="text-gray-300">Đánh giá</div>
           </div>
           <div className="bg-gray-600 rounded p-2">
-            <div className="text-purple-400 font-bold">{currentStore.stats.totalReviews}</div>
+            <div className="text-purple-400 font-bold">{currentStore.stats?.totalReviews || 0}</div>
             <div className="text-gray-300">Đánh giá</div>
           </div>
         </div>
@@ -194,6 +203,18 @@ const StoreSidebar = () => {
           </Link>
           
           <Link
+            to="/store-dashboard/product-variants"
+            className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
+              isActive('/store-dashboard/product-variants')
+                ? 'bg-gray-100 text-gray-700 border-r-2 border-gray-700'
+                : 'text-gray-300 hover:bg-gray-600 hover:text-white'
+            }`}
+          >
+            <span className="mr-3 text-lg">🎨</span>
+            Quản lý Biến thể
+          </Link>
+          
+          <Link
             to="/store-dashboard/orders"
             className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
               isActive('/store-dashboard/orders')
@@ -215,6 +236,18 @@ const StoreSidebar = () => {
           >
             <span className="mr-3 text-lg">🎯</span>
             Khuyến mãi
+          </Link>
+          
+          <Link
+            to={`/store-dashboard/wallet/${currentStore.id}`}
+            className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
+              location.pathname.includes('/store-dashboard/wallet')
+                ? 'bg-gray-100 text-gray-700 border-r-2 border-gray-700'
+                : 'text-gray-300 hover:bg-gray-600 hover:text-white'
+            }`}
+          >
+            <span className="mr-3 text-lg">💰</span>
+            Ví của tôi
           </Link>
           
           <Link

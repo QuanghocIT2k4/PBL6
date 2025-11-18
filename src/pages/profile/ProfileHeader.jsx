@@ -1,9 +1,11 @@
 import { useState, useRef } from 'react';
+import { useToast } from '../../context/ToastContext';
 import Button from '../../components/ui/Button'; // ✅ SỬA: thêm đường dẫn đúng
 
 const ProfileHeader = ({ profile, onAvatarUpload, updating }) => {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
+  const { error: showError } = useToast();
 
   const handleAvatarClick = () => {
     fileInputRef.current?.click();
@@ -15,12 +17,12 @@ const ProfileHeader = ({ profile, onAvatarUpload, updating }) => {
 
     // Validate file
     if (!file.type.startsWith('image/')) {
-      alert('Vui lòng chọn file ảnh');
+      showError('Vui lòng chọn file ảnh');
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) { // 5MB
-      alert('File ảnh phải nhỏ hơn 5MB');
+      showError('File ảnh phải nhỏ hơn 5MB');
       return;
     }
 
@@ -28,7 +30,7 @@ const ProfileHeader = ({ profile, onAvatarUpload, updating }) => {
     try {
       const result = await onAvatarUpload(file);
       if (!result.success) {
-        alert(result.error || 'Lỗi upload ảnh');
+        showError(result.error || 'Lỗi upload ảnh');
       }
     } finally {
       setUploading(false);

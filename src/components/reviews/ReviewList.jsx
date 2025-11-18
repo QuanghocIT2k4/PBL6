@@ -2,7 +2,7 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import ReviewCard from './ReviewCard';
 import ReviewStats from './ReviewStats';
-import { getProductVariantReviews, getProductVariantReviewStats, deleteReview } from '../../services/reviewService';
+import { getProductVariantReviews, getProductVariantReviewStats, deleteReview } from '../../services/buyer/reviewService';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 

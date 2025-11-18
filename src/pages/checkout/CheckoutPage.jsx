@@ -4,10 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { useMemo, useState, useEffect } from 'react';
 import { useProfile } from '../../hooks/useProfile';
 import { useToast } from '../../context/ToastContext';
-import addressService from '../../services/addressService';
+import addressService from '../../services/buyer/addressService';
 import PromoCodeInput from '../../components/promotions/PromoCodeInput';
 import PromotionList from '../../components/promotions/PromotionList';
-import { calculateDiscount } from '../../services/promotionService';
+import { calculateDiscount } from '../../services/admin/promotionService';
+import { createPaymentUrl } from '../../services/buyer/paymentService';
 
 const CheckoutPage = () => {
   const { getSelectedItems, getSelectedTotalItems, getSelectedTotalPrice, formatPrice, removeSelectedItems } = useCart();
@@ -81,6 +82,44 @@ const CheckoutPage = () => {
   const discount = appliedPromotion?.discount || 0;
   // ⚠️ Phí ship được tính ở backend, frontend chỉ hiển thị "Miễn phí"
   const finalTotal = Math.max(0, productTotal - discount);
+  
+  // Debug log
+  useEffect(() => {
+    console.log('💰 [Checkout] Price calculation:', {
+      productTotal,
+      discount,
+      appliedPromotion,
+      finalTotal,
+      discountFromPromo: appliedPromotion?.discount
+    });
+  }, [productTotal, discount, appliedPromotion, finalTotal]);
+
+  // ✅ Lấy storeId từ items - thử nhiều cách
+  const getStoreId = () => {
+    if (!items || items.length === 0) return null;
+    
+    const firstItem = items[0];
+    const product = firstItem?.product;
+    
+    // Thử các cách lấy storeId
+    const storeId = 
+      product?.storeId || 
+      product?.store?.id || 
+      product?.storeId ||
+      (product?.store && typeof product.store === 'string' ? product.store : null);
+    
+    // Debug log
+    if (product && !storeId) {
+      console.log('⚠️ [Checkout] Không tìm thấy storeId trong product:', {
+        productKeys: Object.keys(product || {}),
+        product: product
+      });
+    }
+    
+    return storeId;
+  };
+
+  const storeId = getStoreId();
 
   const placeOrder = async () => {
     if (isPlacingOrder) return; // Prevent double submission
@@ -130,26 +169,94 @@ const CheckoutPage = () => {
         suggestedName: selectedAddress.suggestedName || '', // Optional
       };
       
-      // ✅ Build platformPromotions (nếu có)
-      const platformPromotions = appliedPromotion ? {
-        orderPromotionCode: appliedPromotion.code,
-        shippingPromotionCode: null,
-      } : null;
+      // ✅ Build promotions (platform hoặc store)
+      // Theo Swagger: OrderDTO có cả platformPromotions và storePromotions
+      // - platformPromotions: { orderPromotionCode, shippingPromotionCode }
+      // - storePromotions: { [storeId]: promotionCode }
       
-      const result = await createOrder({
+      let platformPromotions = null;
+      let storePromotions = null;
+      
+      if (appliedPromotion) {
+        // ✅ Kiểm tra promotion là của platform hay store
+        // PromoCodeInput đã set isStorePromotion khi tìm thấy
+        const isStorePromotion = appliedPromotion.isStorePromotion === true;
+        
+        if (isStorePromotion && storeId) {
+          // Store promotion - format: { [storeId]: promotionCode }
+          storePromotions = {
+            [storeId]: appliedPromotion.code
+          };
+          console.log('🏬 [Checkout] Using store promotion:', storePromotions);
+        } else {
+          // Platform promotion
+          platformPromotions = {
+            orderPromotionCode: appliedPromotion.code,
+            shippingPromotionCode: null,
+          };
+          console.log('🏪 [Checkout] Using platform promotion:', platformPromotions);
+        }
+      }
+      
+      const orderData = {
         selectedItems,
         paymentMethod: paymentMethod.toUpperCase(),
         note: note.trim(),
         address: addressDTO,
         ...(platformPromotions && { platformPromotions }),
-      });
+        ...(storePromotions && { storePromotions }),
+      };
+      
+      console.log('📦 [Checkout] Order data:', orderData);
+      
+      const result = await createOrder(orderData);
       
       if (result.success) {
+        console.log('✅ [Checkout] Order created:', result.data);
+        
+        // Lấy orderId từ response
+        const orderId = result.data?.id || result.data?.orderId;
+        
         removeSelectedItems();
-        success('🎉 Đặt hàng thành công! Cảm ơn bạn đã mua hàng.');
-        setTimeout(() => {
-          navigate('/orders');
-        }, 2000);
+        
+        // ✅ Nếu chọn VNPay → Tạo payment URL và redirect
+        if (paymentMethod.toUpperCase() === 'VNPAY') {
+          console.log('💳 [Checkout] VNPay selected, creating payment URL...');
+          console.log('💳 [Checkout] Order ID:', orderId);
+          console.log('💳 [Checkout] Final total:', finalTotal);
+          
+          const paymentResult = await createPaymentUrl({
+            amount: finalTotal,
+            language: 'vn',
+            // Có thể thêm orderId vào đây nếu backend cần
+          });
+          
+          if (paymentResult.success && paymentResult.data?.paymentUrl) {
+            console.log('✅ [Checkout] Payment URL created:', paymentResult.data.paymentUrl);
+            
+            // Mở VNPay trong tab mới NGAY LẬP TỨC
+            const vnpayWindow = window.open(paymentResult.data.paymentUrl, '_blank');
+            
+            if (vnpayWindow) {
+              success('🎉 Đơn hàng đã tạo! Vui lòng thanh toán trên tab mới. Check console để debug!');
+              // TODO: Uncomment để auto redirect
+              // setTimeout(() => {
+              //   navigate('/orders');
+              // }, 2000);
+            } else {
+              error('Trình duyệt chặn popup! Vui lòng cho phép popup và thử lại.');
+            }
+          } else {
+            error('Không thể tạo link thanh toán. Vui lòng thử lại.');
+            console.error('❌ [Checkout] Failed to create payment URL:', paymentResult);
+          }
+        } else {
+          // COD hoặc payment method khác → Redirect về orders
+          success('🎉 Đặt hàng thành công! Cảm ơn bạn đã mua hàng.');
+          setTimeout(() => {
+            navigate('/orders');
+          }, 2000);
+        }
       } else {
         error(result.error || 'Có lỗi khi tạo đơn hàng');
       }
@@ -296,7 +403,7 @@ const CheckoutPage = () => {
             <div className="mb-4">
               <PromoCodeInput
                 orderTotal={productTotal}
-                storeId={items[0]?.product?.storeId}
+                storeId={storeId}
                 productIds={items.map(it => it.product.id)}
                 onApplySuccess={(promoData) => {
                   setAppliedPromotion(promoData);
@@ -311,16 +418,33 @@ const CheckoutPage = () => {
               <div className="mt-2">
                 <PromotionList
                   orderTotal={productTotal}
-                  storeId={items[0]?.product?.storeId}
+                  storeId={storeId}
                   productIds={items.map(it => it.product.id)}
                   selectedCode={appliedPromotion?.code}
-                  onSelectPromotion={(promotion) => {
+                  onSelectPromotion={(promotion, isStorePromotion = false) => {
+                    console.log('🎁 [Checkout] Selected promotion:', promotion);
+                    console.log('🎁 [Checkout] Promotion structure:', {
+                      code: promotion.code,
+                      discountType: promotion.discountType || promotion.type,
+                      discountValue: promotion.discountValue || promotion.value,
+                      maxDiscountAmount: promotion.maxDiscountAmount || promotion.maxDiscountValue,
+                      isStorePromotion,
+                      fullPromotion: promotion
+                    });
+                    console.log('🎁 [Checkout] Order total:', productTotal);
+                    
                     const discount = calculateDiscount(promotion, productTotal);
-                    setAppliedPromotion({
+                    console.log('🎁 [Checkout] Calculated discount:', discount);
+                    
+                    const promoData = {
                       code: promotion.code,
                       promotion,
                       discount,
-                    });
+                      isStorePromotion, // ✅ Lưu thông tin là store hay platform
+                    };
+                    console.log('🎁 [Checkout] Setting applied promotion:', promoData);
+                    
+                    setAppliedPromotion(promoData);
                     success(`✨ Áp dụng mã ${promotion.code} thành công!`);
                   }}
                 />
@@ -328,11 +452,19 @@ const CheckoutPage = () => {
             </div>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between"><span>Tạm tính</span><span>{formatPrice(productTotal)}đ</span></div>
-              {discount>0 && (
-                <div className="flex justify-between text-green-600"><span>Giảm giá</span><span>-{formatPrice(discount)}đ</span></div>
+              {discount > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span>Giảm giá</span>
+                  <span>-{formatPrice(discount)}đ</span>
+                </div>
               )}
               <div className="flex justify-between"><span>Phí vận chuyển</span><span>Miễn phí</span></div>
-              <div className="border-t pt-2 font-semibold text-lg flex justify-between"><span>Tổng cộng</span><span className="text-red-600">{formatPrice(finalTotal)}đ</span></div>
+              <div className="border-t pt-2 font-semibold text-lg flex justify-between">
+                <span>Tổng cộng</span>
+                <span className="text-red-600">
+                  {formatPrice(finalTotal)}đ
+                </span>
+              </div>
             </div>
             <button 
               onClick={placeOrder} 

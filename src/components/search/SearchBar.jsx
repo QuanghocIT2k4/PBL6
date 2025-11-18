@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
-import { searchProductVariants } from '../../services/productService';
+import { searchProductVariants } from '../../services/common/productService';
 
 /**
  * ✅ SWR Fetcher cho Suggestions (Debounced)

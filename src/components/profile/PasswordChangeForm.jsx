@@ -1,80 +1,50 @@
 import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
 
-const PasswordChangeForm = ({ onSubmit }) => {
-  const [formData, setFormData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
+const passwordChangeSchema = z.object({
+  currentPassword: z.string().min(1, 'Mật khẩu hiện tại là bắt buộc'),
+  newPassword: z.string().min(6, 'Mật khẩu mới phải có ít nhất 6 ký tự'),
+  confirmPassword: z.string().min(1, 'Xác nhận mật khẩu là bắt buộc')
+}).refine((data) => data.newPassword === data.confirmPassword, {
+  message: 'Mật khẩu xác nhận không khớp',
+  path: ['confirmPassword']
+}).refine((data) => data.currentPassword !== data.newPassword, {
+  message: 'Mật khẩu mới phải khác mật khẩu hiện tại',
+  path: ['newPassword']
+});
+
+const PasswordChangeForm = ({ onSubmit: onSubmitForm }) => {
+  const [submitError, setSubmitError] = useState('');
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+    reset
+  } = useForm({
+    resolver: zodResolver(passwordChangeSchema),
+    defaultValues: {
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: ''
+    }
   });
-  
-  const [errors, setErrors] = useState({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showPasswords, setShowPasswords] = useState({
-    current: false,
-    new: false,
-    confirm: false
-  });
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+  const onSubmit = async (data) => {
+    setSubmitError('');
     
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
-    }
-  };
-
-  const validateForm = () => {
-    const newErrors = {};
-    
-    if (!formData.currentPassword) {
-      newErrors.currentPassword = 'Mật khẩu hiện tại là bắt buộc';
-    }
-    
-    if (!formData.newPassword) {
-      newErrors.newPassword = 'Mật khẩu mới là bắt buộc';
-    } else if (formData.newPassword.length < 6) {
-      newErrors.newPassword = 'Mật khẩu mới phải có ít nhất 6 ký tự';
-    }
-    
-    if (!formData.confirmPassword) {
-      newErrors.confirmPassword = 'Xác nhận mật khẩu là bắt buộc';
-    } else if (formData.newPassword !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Mật khẩu xác nhận không khớp';
-    }
-    
-    if (formData.currentPassword === formData.newPassword) {
-      newErrors.newPassword = 'Mật khẩu mới phải khác mật khẩu hiện tại';
-    }
-    
-    return newErrors;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    const newErrors = validateForm();
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-
-    setIsSubmitting(true);
     try {
-      const result = await onSubmit({
-        currentPassword: formData.currentPassword,
-        newPassword: formData.newPassword
+      const result = await onSubmitForm({
+        currentPassword: data.currentPassword,
+        newPassword: data.newPassword
       });
       
       if (result.success) {
-        // Reset form
-        setFormData({
-          currentPassword: '',
-          newPassword: '',
-          confirmPassword: ''
-        });
+        reset();
         
         // Show success notification
         const notification = document.createElement('div');
@@ -91,10 +61,10 @@ const PasswordChangeForm = ({ onSubmit }) => {
           }, 300);
         }, 3000);
       } else {
-        setErrors({ submit: result.error });
+        setSubmitError(result.error);
       }
-    } finally {
-      setIsSubmitting(false);
+    } catch (error) {
+      setSubmitError('Đã xảy ra lỗi khi đổi mật khẩu');
     }
   };
 
@@ -102,45 +72,39 @@ const PasswordChangeForm = ({ onSubmit }) => {
     <div className="bg-white rounded-lg shadow-sm p-6">
       <h2 className="text-xl font-semibold text-gray-900 mb-6">Đổi mật khẩu</h2>
       
-      {errors.submit && (
+      {submitError && (
         <div className="mb-4 bg-red-50 border border-red-300 text-red-800 px-4 py-3 rounded-md text-sm">
-          {errors.submit}
+          {submitError}
         </div>
       )}
       
-      <form onSubmit={handleSubmit} className="space-y-6 max-w-md">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 max-w-md">
         <Input
-          name="currentPassword"
+          {...register('currentPassword')}
           type="password"
           label="Mật khẩu hiện tại *"
           placeholder="Nhập mật khẩu hiện tại"
-          value={formData.currentPassword}
-          onChange={handleChange}
-          error={errors.currentPassword}
+          error={errors.currentPassword?.message}
           disabled={isSubmitting}
           showPasswordToggle
         />
         
         <Input
-          name="newPassword"
+          {...register('newPassword')}
           type="password"
           label="Mật khẩu mới *"
           placeholder="Nhập mật khẩu mới (ít nhất 6 ký tự)"
-          value={formData.newPassword}
-          onChange={handleChange}
-          error={errors.newPassword}
+          error={errors.newPassword?.message}
           disabled={isSubmitting}
           showPasswordToggle
         />
         
         <Input
-          name="confirmPassword"
+          {...register('confirmPassword')}
           type="password"
           label="Xác nhận mật khẩu mới *"
           placeholder="Nhập lại mật khẩu mới"
-          value={formData.confirmPassword}
-          onChange={handleChange}
-          error={errors.confirmPassword}
+          error={errors.confirmPassword?.message}
           disabled={isSubmitting}
           showPasswordToggle
         />

@@ -14,8 +14,22 @@ export const useToast = () => {
 export const ToastProvider = ({ children }) => {
   const [toast, setToast] = useState(null);
 
-  const showToast = useCallback((type, message, duration = 3000) => {
-    setToast({ type, message, duration });
+  const showToast = useCallback((messageOrType, typeOrMessage = 'info', duration = 3000) => {
+    // Smart detection: if first param is a valid type, swap them
+    const validTypes = ['success', 'error', 'warning', 'info'];
+    let finalMessage, finalType;
+    
+    if (validTypes.includes(messageOrType)) {
+      // Old format: showToast(type, message)
+      finalType = messageOrType;
+      finalMessage = typeOrMessage;
+    } else {
+      // New format: showToast(message, type)
+      finalMessage = messageOrType;
+      finalType = validTypes.includes(typeOrMessage) ? typeOrMessage : 'info';
+    }
+    
+    setToast({ type: finalType, message: finalMessage, duration });
   }, []);
 
   const hideToast = useCallback(() => {

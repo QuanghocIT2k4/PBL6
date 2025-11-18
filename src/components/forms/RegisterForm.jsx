@@ -1,87 +1,87 @@
 import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { useToast } from '../../context/ToastContext';
-import { useAuth } from '../../context/AuthContext';
+import { register as registerAPI } from '../../services/common/authService';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 
-const RegisterForm = ({ onSwitchToLogin }) => {
-  const { register } = useAuth();
-  const { success: showSuccessToast, error: showErrorToast } = useToast();
-  const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
-    password: '',
-    confirmPassword: ''
+const registerSchema = z.object({
+  fullName: z.string().trim().min(1, 'Họ tên là bắt buộc'),
+  email: z.string().trim().email('Email không hợp lệ').min(1, 'Email là bắt buộc'),
+  password: z.string().trim().min(6, 'Mật khẩu phải có ít nhất 6 ký tự'),
+  confirmPassword: z.string().trim().min(1, 'Xác nhận mật khẩu là bắt buộc')
+}).refine((data) => {
+  const pwd = data.password.trim();
+  const confirm = data.confirmPassword.trim();
+  console.log('🔍 Zod validation:', {
+    password: `"${pwd}"`,
+    confirmPassword: `"${confirm}"`,
+    passwordLength: pwd.length,
+    confirmLength: confirm.length,
+    match: pwd === confirm
   });
-  const [errors, setErrors] = useState({});
-  const [loading, setLoading] = useState(false);
+  return pwd === confirm;
+}, {
+  message: 'Mật khẩu xác nhận không khớp',
+  path: ['confirmPassword']
+});
+
+const RegisterForm = ({ onSwitchToLogin }) => {
+  const { showToast } = useToast();
   const [successMessage, setSuccessMessage] = useState('');
+  const [generalError, setGeneralError] = useState('');
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+    reset,
+    clearErrors
+  } = useForm({
+    resolver: zodResolver(registerSchema),
+    mode: 'onChange', // Validate on change
+    defaultValues: {
+      fullName: '',
+      email: '',
+      password: '',
+      confirmPassword: ''
     }
-  };
+  });
 
-  const validateForm = () => {
-    const newErrors = {};
-    
-    if (!formData.fullName.trim()) {
-      newErrors.fullName = 'Họ tên là bắt buộc';
-    }
-    
-    if (!formData.email) {
-      newErrors.email = 'Email là bắt buộc';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Email không hợp lệ';
-    }
-    
-    if (!formData.password) {
-      newErrors.password = 'Mật khẩu là bắt buộc';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Mật khẩu phải có ít nhất 6 ký tự';
-    }
-    
-    if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Mật khẩu xác nhận không khớp';
-    }
-    
-    return newErrors;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    const newErrors = validateForm();
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-    
-    setLoading(true);
-    setErrors({});
+  const onSubmit = async (data) => {
+    setGeneralError('');
     setSuccessMessage('');
     
-    const result = await register(formData);
+    console.log('📝 Form data:', data);
+    console.log('🔑 Password:', data.password);
+    console.log('🔑 Confirm:', data.confirmPassword);
+    console.log('✅ Match?', data.password === data.confirmPassword);
     
-    if (result.success) {
-      // ✅ Thành công → Hiển thị thông báo verify email
-      const message = result.message || 'Đăng ký thành công! Vui lòng kiểm tra email để xác minh.';
-      setSuccessMessage(message);
-      showSuccessToast(message);
-      // Reset form
-      setFormData({ fullName: '', email: '', password: '', confirmPassword: '' });
-    } else {
-      // ❌ Thất bại → Hiển thị lỗi
-      const errorMessage = result.error || 'Đăng ký thất bại';
-      setErrors({ general: errorMessage });
-      showErrorToast(errorMessage);
+    try {
+      const result = await registerAPI({
+        fullName: data.fullName,
+        email: data.email,
+        password: data.password,
+        confirmPassword: data.confirmPassword  // ✅ THÊM FIELD NÀY
+      });
+      
+      if (result.success) {
+        const message = result.message || 'Đăng ký thành công! Vui lòng kiểm tra email để xác minh.';
+        setSuccessMessage(message);
+        showToast(message, 'success');
+        reset();
+      } else {
+        const errorMessage = result.error || 'Đăng ký thất bại';
+        setGeneralError(errorMessage);
+        showToast(errorMessage, 'error');
+      }
+    } catch (error) {
+      const errorMessage = error.message || 'Đăng ký thất bại';
+      setGeneralError(errorMessage);
+      showToast(errorMessage, 'error');
     }
-    
-    setLoading(false);
   };
 
   return (
@@ -112,56 +112,48 @@ const RegisterForm = ({ onSwitchToLogin }) => {
           )}
 
           {/* Error Message */}
-          {errors.general && (
+          {generalError && (
             <div className="mb-4 bg-red-50 border border-red-300 text-red-800 px-4 py-3 rounded-md text-sm">
-              {errors.general}
+              {generalError}
             </div>
           )}
 
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
             <Input
-              name="fullName"
+              {...register('fullName')}
               type="text"
               label="Họ và tên"
               placeholder="Nhập họ và tên"
-              value={formData.fullName}
-              onChange={handleChange}
-              error={errors.fullName}
-              disabled={loading}
+              error={errors.fullName?.message}
+              disabled={isSubmitting}
             />
 
             <Input
-              name="email"
+              {...register('email')}
               type="email"
               label="Email"
               placeholder="Nhập email của bạn"
-              value={formData.email}
-              onChange={handleChange}
-              error={errors.email}
-              disabled={loading}
+              error={errors.email?.message}
+              disabled={isSubmitting}
             />
 
             <Input
-              name="password"
+              {...register('password')}
               type="password"
               label="Mật khẩu"
               placeholder="Nhập mật khẩu (ít nhất 6 ký tự)"
-              value={formData.password}
-              onChange={handleChange}
-              error={errors.password}
-              disabled={loading}
+              error={errors.password?.message}
+              disabled={isSubmitting}
               showPasswordToggle
             />
 
             <Input
-              name="confirmPassword"
+              {...register('confirmPassword')}
               type="password"
               label="Xác nhận mật khẩu"
               placeholder="Nhập lại mật khẩu"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              error={errors.confirmPassword}
-              disabled={loading}
+              error={errors.confirmPassword?.message}
+              disabled={isSubmitting}
               showPasswordToggle
             />
 
@@ -187,7 +179,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
 
             <Button
               type="submit"
-              loading={loading}
+              loading={isSubmitting}
               className="w-full"
             >
               Tạo tài khoản

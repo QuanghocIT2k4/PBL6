@@ -10,6 +10,10 @@ const AdminSidebar = () => {
     return location.pathname === path;
   };
 
+  console.log('🔍 [AdminSidebar] Rendering...');
+  console.log('🔍 [AdminSidebar] Current path:', location.pathname);
+  console.log('💰 [AdminSidebar] WALLET MENU SHOULD BE HERE!');
+
   return (
     <aside className="w-80 bg-gray-800 h-screen flex flex-col overflow-y-auto fixed left-0 top-0">
       {/* Logo */}
@@ -133,6 +137,24 @@ const AdminSidebar = () => {
           >
             <span className="mr-3 text-lg">👥</span>
             Quản lý User
+          </Link>
+          
+          {/* 💰 VÍ & RÚT TIỀN MENU */}
+          {console.log('💰💰💰 [AdminSidebar] RENDERING WALLET MENU NOW!')}
+          <Link
+            to="/admin-dashboard/wallets"
+            className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
+              isActive('/admin-dashboard/wallets')
+                ? 'bg-gray-100 text-gray-800 border-r-2 border-gray-800'
+                : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+            }`}
+            onClick={() => {
+              console.log('💰💰💰 [AdminSidebar] CLICKED VÍ & RÚT TIỀN!');
+              console.log('💰 [AdminSidebar] Navigating to:', '/admin-dashboard/wallets');
+            }}
+          >
+            <span className="mr-3 text-lg">💰</span>
+            <span className="flex-1 text-left truncate">💰 VÍ & RÚT TIỀN 💰</span>
           </Link>
           
           <Link

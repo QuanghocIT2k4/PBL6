@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
-import { getAllStores } from '../../services/storeService';
+import { getAllStores } from '../../services/common/storeService';
 import { useToast } from '../../context/ToastContext';
 import { getFullImageUrl } from '../../utils/imageUtils';
 

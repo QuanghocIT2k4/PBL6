@@ -14,20 +14,19 @@ import CartPage from './pages/cart/CartPage';
 import ShopPage from './pages/shop/ShopPage';
 import CheckoutPage from './pages/checkout/CheckoutPage';
 import OrdersPage from './pages/orders/OrdersPage';
+import OrderDetailPage from './pages/orders/OrderDetailPage';
 import SearchResults from './pages/search/SearchResults';
 import ProfilePage from './pages/profile/ProfilePage';
 import StoresPage from './pages/stores/StoresPage';
 import StoreDetailPage from './pages/stores/StoreDetailPage';
-import SellersPage from './pages/sellers/SellersPage';
-import SellerDetailPage from './pages/sellers/SellerDetailPage';
-import SellerRoutes from './routes/SellerRoutes';
 import StoreRoutes from './routes/StoreRoutes';
 import AdminRoutes from './routes/AdminRoutes';
+import BecomeStoreOwner from './pages/store/BecomeStoreOwner';
+import PaymentCallback from './pages/payment/PaymentCallback';
 
 const AppContent = () => {
   const { isAuthenticated, loading } = useAuth();
 
-  // Bỏ qua loading check để seller routes luôn hoạt động
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -51,14 +50,12 @@ const AppContent = () => {
       <Route path="/cart" element={<CartPage />} />
       <Route path="/stores" element={<StoresPage />} />
       <Route path="/store/:storeId" element={<StoreDetailPage />} />
-      <Route path="/sellers" element={<SellersPage />} />
-      <Route path="/seller/:sellerId" element={<SellerDetailPage />} />
       <Route path="/checkout" element={<CheckoutPage />} />
       <Route path="/orders" element={<OrdersPage />} />
+      <Route path="/orders/:id" element={<OrderDetailPage />} />
+      <Route path="/payment/callback" element={<PaymentCallback />} />
       <Route path="/profile" element={<ProfilePage />} />
-      
-      {/* Seller Management Routes (C2C) */}
-      <Route path="/seller-dashboard/*" element={<SellerRoutes />} />
+      <Route path="/become-store-owner" element={<BecomeStoreOwner />} />
       
       {/* Store Management Routes (B2C) */}
       <Route path="/store-dashboard/*" element={<StoreRoutes />} />

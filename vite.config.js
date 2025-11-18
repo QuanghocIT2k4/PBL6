@@ -10,6 +10,13 @@ export default defineConfig({
     open: true, // Tự động mở browser
     hmr: {
       overlay: false // Tắt error overlay nếu cần
+    },
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+      }
     }
   },
   preview: {

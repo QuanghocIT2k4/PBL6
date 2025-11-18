@@ -54,6 +54,10 @@
       "description": "APIs for admin to approve/reject products"
     },
     {
+      "name": "Admin User Management",
+      "description": "APIs for admin to manage users"
+    },
+    {
       "name": "User Management",
       "description": "APIs for user registration, authentication and profile management"
     },
@@ -90,12 +94,12 @@
       "description": "Public APIs to view promotions - No authentication required"
     },
     {
-      "name": "Admin Store Management",
-      "description": "APIs for admin to manage stores - approval, rejection, status updates"
+      "name": "Buyer Promotion APIs",
+      "description": "Buyer APIs to view promotions - Need authentication required"
     },
     {
-      "name": "Password Reset",
-      "description": "APIs for forgot password and reset password functionality"
+      "name": "Admin Store Management",
+      "description": "APIs for admin to manage stores - approval, rejection, status updates"
     },
     {
       "name": "B2C Store Management",
@@ -136,6 +140,10 @@
     {
       "name": "B2C Promotion Management",
       "description": "Promotion management APIs for B2C stores - Handle discount campaigns, coupon codes, and promotional offers"
+    },
+    {
+      "name": "Password Reset",
+      "description": "API for forgot password functionality - sends new random password via email"
     }
   ],
   "paths": {
@@ -476,53 +484,6 @@
           },
           "required": true
         },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "Buyer Cart Management"
-        ],
-        "summary": "Remove item from cart",
-        "description": "Remove a specific product variant completely from the shopping cart",
-        "operationId": "removeCartItem",
-        "parameters": [
-          {
-            "name": "productVariantId",
-            "in": "path",
-            "description": "ID of the product variant to remove",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
-          },
-          {
-            "name": "colorId",
-            "in": "query",
-            "description": "Color ID of the product variant (optional)",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "example": "red"
-          }
-        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -1035,43 +996,6 @@
       }
     },
     "/api/v1/b2c/promotions/{promotionId}": {
-      "get": {
-        "tags": [
-          "B2C Promotion Management"
-        ],
-        "summary": "Get promotion by ID",
-        "description": "Retrieve detailed information of a specific promotion",
-        "operationId": "getPromotionById",
-        "parameters": [
-          {
-            "name": "promotionId",
-            "in": "path",
-            "description": "ID of the promotion to retrieve",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      },
       "put": {
         "tags": [
           "B2C Promotion Management"
@@ -2146,24 +2070,26 @@
         ]
       }
     },
-    "/reset-password": {
+    "/forgot-password": {
       "post": {
         "tags": [
           "Password Reset"
         ],
-        "summary": "Reset password with token",
-        "description": "Reset user password using the token received via email",
-        "operationId": "resetPassword",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ResetPasswordDTO"
-              }
-            }
-          },
-          "required": true
-        },
+        "summary": "Request password reset",
+        "description": "Generate new random password and send to user's email address",
+        "operationId": "processForgotPassword",
+        "parameters": [
+          {
+            "name": "email",
+            "in": "query",
+            "description": "User's email address",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "user@example.com"
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -2178,24 +2104,22 @@
         }
       }
     },
-    "/forgot-password": {
+    "/api/v1/users/send-verification-email": {
       "post": {
         "tags": [
-          "Password Reset"
+          "User Management"
         ],
-        "summary": "Request password reset",
-        "description": "Send password reset email with token to user's email address",
-        "operationId": "processForgotPassword",
+        "summary": "Send verification email",
+        "description": "Send a verification email to the user",
+        "operationId": "sendVerificationEmail",
         "parameters": [
           {
             "name": "email",
             "in": "query",
-            "description": "User's email address",
             "required": true,
             "schema": {
               "type": "string"
-            },
-            "example": "user@example.com"
+            }
           }
         ],
         "responses": {
@@ -2257,6 +2181,38 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UserLoginDTO"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/change-password": {
+      "post": {
+        "tags": [
+          "User Management"
+        ],
+        "summary": "Change user password",
+        "description": "Change the password of the currently authenticated user",
+        "operationId": "changePassword",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordDTO"
               }
             }
           },
@@ -2760,19 +2716,19 @@
         ]
       }
     },
-    "/api/v1/b2c/promotions/{promotionId}/calculate-discount": {
-      "post": {
+    "/api/v1/b2c/promotions/store/{storeId}": {
+      "get": {
         "tags": [
           "B2C Promotion Management"
         ],
-        "summary": "Calculate discount amount",
-        "description": "Calculate the exact discount amount that will be applied for a specific order value",
-        "operationId": "calculateDiscount",
+        "summary": "Get promotions by store",
+        "description": "Retrieve all promotions for a specific store (both active and inactive)",
+        "operationId": "getPromotionsByStore",
         "parameters": [
           {
-            "name": "promotionId",
+            "name": "storeId",
             "in": "path",
-            "description": "ID of the promotion",
+            "description": "ID of the store",
             "required": true,
             "schema": {
               "type": "string"
@@ -2780,15 +2736,42 @@
             "example": "64f1a2b3c4d5e6f7a8b9c0d1"
           },
           {
-            "name": "orderValue",
+            "name": "page",
             "in": "query",
-            "description": "Order value to calculate discount for",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "integer",
-              "format": "int64"
-            },
-            "example": 500000
+              "format": "int32",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "createdAt"
+            }
+          },
+          {
+            "name": "sortDir",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "desc"
+            }
           }
         ],
         "responses": {
@@ -2808,9 +2791,7 @@
             "bearerAuth": []
           }
         ]
-      }
-    },
-    "/api/v1/b2c/promotions/store/{storeId}": {
+      },
       "post": {
         "tags": [
           "B2C Promotion Management"
@@ -3047,6 +3028,82 @@
         ]
       }
     },
+    "/api/v1/admin/users/unban/{userId}": {
+      "post": {
+        "tags": [
+          "Admin User Management"
+        ],
+        "summary": "Unban a user",
+        "description": "Remove ban for a user",
+        "operationId": "unbanUser",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "description": "ID of user to unban",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/users/ban": {
+      "post": {
+        "tags": [
+          "Admin User Management"
+        ],
+        "summary": "Ban a user",
+        "description": "Ban a user (temporary or permanent) by admin",
+        "operationId": "banUser",
+        "requestBody": {
+          "description": "BanUser payload",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BanUserDTO"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/promotions/platform": {
       "post": {
         "tags": [
@@ -3143,6 +3200,19 @@
             "bearerAuth": []
           }
         ]
+      }
+    },
+    "/api/v1/users/auth/social-login": {
+      "get": {
+        "tags": [
+          "User Management"
+        ],
+        "operationId": "socialAuth",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
       }
     },
     "/api/v1/stores": {
@@ -3521,31 +3591,66 @@
         ]
       }
     },
-    "/api/v1/reviews/my-reviews": {
+    "/api/v1/promotions": {
       "get": {
         "tags": [
-          "Review Management"
+          "Public Promotion APIs"
         ],
-        "summary": "Get my reviews",
-        "description": "Retrieve all reviews created by the current authenticated user",
-        "operationId": "getMyReviews",
+        "summary": "Get all active promotions for customer",
+        "description": "Retrieve all currently active promotions across all stores and platform",
+        "operationId": "getActivePromotions",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "createdAt"
+            }
+          },
+          {
+            "name": "sortDir",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "desc"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseListReviewResponse"
+                  "type": "object"
                 }
               }
             }
           }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/promotions/{promotionId}": {
@@ -3555,7 +3660,7 @@
         ],
         "summary": "Get promotion by ID",
         "description": "Retrieve detailed information of a specific promotion",
-        "operationId": "getPromotionById_1",
+        "operationId": "getPromotionById",
         "parameters": [
           {
             "name": "promotionId",
@@ -3699,24 +3804,34 @@
         }
       }
     },
-    "/api/v1/promotions/store/{storeId}": {
+    "/api/v1/buyer/promotions/store/{storeId}/available": {
       "get": {
         "tags": [
-          "Public Promotion APIs"
+          "Buyer Promotion APIs"
         ],
-        "summary": "Get promotions by store",
-        "description": "Retrieve all promotions for a specific store (both active and inactive)",
-        "operationId": "getPromotionsByStore",
+        "summary": "Get active promotions by store for customer",
+        "description": "Retrieve all currently active promotions for a specific store",
+        "operationId": "getActivePromotionsByStore",
         "parameters": [
           {
             "name": "storeId",
             "in": "path",
-            "description": "ID of the store",
+            "description": "ID of the store (optional, null for platform promotions only)",
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "orderValue",
+            "in": "query",
+            "description": "Order value to check applicable promotions",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
             },
-            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
+            "example": 500000
           },
           {
             "name": "page",
@@ -3768,18 +3883,34 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
-    "/api/v1/promotions/platform": {
+    "/api/v1/buyer/promotions/platform/available": {
       "get": {
         "tags": [
-          "Public Promotion APIs"
+          "Buyer Promotion APIs"
         ],
-        "summary": "Get all platform promotions",
+        "summary": "Get all platform promotions with status ACTIVE",
         "description": "Retrieve all active platform-wide promotions",
         "operationId": "getPlatformPromotions",
         "parameters": [
+          {
+            "name": "orderValue",
+            "in": "query",
+            "description": "Order value to check applicable promotions",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "example": 500000
+          },
           {
             "name": "page",
             "in": "query",
@@ -3817,6 +3948,45 @@
               "type": "string",
               "default": "desc"
             }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/promotions/code/{promotionCode}": {
+      "get": {
+        "tags": [
+          "Public Promotion APIs"
+        ],
+        "summary": "Get promotion by code",
+        "description": "Retrieve detailed information of a specific promotion by its code",
+        "operationId": "getPromotionByCode",
+        "parameters": [
+          {
+            "name": "promotionCode",
+            "in": "path",
+            "description": "Code of the promotion to retrieve",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "BLACKFRIDAY"
           }
         ],
         "responses": {
@@ -3840,7 +4010,7 @@
         ],
         "summary": "Calculate discount amount",
         "description": "Calculate the exact discount amount for a specific order value",
-        "operationId": "calculateDiscount_1",
+        "operationId": "calculateDiscount",
         "parameters": [
           {
             "name": "promotionId",
@@ -3862,140 +4032,6 @@
               "format": "int64"
             },
             "example": 500000
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/promotions/active": {
-      "get": {
-        "tags": [
-          "Public Promotion APIs"
-        ],
-        "summary": "Get all active promotions",
-        "description": "Retrieve all currently active promotions across all stores and platform",
-        "operationId": "getActivePromotions",
-        "parameters": [
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 0
-            }
-          },
-          {
-            "name": "size",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 10
-            }
-          },
-          {
-            "name": "sortBy",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "createdAt"
-            }
-          },
-          {
-            "name": "sortDir",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "desc"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/promotions/active/store/{storeId}": {
-      "get": {
-        "tags": [
-          "Public Promotion APIs"
-        ],
-        "summary": "Get active promotions by store",
-        "description": "Retrieve all currently active promotions for a specific store",
-        "operationId": "getActivePromotionsByStore",
-        "parameters": [
-          {
-            "name": "storeId",
-            "in": "path",
-            "description": "ID of the store",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 0
-            }
-          },
-          {
-            "name": "size",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 10
-            }
-          },
-          {
-            "name": "sortBy",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "createdAt"
-            }
-          },
-          {
-            "name": "sortDir",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "desc"
-            }
           }
         ],
         "responses": {
@@ -4571,9 +4607,9 @@
             "schema": {
               "type": "integer",
               "format": "int32",
-              "default": 2
+              "default": 15
             },
-            "example": 2
+            "example": 15
           },
           {
             "name": "sortBy",
@@ -4936,7 +4972,7 @@
         ],
         "summary": "Get my reviews",
         "description": "Retrieve all reviews created by the current authenticated user",
-        "operationId": "getMyReviews_1",
+        "operationId": "getMyReviews",
         "responses": {
           "200": {
             "description": "OK",
@@ -4966,16 +5002,26 @@
         "operationId": "getOrderHistory",
         "parameters": [
           {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by order status (PENDING, CONFIRMED, SHIPPING, DELIVERED, CANCELLED)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "PENDING"
+          },
+          {
             "name": "page",
             "in": "query",
-            "description": "Page number (1-based)",
+            "description": "Page number (0-based)",
             "required": false,
             "schema": {
               "type": "integer",
               "format": "int32",
-              "default": 1
+              "default": 0
             },
-            "example": 1
+            "example": 0
           },
           {
             "name": "size",
@@ -4988,16 +5034,6 @@
               "default": 10
             },
             "example": 10
-          },
-          {
-            "name": "status",
-            "in": "query",
-            "description": "Filter by order status (PENDING, CONFIRMED, SHIPPING, DELIVERED, CANCELLED)",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "example": "PENDING"
           },
           {
             "name": "sortBy",
@@ -5088,6 +5124,45 @@
         "summary": "Get shopping cart",
         "description": "Retrieve all items in the current user's shopping cart with detailed product information and totals",
         "operationId": "getCart",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Buyer Cart Management"
+        ],
+        "summary": "Remove many items from cart",
+        "description": "Remove a specific product variant completely from the shopping cart",
+        "operationId": "removeManyCartItems",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "description": "List of cart item IDs to remove from cart",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "OK",
@@ -5335,6 +5410,490 @@
         ]
       }
     },
+    "/api/v1/b2c/promotions/store/{storeId}/inactive": {
+      "get": {
+        "tags": [
+          "B2C Promotion Management"
+        ],
+        "summary": "Get inactive promotions by store",
+        "description": "Retrieve all inactive promotions for a specific store",
+        "operationId": "getInactivePromotionsByStore",
+        "parameters": [
+          {
+            "name": "storeId",
+            "in": "path",
+            "description": "ID of the store",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "createdAt"
+            }
+          },
+          {
+            "name": "sortDir",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/b2c/promotions/store/{storeId}/expired": {
+      "get": {
+        "tags": [
+          "B2C Promotion Management"
+        ],
+        "summary": "Get expired promotions by store",
+        "description": "Retrieve all expired promotions for a specific store",
+        "operationId": "getExpiredPromotionsByStore",
+        "parameters": [
+          {
+            "name": "storeId",
+            "in": "path",
+            "description": "ID of the store",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "createdAt"
+            }
+          },
+          {
+            "name": "sortDir",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/b2c/promotions/store/{storeId}/deleted": {
+      "get": {
+        "tags": [
+          "B2C Promotion Management"
+        ],
+        "summary": "Get deleted promotions by store",
+        "description": "Retrieve all deleted promotions for a specific store",
+        "operationId": "getDeletedPromotionsByStore",
+        "parameters": [
+          {
+            "name": "storeId",
+            "in": "path",
+            "description": "ID of the store",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "createdAt"
+            }
+          },
+          {
+            "name": "sortDir",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/b2c/promotions/store/{storeId}/active": {
+      "get": {
+        "tags": [
+          "B2C Promotion Management"
+        ],
+        "summary": "Get active promotions by store",
+        "description": "Retrieve all active promotions for a specific store",
+        "operationId": "getActivePromotionsByStore_1",
+        "parameters": [
+          {
+            "name": "storeId",
+            "in": "path",
+            "description": "ID of the store",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "createdAt"
+            }
+          },
+          {
+            "name": "sortDir",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/b2c/products/{storeId}": {
+      "get": {
+        "tags": [
+          "B2C Product Management"
+        ],
+        "summary": "Get all products",
+        "description": "Retrieve a list of all products for a specific store",
+        "operationId": "getAllProduct",
+        "parameters": [
+          {
+            "name": "storeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (0-based)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Page size",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "description": "Sort by field",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "createdAt"
+            }
+          },
+          {
+            "name": "sortDir",
+            "in": "query",
+            "description": "Sort direction: asc or desc",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/b2c/product-variants/{storeId}": {
+      "get": {
+        "tags": [
+          "B2C Product Variant Management"
+        ],
+        "summary": "Get all product variants",
+        "description": "Retrieve a list of all product variants for a specific store",
+        "operationId": "getAllProductVariant",
+        "parameters": [
+          {
+            "name": "storeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (0-based)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Page size",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "description": "Sort by field",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "createdAt"
+            }
+          },
+          {
+            "name": "sortDir",
+            "in": "query",
+            "description": "Sort direction: asc or desc",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/b2c/orders": {
       "get": {
         "tags": [
@@ -5357,14 +5916,14 @@
           {
             "name": "page",
             "in": "query",
-            "description": "Page number (1-based)",
+            "description": "Page number (0-based)",
             "required": false,
             "schema": {
               "type": "integer",
               "format": "int32",
-              "default": 1
+              "default": 0
             },
-            "example": 1
+            "example": 0
           },
           {
             "name": "size",
@@ -6332,6 +6891,142 @@
         ]
       }
     },
+    "/api/v1/admin/users": {
+      "get": {
+        "tags": [
+          "Admin User Management"
+        ],
+        "summary": "Get users (admin)",
+        "description": "Retrieve paginated list of users with optional filters",
+        "operationId": "getAllUsers",
+        "parameters": [
+          {
+            "name": "userName",
+            "in": "query",
+            "description": "Filter by full name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userEmail",
+            "in": "query",
+            "description": "Filter by email",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userPhone",
+            "in": "query",
+            "description": "Filter by phone",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (0-based)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Page size",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "description": "Sort by field",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "createdAt"
+            }
+          },
+          {
+            "name": "sortDir",
+            "in": "query",
+            "description": "Sort direction: asc or desc",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/users/check-ban/{userId}": {
+      "get": {
+        "tags": [
+          "Admin User Management"
+        ],
+        "summary": "Check ban status",
+        "description": "Check whether a user is currently banned",
+        "operationId": "checkBanStatus",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "description": "User ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/stores/pending": {
       "get": {
         "tags": [
@@ -6540,7 +7235,7 @@
         ],
         "summary": "Get promotion by ID (Admin)",
         "description": "Retrieve detailed information of a specific promotion - Admin view",
-        "operationId": "getPromotionById_2",
+        "operationId": "getPromotionById_1",
         "parameters": [
           {
             "name": "promotionId",
@@ -6588,83 +7283,6 @@
               "type": "string"
             },
             "example": "64f1a2b3c4d5e6f7a8b9c0d1"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/admin/promotions/store/{storeId}": {
-      "get": {
-        "tags": [
-          "Admin Promotion Management"
-        ],
-        "summary": "Get promotions by store (Admin)",
-        "description": "Retrieve all promotions for a specific store - Admin oversight",
-        "operationId": "getPromotionsByStore_1",
-        "parameters": [
-          {
-            "name": "storeId",
-            "in": "path",
-            "description": "ID of the store",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 0
-            }
-          },
-          {
-            "name": "size",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 10
-            }
-          },
-          {
-            "name": "sortBy",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "createdAt"
-            }
-          },
-          {
-            "name": "sortDir",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "desc"
-            }
           }
         ],
         "responses": {
@@ -7163,6 +7781,44 @@
         ]
       }
     },
+    "/api/v1/buyer/cart/{cartItemId}": {
+      "delete": {
+        "tags": [
+          "Buyer Cart Management"
+        ],
+        "summary": "Remove item from cart",
+        "description": "Remove a specific product variant completely from the shopping cart",
+        "operationId": "removeCartItem",
+        "parameters": [
+          {
+            "name": "cartItemId",
+            "in": "path",
+            "description": "ID of the cart item to remove",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/buyer/cart/clear": {
       "delete": {
         "tags": [
@@ -7451,6 +8107,7 @@
         "required": [
           "applicableFor",
           "code",
+          "description",
           "discountType",
           "discountValue",
           "endDate",
@@ -7465,6 +8122,9 @@
           },
           "code": {
             "pattern": "^[A-Z0-9]{4,20}$",
+            "type": "string"
+          },
+          "description": {
             "type": "string"
           },
           "type": {
@@ -7506,6 +8166,14 @@
             "minimum": 1,
             "type": "integer",
             "format": "int32"
+          },
+          "usageLimitPerUser": {
+            "minimum": 1,
+            "type": "integer",
+            "format": "int32"
+          },
+          "isNewUserOnly": {
+            "type": "boolean"
           },
           "categoryId": {
             "type": "string"
@@ -7564,18 +8232,6 @@
         },
         "description": "Color option information including color name, hex code, and additional properties"
       },
-      "ResetPasswordDTO": {
-        "type": "object",
-        "properties": {
-          "token": {
-            "type": "string"
-          },
-          "password": {
-            "type": "string"
-          }
-        },
-        "description": "Reset password data with token and new password"
-      },
       "UserRegisterDTO": {
         "required": [
           "email",
@@ -7615,6 +8271,21 @@
         },
         "description": "User login credentials"
       },
+      "ChangePasswordDTO": {
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ],
+        "type": "object",
+        "properties": {
+          "currentPassword": {
+            "type": "string"
+          },
+          "newPassword": {
+            "type": "string"
+          }
+        }
+      },
       "GoogleCodeRequest": {
         "type": "object",
         "properties": {
@@ -7650,7 +8321,7 @@
           "storePromotions": {
             "type": "object",
             "additionalProperties": {
-              "$ref": "#/components/schemas/StorePromotions"
+              "type": "string"
             }
           },
           "note": {
@@ -7670,6 +8341,12 @@
           },
           "shippingPromotionCode": {
             "type": "string"
+          },
+          "applyShippingToStores": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -7679,22 +8356,18 @@
         ],
         "type": "object",
         "properties": {
+          "id": {
+            "type": "string"
+          },
           "productVariantId": {
             "type": "string"
           },
           "colorId": {
             "type": "string"
-          }
-        }
-      },
-      "StorePromotions": {
-        "type": "object",
-        "properties": {
-          "orderPromotionCode": {
-            "type": "string"
           },
-          "shippingPromotionCode": {
-            "type": "string"
+          "quantity": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -7781,6 +8454,7 @@
         "required": [
           "applicableFor",
           "code",
+          "description",
           "discountType",
           "discountValue",
           "endDate",
@@ -7791,6 +8465,9 @@
         "type": "object",
         "properties": {
           "title": {
+            "type": "string"
+          },
+          "description": {
             "type": "string"
           },
           "code": {
@@ -7837,6 +8514,14 @@
             "type": "integer",
             "format": "int32"
           },
+          "usageLimitPerUser": {
+            "minimum": 1,
+            "type": "integer",
+            "format": "int32"
+          },
+          "isNewUserOnly": {
+            "type": "boolean"
+          },
           "categoryId": {
             "type": "string"
           }
@@ -7876,6 +8561,33 @@
           }
         },
         "description": "Product variant information including product ID, size, color, price, and stock quantity"
+      },
+      "BanUserDTO": {
+        "required": [
+          "banType",
+          "reason",
+          "userId"
+        ],
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "banType": {
+            "type": "string",
+            "enum": [
+              "TEMPORARY",
+              "PERMANENT"
+            ]
+          },
+          "durationDays": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
       },
       "ApiResponseReviewResponse": {
         "type": "object",
@@ -8029,13 +8741,13 @@
       "SortObject": {
         "type": "object",
         "properties": {
+          "unsorted": {
+            "type": "boolean"
+          },
           "sorted": {
             "type": "boolean"
           },
           "empty": {
-            "type": "boolean"
-          },
-          "unsorted": {
             "type": "boolean"
           }
         }

@@ -1,5 +1,5 @@
 import useSWR, { useSWRConfig } from 'swr';
-import { getProductVariantsByCategory, getLatestProductVariants, getCategories } from '../services/productService';
+import { getProductVariantsByCategory, getLatestProductVariants, getCategories } from '../services/common/productService';
 
 // ✅ Key mapping: Frontend key → Backend API name
 const KEY_TO_API_NAME = {
@@ -97,34 +97,113 @@ export const useProductVariants = (category, options = {}) => {
     {
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
-      dedupingInterval: 600000, // ✅ Cache 10 phút (tăng từ 5 phút)
+      dedupingInterval: 600000, // ✅ Tăng cache lên 10 phút (vì BE chậm, cache lâu hơn)
       revalidateIfStale: false,
       shouldRetryOnError: false,
-      errorRetryCount: 1,
+      errorRetryCount: 0, // ✅ Không retry (vì BE chậm, retry sẽ làm chậm hơn)
       keepPreviousData: true, // ✅ Giữ data cũ khi fetch mới → UX mượt hơn
+      revalidateOnMount: true,
+      fallbackData: undefined,
+      // ✅ Tối ưu: Loading timeout - nếu quá 5s thì coi như đang load (để hiển thị data cũ)
+      loadingTimeout: 5000,
     }
   );
 
   // Parse response data
   // ✅ Kiểm tra cẩn thận: data có thể là {}, phải check Array.isArray
   let variants = [];
+  let totalElementsFromAPI = undefined;
+  let totalPagesFromAPI = undefined;
+  let currentPageFromAPI = undefined;
+  
   if (!data) {
     // Data chưa load (SWR đang fetch) → trả về empty array
     variants = [];
   } else if (Array.isArray(data?.content)) {
+    // ✅ Paginated response: có content array
     variants = data.content;
+    // ✅ Backend trả về structure: { content: [...], page: {...} }
+    // Lấy pagination metadata từ data.page hoặc data (nếu có ở top level)
+    if (data.page && typeof data.page === 'object') {
+      // ✅ Structure mới: pagination metadata nằm trong page object
+      totalElementsFromAPI = data.page.totalElements !== undefined ? data.page.totalElements : undefined;
+      totalPagesFromAPI = data.page.totalPages !== undefined ? data.page.totalPages : undefined;
+      currentPageFromAPI = data.page.number !== undefined ? data.page.number : undefined;
+    } else {
+      // ✅ Fallback: thử lấy từ top level (structure cũ)
+      totalElementsFromAPI = data.totalElements !== undefined ? data.totalElements : undefined;
+      totalPagesFromAPI = data.totalPages !== undefined ? data.totalPages : undefined;
+      currentPageFromAPI = data.number !== undefined ? data.number : undefined;
+    }
   } else if (Array.isArray(data)) {
+    // ✅ Array trực tiếp (không có pagination metadata)
     variants = data;
+  } else if (data && typeof data === 'object') {
+    // ✅ Có thể là object với structure khác, thử tìm content
+    if (Array.isArray(data.content)) {
+      variants = data.content;
+      // ✅ Backend trả về structure: { content: [...], page: {...} }
+      if (data.page && typeof data.page === 'object') {
+        // ✅ Structure mới: pagination metadata nằm trong page object
+        totalElementsFromAPI = data.page.totalElements !== undefined ? data.page.totalElements : undefined;
+        totalPagesFromAPI = data.page.totalPages !== undefined ? data.page.totalPages : undefined;
+        currentPageFromAPI = data.page.number !== undefined ? data.page.number : undefined;
+      } else {
+        // ✅ Fallback: thử lấy từ top level (structure cũ)
+        totalElementsFromAPI = data.totalElements !== undefined ? data.totalElements : undefined;
+        totalPagesFromAPI = data.totalPages !== undefined ? data.totalPages : undefined;
+        currentPageFromAPI = data.number !== undefined ? data.number : undefined;
+      }
+    } else {
+      // ✅ Có thể là object chứa array trực tiếp (không có wrapper content)
+      // Thử tìm các key có thể chứa array
+      const arrayKeys = Object.keys(data).filter(key => Array.isArray(data[key]));
+      if (arrayKeys.length > 0) {
+        // Lấy array đầu tiên tìm thấy
+        variants = data[arrayKeys[0]];
+        console.log(`⚠️ Using array from key "${arrayKeys[0]}" (no content wrapper)`);
+        // ✅ Thử lấy pagination từ page object nếu có
+        if (data.page && typeof data.page === 'object') {
+          totalElementsFromAPI = data.page.totalElements !== undefined ? data.page.totalElements : undefined;
+          totalPagesFromAPI = data.page.totalPages !== undefined ? data.page.totalPages : undefined;
+          currentPageFromAPI = data.page.number !== undefined ? data.page.number : undefined;
+        }
+      } else {
+        console.warn('⚠️ Unexpected data format (object but no content or array):', data);
+        variants = [];
+      }
+    }
   } else {
     console.warn('⚠️ Unexpected data format (not array or paginated):', data);
     variants = [];
   }
   
+  // ✅ Debug: Log API response để kiểm tra totalElements
+  console.log('🔍 useProductVariants - API Response:', {
+    hasData: !!data,
+    dataType: typeof data,
+    dataKeys: data ? Object.keys(data) : [],
+    totalElements: totalElementsFromAPI,
+    totalPages: totalPagesFromAPI,
+    number: currentPageFromAPI,
+    size: data?.size || data?.page?.size,
+    contentLength: variants.length,
+    // ✅ Log chi tiết để debug
+    hasContent: Array.isArray(data?.content),
+    hasPage: !!data?.page,
+    pageKeys: data?.page ? Object.keys(data.page) : [],
+    hasTotalElements: 'totalElements' in (data || {}) || 'totalElements' in (data?.page || {}),
+    hasTotalPages: 'totalPages' in (data || {}) || 'totalPages' in (data?.page || {}),
+    pageObject: data?.page,
+    fullData: data
+  });
+  
   const pagination = {
-    currentPage: data?.number || 0,
-    totalPages: data?.totalPages || 1,
-    totalElements: data?.totalElements || variants.length,
-    pageSize: data?.size || size,
+    currentPage: currentPageFromAPI !== undefined ? currentPageFromAPI : 0,
+    totalPages: totalPagesFromAPI !== undefined ? totalPagesFromAPI : 1,
+    // ✅ Lấy totalElements từ API response
+    totalElements: totalElementsFromAPI,
+    pageSize: data?.page?.size || data?.size || size,
   };
 
   // ✅ Transform variants để tương thích với ProductSection component

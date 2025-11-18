@@ -1,5 +1,5 @@
 import useSWR from 'swr';
-import { getStoreById } from '../services/storeService';
+import { getStoreById } from '../services/common/storeService';
 
 /**
  * ✅ Hook để fetch store info từ storeId

@@ -3,6 +3,7 @@ import ProductSection from '../../components/common/ProductSection';
 import ProductSkeleton from '../../components/common/ProductSkeleton';
 import BrandsSection from '../../components/common/BrandsSection';
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useProductVariants, usePrefetchVariants } from '../../hooks/useProductVariants';
 import { useCategories } from '../../hooks/useCategories';
 import { useNavigate } from 'react-router-dom';
@@ -294,35 +295,56 @@ const HomePage = () => {
 
             {/* Main Content Area - BANNER QUẢNG CÁO */}
             <div className="flex-1 flex flex-col relative z-0">
-              {/* Banner Slider */}
+              {/* Banner Slider với Framer Motion */}
               <div 
-                className={`relative bg-gradient-to-r ${currentBanner.gradient} h-96 overflow-hidden transition-all duration-700 ease-in-out`}
+                className={`relative bg-gradient-to-r ${currentBanner.gradient} h-96 overflow-hidden`}
                 onMouseEnter={() => setIsPaused(true)}
                 onMouseLeave={() => setIsPaused(false)}
               >
                 {/* Animated Background Pattern */}
-                <div className="absolute inset-0 opacity-10">
+                <motion.div 
+                  className="absolute inset-0 opacity-10"
+                  animate={{ 
+                    backgroundPosition: ['0% 0%', '100% 100%'],
+                  }}
+                  transition={{ 
+                    duration: 20, 
+                    repeat: Infinity, 
+                    repeatType: "reverse",
+                    ease: "linear"
+                  }}
+                >
                   <div className="absolute inset-0" style={{
                     backgroundImage: 'radial-gradient(circle at 20% 50%, white 0%, transparent 50%), radial-gradient(circle at 80% 80%, white 0%, transparent 50%)',
                   }}></div>
-                </div>
+                </motion.div>
 
                 <div className="absolute inset-0 px-8 z-10 flex items-center justify-between">
-                  {/* Previous Button */}
-                  <button
+                  {/* Previous Button với Framer Motion */}
+                  <motion.button
                     onClick={handlePrevious}
-                    className="w-14 h-14 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-full flex items-center justify-center text-white transition-all duration-300 z-20 hover:scale-110 shadow-2xl border border-white/30"
+                    whileHover={{ scale: 1.1, backgroundColor: "rgba(255,255,255,0.3)" }}
+                    whileTap={{ scale: 0.95 }}
+                    className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white z-20 shadow-2xl border border-white/30"
                     aria-label="Banner trước"
                   >
                     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7"></path>
                     </svg>
-                  </button>
+                  </motion.button>
 
-                  {/* Content - LAYOUT CỐ ĐỊNH: TEXT TRÁI, ẢNH PHẢI */}
+                  {/* Content - LAYOUT CỐ ĐỊNH: TEXT TRÁI, ẢNH PHẢI với Fade Animation */}
                   <div className="flex-1 px-12 max-w-6xl mx-auto grid grid-cols-12 items-center gap-8">
-                    {/* Text Content - BÊN TRÁI */}
-                    <div className={`${currentBanner.textColor} transition-all duration-700 ease-in-out col-span-7 pr-4`}> 
+                    {/* Text Content - BÊN TRÁI với Framer Motion */}
+                    <AnimatePresence mode="wait">
+                      <motion.div 
+                        key={currentBannerIndex}
+                        initial={{ opacity: 0, x: -30 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 30 }}
+                        transition={{ duration: 0.5, ease: "easeInOut" }}
+                        className={`${currentBanner.textColor} col-span-7 pr-4`}
+                      > 
                       <div className="flex items-center mb-6">
                         <span className="bg-white/20 backdrop-blur-sm text-white text-sm px-4 py-2 rounded-full font-bold border border-white/30 shadow-lg">
                           {currentBanner.badge}
@@ -349,51 +371,87 @@ const HomePage = () => {
                         </div>
                       </div>
                       
-                      <button className={`${currentBanner.buttonColor} font-bold px-8 py-3 rounded-full transition-all duration-300 hover:scale-105 shadow-2xl text-base`}>
+                      <motion.button 
+                        className={`${currentBanner.buttonColor} font-bold px-8 py-3 rounded-full shadow-2xl text-base`}
+                        whileHover={{ scale: 1.05, y: -2 }}
+                        whileTap={{ scale: 0.98 }}
+                        transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                      >
                         Mua ngay →
-                      </button>
-                    </div>
+                      </motion.button>
+                    </motion.div>
+                    </AnimatePresence>
 
-                    {/* Product Image - BÊN PHẢI (CỐ ĐỊNH KHUNG) */}
+                    {/* Product Image - BÊN PHẢI (CỐ ĐỊNH KHUNG) với Framer Motion */}
                     <div className="col-span-5 h-full flex items-center justify-end">
                       <div className="relative w-[420px] h-[320px] lg:w-[460px] lg:h-[340px] xl:w-[500px] xl:h-[360px]">
-                        <div className="absolute inset-0 bg-white/20 rounded-2xl blur-2xl transition-all duration-700 opacity-50"></div>
-                        <img
-                          src={currentBanner.image}
-                          alt={currentBanner.title}
-                          className="relative w-full h-full object-contain transition-all duration-700 ease-in-out drop-shadow-2xl"
-                          onError={(e) => {
-                            e.target.src = 'https://via.placeholder.com/500x360?text=' + encodeURIComponent(currentBanner.title);
+                        <motion.div 
+                          className="absolute inset-0 bg-white/20 rounded-2xl blur-2xl opacity-50"
+                          animate={{ 
+                            scale: [1, 1.1, 1],
+                            opacity: [0.5, 0.6, 0.5]
                           }}
-                        />
+                          transition={{ 
+                            duration: 3, 
+                            repeat: Infinity, 
+                            ease: "easeInOut" 
+                          }}
+                        ></motion.div>
+                        <AnimatePresence mode="wait">
+                          <motion.img
+                            key={currentBannerIndex}
+                            src={currentBanner.image}
+                            alt={currentBanner.title}
+                            initial={{ opacity: 0, scale: 0.8, rotateY: -15 }}
+                            animate={{ opacity: 1, scale: 1, rotateY: 0 }}
+                            exit={{ opacity: 0, scale: 0.8, rotateY: 15 }}
+                            transition={{ duration: 0.5, ease: "easeInOut" }}
+                            className="relative w-full h-full object-contain drop-shadow-2xl"
+                            onError={(e) => {
+                              e.target.src = 'https://via.placeholder.com/500x360?text=' + encodeURIComponent(currentBanner.title);
+                            }}
+                          />
+                        </AnimatePresence>
                       </div>
                     </div>
                   </div>
 
-                  {/* Next Button */}
-                  <button
+                  {/* Next Button với Framer Motion */}
+                  <motion.button
                     onClick={handleNext}
-                    className="w-14 h-14 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-full flex items-center justify-center text-white transition-all duration-300 z-20 hover:scale-110 shadow-2xl border border-white/30"
+                    whileHover={{ scale: 1.1, backgroundColor: "rgba(255,255,255,0.3)" }}
+                    whileTap={{ scale: 0.95 }}
+                    className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white z-20 shadow-2xl border border-white/30"
                     aria-label="Banner sau"
                   >
                     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7"></path>
                     </svg>
-                  </button>
+                  </motion.button>
                 </div>
                 
-                {/* Progress Indicators - Dots */}
+                {/* Progress Indicators - Dots với Framer Motion */}
                 <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex space-x-3 z-20">
                   {promotionalBanners.map((_, index) => (
-                    <button
+                    <motion.button
                       key={index}
                       onClick={() => setCurrentBannerIndex(index)}
-                      className={`transition-all duration-300 rounded-full ${
+                      whileHover={{ scale: 1.2 }}
+                      whileTap={{ scale: 0.9 }}
+                      className={`rounded-full ${
                         index === currentBannerIndex
                           ? 'w-10 h-3 bg-white shadow-lg'
                           : 'w-3 h-3 bg-white/50 hover:bg-white/70'
                       }`}
                       aria-label={`Chuyển đến banner ${index + 1}`}
+                      animate={index === currentBannerIndex ? {
+                        scale: [1, 1.1, 1]
+                      } : {}}
+                      transition={{ 
+                        duration: 2, 
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                      }}
                     />
                   ))}
                 </div>

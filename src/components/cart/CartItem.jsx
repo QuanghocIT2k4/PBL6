@@ -1,6 +1,7 @@
 import { useCart } from '../../context/CartContext';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { getAttributeLabel } from '../../utils/attributeLabels';
 
 const CartItem = ({ item }) => {
@@ -49,7 +50,14 @@ const CartItem = ({ item }) => {
   const totalPrice = itemPrice * item.quantity;
 
   return (
-    <div className={`flex items-center space-x-4 bg-white p-4 rounded-lg shadow-sm border transition-all duration-300 ${isUpdating || isRemoving ? 'opacity-60' : ''}`}>
+    <motion.div 
+      layout
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: isRemoving ? 0 : 1, x: 0 }}
+      exit={{ opacity: 0, x: 20, scale: 0.95 }}
+      transition={{ duration: 0.3, ease: "easeInOut" }}
+      className={`flex items-center space-x-4 bg-white p-4 rounded-lg shadow-sm border ${isUpdating || isRemoving ? 'opacity-60' : ''}`}
+    >
       {/* Select Checkbox */}
       <input
         type="checkbox"
@@ -123,25 +131,35 @@ const CartItem = ({ item }) => {
         </div>
       </div>
 
-      {/* Quantity Controls */}
+      {/* Quantity Controls với Framer Motion */}
       <div className="flex items-center space-x-2 flex-shrink-0">
-        <button
+        <motion.button
           onClick={() => handleQuantityChange(item.quantity - 1)}
           disabled={item.quantity <= 1 || isUpdating}
-          className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          whileHover={item.quantity > 1 && !isUpdating ? { scale: 1.1 } : {}}
+          whileTap={item.quantity > 1 && !isUpdating ? { scale: 0.9 } : {}}
+          className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           -
-        </button>
-        <span className="w-8 text-center font-medium">
+        </motion.button>
+        <motion.span 
+          className="w-8 text-center font-medium"
+          key={item.quantity}
+          initial={{ scale: 1.2 }}
+          animate={{ scale: 1 }}
+          transition={{ duration: 0.2 }}
+        >
           {isUpdating ? '...' : item.quantity}
-        </span>
-        <button
+        </motion.span>
+        <motion.button
           onClick={() => handleQuantityChange(item.quantity + 1)}
           disabled={isUpdating}
-          className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          whileHover={!isUpdating ? { scale: 1.1 } : {}}
+          whileTap={!isUpdating ? { scale: 0.9 } : {}}
+          className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           +
-        </button>
+        </motion.button>
       </div>
 
       {/* Total Price */}
@@ -149,15 +167,17 @@ const CartItem = ({ item }) => {
         <div className="font-bold text-lg text-red-600">
           {totalPrice?.toLocaleString('vi-VN')}đ
         </div>
-        <button
+        <motion.button
           onClick={handleRemove}
           disabled={isRemoving}
-          className="text-sm text-red-500 hover:text-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          whileHover={!isRemoving ? { scale: 1.05 } : {}}
+          whileTap={!isRemoving ? { scale: 0.95 } : {}}
+          className="text-sm text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isRemoving ? 'Đang xóa...' : 'Xóa'}
-        </button>
+        </motion.button>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

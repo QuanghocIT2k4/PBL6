@@ -1,5 +1,5 @@
 import useSWR from 'swr';
-import { getProductById, getProductVariantById, getProductVariantsByCategory } from '../services/productService';
+import { getProductById, getProductVariantById, getProductVariantsByCategory } from '../services/common/productService';
 
 /**
  * ✅ SWR Fetchers

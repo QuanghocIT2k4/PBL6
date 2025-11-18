@@ -1,13 +1,107 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import StoreLayout from '../../layouts/StoreLayout';
 import StoreStatusGuard from '../../components/store/StoreStatusGuard';
 import { useStoreContext } from '../../context/StoreContext';
+import { 
+  getDashboardAnalytics,
+  getRevenueAnalytics,
+  getOrderAnalytics,
+  getProductAnalytics,
+  getTopProducts,
+  getCustomerAnalytics,
+  getTopCustomers,
+  getSalesTrend,
+  getInventoryAnalytics,
+} from '../../services/b2c/b2cAnalyticsService';
 
 const StoreAnalytics = () => {
   const { currentStore, loading: storeLoading } = useStoreContext();
   const [timeRange, setTimeRange] = useState('30days');
+  const [analyticsData, setAnalyticsData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Mock data động theo chi nhánh
+  // Fetch real analytics data from backend
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      if (!currentStore?.id) return;
+      
+      setLoading(true);
+      try {
+        console.log('📊 Fetching analytics for store:', currentStore.id);
+        
+        // Fetch all analytics in parallel
+        const [
+          dashboardResult,
+          revenueResult,
+          orderResult,
+          productResult,
+          topProductsResult,
+          customerResult,
+        ] = await Promise.all([
+          getDashboardAnalytics(currentStore.id),
+          getRevenueAnalytics(currentStore.id),
+          getOrderAnalytics(currentStore.id),
+          getProductAnalytics(currentStore.id),
+          getTopProducts(currentStore.id, 5),
+          getCustomerAnalytics(currentStore.id),
+        ]);
+
+        // Combine results into analytics data structure
+        // ⚠️ Backend analytics có thể chưa ready → Safely handle
+        const hasAnySuccess = dashboardResult.success || revenueResult.success || 
+                             orderResult.success || productResult.success;
+        
+        if (hasAnySuccess) {
+          const data = {
+            revenue: (revenueResult.success && revenueResult.data) 
+              ? revenueResult.data 
+              : { total: 0, growth: 0, chart: [] },
+            orders: (orderResult.success && orderResult.data)
+              ? orderResult.data
+              : { total: 0, growth: 0, chart: [] },
+            products: (productResult.success && productResult.data)
+              ? productResult.data
+              : { total: 0, active: 0, inactive: 0, topSelling: [] },
+            customers: (customerResult.success && customerResult.data)
+              ? customerResult.data
+              : { total: 0, new: 0, returning: 0, chart: [] },
+          };
+          
+          // Update top selling from topProductsResult
+          if (topProductsResult.success && Array.isArray(topProductsResult.data)) {
+            data.products.topSelling = topProductsResult.data;
+          }
+          
+          setAnalyticsData(data);
+          console.log('✅ Analytics loaded (partial or full):', data);
+        } else {
+          console.warn('⚠️ Backend analytics not ready');
+          // Set empty data instead of mock
+          setAnalyticsData({
+            revenue: { total: 0, growth: 0, chart: [] },
+            orders: { total: 0, growth: 0, chart: [] },
+            products: { total: 0, active: 0, inactive: 0, topSelling: [] },
+            customers: { total: 0, new: 0, returning: 0, chart: [] },
+          });
+        }
+      } catch (error) {
+        console.error('❌ Error fetching analytics:', error);
+        // Set empty data instead of mock
+        setAnalyticsData({
+          revenue: { total: 0, growth: 0, chart: [] },
+          orders: { total: 0, growth: 0, chart: [] },
+          products: { total: 0, active: 0, inactive: 0, topSelling: [] },
+          customers: { total: 0, new: 0, returning: 0, chart: [] },
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAnalytics();
+  }, [currentStore?.id, timeRange]);
+
+  // Mock data động theo chi nhánh (FALLBACK)
   const getAnalyticsByBranch = (branchId) => {
     const branchAnalytics = {
       'branch-1': { // Hải Châu - Điện thoại cao cấp
@@ -181,8 +275,9 @@ const StoreAnalytics = () => {
     
     return branchAnalytics[branchId] || branchAnalytics['branch-1'];
   };
-  
-  const analyticsData = currentStore ? getAnalyticsByBranch(currentStore.id) : getAnalyticsByBranch('branch-1');
+
+  // Show loading or use mock data as fallback
+  const displayData = analyticsData || (currentStore ? getAnalyticsByBranch(currentStore.id) : getAnalyticsByBranch('branch-1'));
 
   const formatPrice = (price) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -194,6 +289,22 @@ const StoreAnalytics = () => {
   const formatNumber = (num) => {
     return new Intl.NumberFormat('vi-VN').format(num);
   };
+
+  // Show loading state
+  if (loading && !displayData) {
+    return (
+      <StoreStatusGuard currentStore={currentStore} pageName="phân tích dữ liệu" loading={storeLoading}>
+        <StoreLayout>
+          <div className="flex items-center justify-center h-96">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+              <p className="mt-4 text-gray-600">Đang tải dữ liệu phân tích...</p>
+            </div>
+          </div>
+        </StoreLayout>
+      </StoreStatusGuard>
+    );
+  }
 
   return (
     <StoreStatusGuard currentStore={currentStore} pageName="phân tích dữ liệu" loading={storeLoading}>
@@ -217,18 +328,22 @@ const StoreAnalytics = () => {
                       <p className="text-gray-600 mt-1">Thống kê và báo cáo chi tiết</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <select
-                      value={timeRange}
-                      onChange={(e) => setTimeRange(e.target.value)}
-                      className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    >
-                      <option value="7days">7 ngày qua</option>
-                      <option value="30days">30 ngày qua</option>
-                      <option value="90days">90 ngày qua</option>
-                      <option value="1year">1 năm qua</option>
-                    </select>
-                  </div>
+                  {currentStore?.status && (
+                    <div className={`px-6 py-3 rounded-xl font-semibold text-sm flex items-center gap-2 ${
+                      currentStore.status === 'APPROVED' ? 'bg-green-100 text-green-800 border-2 border-green-300' :
+                      currentStore.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800 border-2 border-yellow-300' :
+                      'bg-red-100 text-red-800 border-2 border-red-300'
+                    }`}>
+                      <span className="text-lg">
+                        {currentStore.status === 'APPROVED' ? '✅' :
+                         currentStore.status === 'PENDING' ? '⏳' : '❌'}
+                      </span>
+                      <span>
+                        {currentStore.status === 'APPROVED' ? 'Đã duyệt' :
+                         currentStore.status === 'PENDING' ? 'Chờ duyệt' : 'Đã từ chối'}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 
                 {/* Stats Cards */}
@@ -242,8 +357,8 @@ const StoreAnalytics = () => {
                       </div>
                       <div>
                         <p className="text-sm font-medium text-gray-600">Tổng doanh thu</p>
-                        <p className="text-xl font-bold text-gray-900">{formatPrice(analyticsData.revenue.total)}</p>
-                        <p className="text-xs text-green-600">+{analyticsData.revenue.growth}% so với tháng trước</p>
+                        <p className="text-xl font-bold text-gray-900">{formatPrice(displayData?.revenue?.total || 0)}</p>
+                        <p className="text-xs text-green-600">+{displayData?.revenue?.growth || 0}% so với tháng trước</p>
                       </div>
                     </div>
                   </div>
@@ -257,8 +372,8 @@ const StoreAnalytics = () => {
                       </div>
                       <div>
                         <p className="text-sm font-medium text-gray-600">Tổng đơn hàng</p>
-                        <p className="text-xl font-bold text-gray-900">{formatNumber(analyticsData.orders.total)}</p>
-                        <p className="text-xs text-blue-600">+{analyticsData.orders.growth}% so với tháng trước</p>
+                        <p className="text-xl font-bold text-gray-900">{formatNumber(displayData?.orders?.total || 0)}</p>
+                        <p className="text-xs text-blue-600">+{displayData?.orders?.growth || 0}% so với tháng trước</p>
                       </div>
                     </div>
                   </div>
@@ -272,8 +387,8 @@ const StoreAnalytics = () => {
                       </div>
                       <div>
                         <p className="text-sm font-medium text-gray-600">Sản phẩm</p>
-                        <p className="text-xl font-bold text-gray-900">{formatNumber(analyticsData.products.total)}</p>
-                        <p className="text-xs text-purple-600">{formatNumber(analyticsData.products.active)} đang bán</p>
+                        <p className="text-xl font-bold text-gray-900">{formatNumber(displayData?.products?.total || 0)}</p>
+                        <p className="text-xs text-purple-600">{formatNumber(displayData?.products?.active || 0)} đang bán</p>
                       </div>
                     </div>
                   </div>
@@ -287,8 +402,8 @@ const StoreAnalytics = () => {
                       </div>
                       <div>
                         <p className="text-sm font-medium text-gray-600">Khách hàng</p>
-                        <p className="text-xl font-bold text-gray-900">{formatNumber(analyticsData.customers.total)}</p>
-                        <p className="text-xs text-orange-600">{formatNumber(analyticsData.customers.new)} mới</p>
+                        <p className="text-xl font-bold text-gray-900">{formatNumber(displayData?.customers?.total || 0)}</p>
+                        <p className="text-xs text-orange-600">{formatNumber(displayData?.customers?.new || 0)} mới</p>
                       </div>
                     </div>
                   </div>
@@ -303,11 +418,11 @@ const StoreAnalytics = () => {
             <div className="bg-white rounded-lg border border-gray-100 p-6 shadow-sm">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Doanh thu theo tháng</h3>
               <div className="h-64 flex items-end justify-between gap-2">
-                {analyticsData.revenue.chart.map((item, index) => (
+                {(displayData?.revenue?.chart || []).map((item, index) => (
                   <div key={index} className="flex flex-col items-center flex-1">
                     <div
                       className="w-full bg-gradient-to-t from-green-500 to-green-400 rounded-t"
-                      style={{ height: `${(item.revenue / Math.max(...analyticsData.revenue.chart.map(c => c.revenue))) * 200}px` }}
+                      style={{ height: `${displayData?.revenue?.chart?.length > 0 ? (item.revenue / Math.max(...displayData.revenue.chart.map(c => c.revenue))) * 200 : 0}px` }}
                     ></div>
                     <span className="text-xs text-gray-500 mt-2">{item.month}</span>
                     <span className="text-xs text-gray-700 font-medium">{formatPrice(item.revenue)}</span>
@@ -320,11 +435,11 @@ const StoreAnalytics = () => {
             <div className="bg-white rounded-lg border border-gray-100 p-6 shadow-sm">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Đơn hàng theo tháng</h3>
               <div className="h-64 flex items-end justify-between gap-2">
-                {analyticsData.orders.chart.map((item, index) => (
+                {(displayData?.orders?.chart || []).map((item, index) => (
                   <div key={index} className="flex flex-col items-center flex-1">
                     <div
                       className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t"
-                      style={{ height: `${(item.orders / Math.max(...analyticsData.orders.chart.map(c => c.orders))) * 200}px` }}
+                      style={{ height: `${displayData?.orders?.chart?.length > 0 ? (item.orders / Math.max(...displayData.orders.chart.map(c => c.orders))) * 200 : 0}px` }}
                     ></div>
                     <span className="text-xs text-gray-500 mt-2">{item.month}</span>
                     <span className="text-xs text-gray-700 font-medium">{formatNumber(item.orders)}</span>
@@ -338,7 +453,7 @@ const StoreAnalytics = () => {
           <div className="bg-white rounded-lg border border-gray-100 p-6 shadow-sm">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Sản phẩm bán chạy</h3>
             <div className="space-y-4">
-              {analyticsData.products.topSelling.map((product, index) => (
+              {(displayData?.products?.topSelling || []).map((product, index) => (
                 <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                   <div className="flex items-center gap-4">
                     <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">

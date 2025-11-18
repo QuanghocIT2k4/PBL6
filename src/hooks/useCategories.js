@@ -1,5 +1,5 @@
 import useSWR from 'swr';
-import { getCategories, getProductVariantsByCategory } from '../services/productService';
+import { getCategories, getProductVariantsByCategory } from '../services/common/productService';
 
 // ✅ Icon mapping cho từng category name trong DB
 const CATEGORY_ICONS = {

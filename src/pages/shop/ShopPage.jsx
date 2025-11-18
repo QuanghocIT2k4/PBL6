@@ -2,7 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
 import ProductSection from '../../components/common/ProductSection';
 import { useEffect, useState } from 'react';
-import { productService } from '../../services/productService';
+import { productService } from '../../services/common/productService';
 
 const ShopPage = () => {
   const { id } = useParams();

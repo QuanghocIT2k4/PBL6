@@ -1,315 +1,376 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react';
+import useSWR, { mutate } from 'swr';
+import { getPendingStores, getApprovedStores, approveStore, rejectStore, updateStoreStatus, softDeleteStore } from '../../services/admin/adminStoreService';
+import { useToast } from '../../context/ToastContext';
 
 const AdminStores = () => {
-  const [stores, setStores] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all'); // all, pending, approved, rejected
+  const { showToast } = useToast();
+  const [activeTab, setActiveTab] = useState('pending'); // 'pending' | 'approved'
+  const [page, setPage] = useState(0);
+  const [selectedStore, setSelectedStore] = useState(null);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [newStatus, setNewStatus] = useState('');
 
-  useEffect(() => {
-    fetchStores();
-  }, [filter]);
-
-  const fetchStores = async () => {
-    try {
-      setLoading(true);
-      // Mock data - trong thực tế sẽ gọi API: GET /api/admin/stores/{status}
-      
-      const mockStores = [
-        {
-          id: 'store-1',
-          name: 'TechPro Store',
-          owner: 'Nguyễn Văn A',
-          email: 'nguyenvana@email.com',
-          phone: '0123456789',
-          address: '123 Đường ABC, Quận 1, TP.HCM',
-          status: 'PENDING',
-          createdAt: '2024-01-20T10:30:00Z',
-          totalProducts: 45,
-          totalOrders: 123
-        },
-        {
-          id: 'store-2',
-          name: 'Mobile World',
-          owner: 'Trần Thị B',
-          email: 'tranthib@email.com',
-          phone: '0987654321',
-          address: '456 Đường XYZ, Quận 2, TP.HCM',
-          status: 'APPROVED',
-          createdAt: '2024-01-18T14:20:00Z',
-          totalProducts: 78,
-          totalOrders: 234
-        },
-        {
-          id: 'store-3',
-          name: 'ABC Electronics',
-          owner: 'Lê Văn C',
-          email: 'levanc@email.com',
-          phone: '0369258147',
-          address: '789 Đường DEF, Quận 3, TP.HCM',
-          status: 'REJECTED',
-          createdAt: '2024-01-15T09:15:00Z',
-          totalProducts: 0,
-          totalOrders: 0,
-          rejectionReason: 'Thiếu giấy phép kinh doanh'
-        },
-        {
-          id: 'store-4',
-          name: 'Gaming Zone',
-          owner: 'Phạm Thị D',
-          email: 'phamthid@email.com',
-          phone: '0147258369',
-          address: '321 Đường GHI, Quận 4, TP.HCM',
-          status: 'PENDING',
-          createdAt: '2024-01-22T16:45:00Z',
-          totalProducts: 12,
-          totalOrders: 0
-        }
-      ];
-
-      let filteredStores = mockStores;
-      if (filter !== 'all') {
-        filteredStores = mockStores.filter(store => store.status === filter);
-      }
-
-      setStores(filteredStores);
-    } catch (error) {
-      console.error('Error fetching stores:', error);
-    } finally {
-      setLoading(false);
+  // Fetch data based on active tab
+  const fetchStores = () => {
+    if (activeTab === 'pending') {
+      return getPendingStores({ page, size: 20 });
     }
+    return getApprovedStores({ page, size: 20 });
   };
 
+  const { data: storesData, error, isLoading } = useSWR(
+    [`admin-stores-${activeTab}`, page],
+    fetchStores,
+    { revalidateOnFocus: false }
+  );
+
+  const stores = storesData?.data?.content || [];
+  const totalPages = storesData?.data?.totalPages || 0;
+  const totalElements = storesData?.data?.totalElements || 0;
+
+  // Handle approve store
   const handleApprove = async (storeId) => {
-    try {
-      // Mock API call - trong thực tế sẽ gọi: PUT /api/admin/stores/{storeId}/approve
-      console.log('Approving store:', storeId);
-      
-      setStores(prevStores => 
-        prevStores.map(store => 
-          store.id === storeId 
-            ? { ...store, status: 'APPROVED' }
-            : store
-        )
-      );
-      
-      alert('Duyệt store thành công!');
-    } catch (error) {
-      console.error('Error approving store:', error);
-      alert('Có lỗi xảy ra khi duyệt store');
+    if (!confirm('Bạn có chắc muốn duyệt cửa hàng này?')) return;
+
+    const result = await approveStore(storeId);
+    if (result.success) {
+      showToast(result.message || 'Duyệt cửa hàng thành công!', 'success');
+      mutate([`admin-stores-${activeTab}`, page]);
+      mutate('admin-pending-stores-count');
+    } else {
+      showToast(result.error || 'Có lỗi xảy ra', 'error');
     }
   };
 
-  const handleReject = async (storeId) => {
-    const reason = prompt('Nhập lý do từ chối:');
-    if (!reason) return;
+  // Handle reject store
+  const handleRejectClick = (store) => {
+    setSelectedStore(store);
+    setRejectReason('');
+    setShowRejectModal(true);
+  };
 
-    try {
-      // Mock API call - trong thực tế sẽ gọi: PUT /api/admin/stores/{storeId}/reject?reason={reason}
-      console.log('Rejecting store:', storeId, 'Reason:', reason);
-      
-      setStores(prevStores => 
-        prevStores.map(store => 
-          store.id === storeId 
-            ? { ...store, status: 'REJECTED', rejectionReason: reason }
-            : store
-        )
-      );
-      
-      alert('Từ chối store thành công!');
-    } catch (error) {
-      console.error('Error rejecting store:', error);
-      alert('Có lỗi xảy ra khi từ chối store');
+  const handleRejectConfirm = async () => {
+    if (!rejectReason.trim()) {
+      showToast('Vui lòng nhập lý do từ chối', 'error');
+      return;
+    }
+
+    const result = await rejectStore(selectedStore.id, rejectReason);
+    if (result.success) {
+      showToast(result.message || 'Từ chối cửa hàng thành công!', 'success');
+      setShowRejectModal(false);
+      setSelectedStore(null);
+      setRejectReason('');
+      mutate([`admin-stores-${activeTab}`, page]);
+      mutate('admin-pending-stores-count');
+    } else {
+      showToast(result.error || 'Có lỗi xảy ra', 'error');
     }
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'PENDING':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'APPROVED':
-        return 'bg-green-100 text-green-800 border-green-200';
-      case 'REJECTED':
-        return 'bg-red-100 text-red-800 border-red-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+  // Handle update status
+  const handleStatusClick = (store) => {
+    setSelectedStore(store);
+    setNewStatus(store.status || 'ACTIVE');
+    setShowStatusModal(true);
+  };
+
+  const handleStatusConfirm = async () => {
+    const result = await updateStoreStatus(selectedStore.id, newStatus);
+    if (result.success) {
+      showToast(result.message || 'Cập nhật trạng thái thành công!', 'success');
+      setShowStatusModal(false);
+      setSelectedStore(null);
+      mutate([`admin-stores-${activeTab}`, page]);
+    } else {
+      showToast(result.error || 'Có lỗi xảy ra', 'error');
     }
   };
 
-  const getStatusText = (status) => {
-    switch (status) {
-      case 'PENDING':
-        return 'Chờ duyệt';
-      case 'APPROVED':
-        return 'Đã duyệt';
-      case 'REJECTED':
-        return 'Bị từ chối';
-      default:
-        return 'Không xác định';
+  // Handle delete store
+  const handleDelete = async (storeId) => {
+    if (!confirm('Bạn có chắc muốn xóa cửa hàng này? Hành động này có thể khôi phục.')) return;
+
+    const result = await softDeleteStore(storeId);
+    if (result.success) {
+      showToast(result.message || 'Xóa cửa hàng thành công!', 'success');
+      mutate([`admin-stores-${activeTab}`, page]);
+    } else {
+      showToast(result.error || 'Có lỗi xảy ra', 'error');
     }
   };
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('vi-VN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  if (loading) {
+  const getStatusBadge = (status) => {
+    const statusConfig = {
+      ACTIVE: { bg: 'bg-green-100', text: 'text-green-800', label: 'Hoạt động' },
+      INACTIVE: { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Không hoạt động' },
+      SUSPENDED: { bg: 'bg-red-100', text: 'text-red-800', label: 'Tạm ngưng' },
+      PENDING: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Chờ duyệt' },
+    };
+    const config = statusConfig[status] || statusConfig.PENDING;
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
-      </div>
+      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${config.bg} ${config.text}`}>
+        {config.label}
+      </span>
     );
-  }
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Quản lý Store</h1>
-            <p className="text-gray-600 mt-1">Duyệt và quản lý các store trong hệ thống</p>
-          </div>
-        </div>
-
-        {/* Filter Tabs */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-          <div className="p-6">
-            <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
-              {[
-                { key: 'all', label: 'Tất cả', count: stores.length },
-                { key: 'PENDING', label: 'Chờ duyệt', count: stores.filter(s => s.status === 'PENDING').length },
-                { key: 'APPROVED', label: 'Đã duyệt', count: stores.filter(s => s.status === 'APPROVED').length },
-                { key: 'REJECTED', label: 'Bị từ chối', count: stores.filter(s => s.status === 'REJECTED').length }
-              ].map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => setFilter(tab.key)}
-                  className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                    filter === tab.key
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  {tab.label} ({tab.count})
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Stores Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {stores.map((store) => (
-            <div key={store.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
-              <div className="p-6 flex-1 flex flex-col">
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900">{store.name}</h3>
-                    <p className="text-sm text-gray-600">Chủ sở hữu: {store.owner}</p>
-                  </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(store.status)}`}>
-                    {getStatusText(store.status)}
-                  </span>
-                </div>
-
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-center text-sm text-gray-600">
-                    <span className="w-4 h-4 mr-2">📧</span>
-                    <span>{store.email}</span>
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <span className="w-4 h-4 mr-2">📱</span>
-                    <span>{store.phone}</span>
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <span className="w-4 h-4 mr-2">📍</span>
-                    <span className="truncate">{store.address}</span>
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <span className="w-4 h-4 mr-2">📅</span>
-                    <span>{formatDate(store.createdAt)}</span>
-                  </div>
-                </div>
-
-
-                <div className="flex items-center justify-between text-sm text-gray-600 mb-4">
-                  <span>📦 {store.totalProducts} sản phẩm</span>
-                  <span>📋 {store.totalOrders} đơn hàng</span>
-                </div>
-
-                {/* Fixed height area for rejection reason */}
-                <div className="mb-4 min-h-[60px]">
-                  {store.rejectionReason && (
-                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                      <p className="text-sm text-red-800">
-                        <span className="font-medium">Lý do từ chối:</span> {store.rejectionReason}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Fixed position buttons */}
-                <div className="mt-auto">
-                  {store.status === 'PENDING' && (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleApprove(store.id)}
-                        className="flex-1 bg-green-600 text-white py-2.5 px-4 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
-                      >
-                        Duyệt
-                      </button>
-                      <button
-                        onClick={() => handleReject(store.id)}
-                        className="flex-1 bg-red-600 text-white py-2.5 px-4 rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
-                      >
-                        Từ chối
-                      </button>
-                    </div>
-                  )}
-
-                  {store.status === 'APPROVED' && (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleReject(store.id)}
-                        className="w-full bg-red-600 text-white py-2.5 px-4 rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
-                      >
-                        Thu hồi duyệt
-                      </button>
-                    </div>
-                  )}
-
-                  {store.status === 'REJECTED' && (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleApprove(store.id)}
-                        className="w-full bg-green-600 text-white py-2.5 px-4 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
-                      >
-                        Duyệt lại
-                      </button>
-                    </div>
-                  )}
-                </div>
+        <div className="bg-gradient-to-r from-yellow-200 to-orange-200 rounded-2xl p-6">
+          <div className="bg-white rounded-2xl p-8 shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 bg-gradient-to-br from-yellow-400 to-orange-400 rounded-2xl flex items-center justify-center shadow-lg">
+                <span className="text-5xl">🏪</span>
+              </div>
+              <div>
+                <h1 className="text-5xl font-bold mb-2">
+                  <span className="text-yellow-600">Quản lý</span> <span className="text-orange-600">Cửa hàng</span>
+                </h1>
+                <p className="text-gray-600 text-xl">Duyệt và quản lý các cửa hàng trên hệ thống</p>
               </div>
             </div>
-          ))}
+          </div>
         </div>
 
-        {stores.length === 0 && (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-              <span className="text-2xl">🏪</span>
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Không có store nào</h3>
-            <p className="text-gray-600">Không có store nào phù hợp với bộ lọc hiện tại.</p>
+        {/* Tabs */}
+        <div className="bg-white rounded-xl shadow-sm border-2 border-gray-200">
+          <div className="flex border-b">
+            <button
+              onClick={() => { setActiveTab('pending'); setPage(0); }}
+              className={`flex-1 px-6 py-4 font-semibold transition-all ${
+                activeTab === 'pending'
+                  ? 'bg-yellow-50 text-yellow-600 border-b-4 border-yellow-500'
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <span className="text-2xl mr-2">⏳</span>
+              Chờ duyệt
+            </button>
+            <button
+              onClick={() => { setActiveTab('approved'); setPage(0); }}
+              className={`flex-1 px-6 py-4 font-semibold transition-all ${
+                activeTab === 'approved'
+                  ? 'bg-green-50 text-green-600 border-b-4 border-green-500'
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <span className="text-2xl mr-2">✅</span>
+              Đã duyệt
+            </button>
           </div>
-        )}
+
+          {/* Content */}
+          <div className="p-6">
+            {isLoading ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-600 mx-auto"></div>
+                <p className="mt-4 text-gray-600">Đang tải...</p>
+              </div>
+            ) : error ? (
+              <div className="text-center py-12">
+                <span className="text-6xl">❌</span>
+                <p className="mt-4 text-red-600 font-semibold">Có lỗi xảy ra khi tải dữ liệu</p>
+              </div>
+            ) : stores.length === 0 ? (
+              <div className="text-center py-12">
+                <span className="text-6xl">📭</span>
+                <p className="mt-4 text-gray-600 font-semibold">
+                  {activeTab === 'pending' ? 'Không có cửa hàng chờ duyệt' : 'Không có cửa hàng đã duyệt'}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center mb-4">
+                  <p className="text-gray-600">
+                    Tổng số: <span className="font-bold text-gray-900">{totalElements}</span> cửa hàng
+                  </p>
+                </div>
+
+                {/* Store List */}
+                <div className="grid gap-4">
+                  {stores.map((store) => (
+                    <div key={store.id} className="bg-white border-2 border-gray-200 rounded-xl p-6 hover:shadow-xl transition-all">
+                      <div className="flex items-start gap-4">
+                        {/* Store Logo */}
+                        <div className="w-24 h-24 bg-gradient-to-br from-yellow-50 to-orange-50 rounded-xl flex items-center justify-center flex-shrink-0">
+                          {store.logoUrl ? (
+                            <img
+                              src={store.logoUrl}
+                              alt={store.name}
+                              className="w-full h-full object-cover rounded-xl"
+                            />
+                          ) : (
+                            <span className="text-5xl">🏪</span>
+                          )}
+                        </div>
+
+                        {/* Store Info */}
+                        <div className="flex-1">
+                          <div className="flex items-start justify-between mb-3">
+                            <div>
+                              <h3 className="text-xl font-bold text-gray-900 mb-1">{store.name}</h3>
+                              <p className="text-gray-600 text-sm">{store.description || 'Chưa có mô tả'}</p>
+                            </div>
+                            {getStatusBadge(store.status)}
+                          </div>
+
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
+                            <div>
+                              <span className="text-gray-500 block">👤 Chủ shop:</span>
+                              <span className="font-medium">{String(store.ownerName || store.owner?.name || 'N/A')}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 block">📧 Email:</span>
+                              <span className="font-medium">{String(store.email || store.owner?.email || 'N/A')}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 block">📞 SĐT:</span>
+                              <span className="font-medium">{String(store.phone || store.contactPhone || 'N/A')}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 block">📍 Địa chỉ:</span>
+                              <span className="font-medium">{String(store.address || store.location || 'N/A')}</span>
+                            </div>
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex gap-2 flex-wrap">
+                            {activeTab === 'pending' ? (
+                              <>
+                                <button
+                                  onClick={() => handleApprove(store.id)}
+                                  className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-semibold"
+                                >
+                                  ✅ Duyệt
+                                </button>
+                                <button
+                                  onClick={() => handleRejectClick(store)}
+                                  className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-semibold"
+                                >
+                                  ❌ Từ chối
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => handleStatusClick(store)}
+                                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold"
+                                >
+                                  🔄 Đổi trạng thái
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(store.id)}
+                                  className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-semibold"
+                                >
+                                  🗑️ Xóa
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex justify-center gap-2 mt-6">
+                    <button
+                      onClick={() => setPage(p => Math.max(0, p - 1))}
+                      disabled={page === 0}
+                      className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+                    >
+                      ← Trước
+                    </button>
+                    <span className="px-4 py-2 bg-yellow-100 text-yellow-800 rounded-lg font-bold">
+                      {page + 1} / {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                      disabled={page >= totalPages - 1}
+                      className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+                    >
+                      Sau →
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
+
+      {/* Reject Modal */}
+      {showRejectModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+            <h2 className="text-2xl font-bold mb-4 text-gray-900">Từ chối cửa hàng</h2>
+            <p className="text-gray-600 mb-4">Cửa hàng: <span className="font-bold">{selectedStore?.name}</span></p>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Nhập lý do từ chối..."
+              className="w-full border-2 border-gray-300 rounded-lg p-3 mb-4 focus:outline-none focus:border-red-500"
+              rows="4"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowRejectModal(false); setSelectedStore(null); setRejectReason(''); }}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-semibold"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleRejectConfirm}
+                className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 font-semibold"
+              >
+                Xác nhận từ chối
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Status Modal */}
+      {showStatusModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+            <h2 className="text-2xl font-bold mb-4 text-gray-900">Cập nhật trạng thái</h2>
+            <p className="text-gray-600 mb-4">Cửa hàng: <span className="font-bold">{selectedStore?.name}</span></p>
+            <select
+              value={newStatus}
+              onChange={(e) => setNewStatus(e.target.value)}
+              className="w-full border-2 border-gray-300 rounded-lg p-3 mb-4 focus:outline-none focus:border-blue-500"
+            >
+              <option value="ACTIVE">Hoạt động</option>
+              <option value="INACTIVE">Không hoạt động</option>
+              <option value="SUSPENDED">Tạm ngưng</option>
+            </select>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowStatusModal(false); setSelectedStore(null); }}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-semibold"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleStatusConfirm}
+                className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-semibold"
+              >
+                Xác nhận
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

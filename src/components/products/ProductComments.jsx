@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { commentService } from '../../services/commentService';
+import { commentService } from '../../services/buyer/commentService';
 import { useAuth } from '../../context/AuthContext';
 
 const ProductComments = ({ productId }) => {

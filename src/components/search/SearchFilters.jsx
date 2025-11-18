@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useCategories } from '../../hooks/useCategories';
-import { getAllBrands } from '../../services/productService';
+import { getAllBrands } from '../../services/common/productService';
 
-const SearchFilters = ({ onFiltersChange, initialFilters = {}, currentProducts = [] }) => {
+const SearchFilters = ({ onFiltersChange, initialFilters = {}, currentProducts = [], categoryBrands = [], loadingCategoryBrands = false }) => {
   const [filters, setFilters] = useState({
     category: 'all',
     minPrice: '',
@@ -67,12 +67,18 @@ const SearchFilters = ({ onFiltersChange, initialFilters = {}, currentProducts =
     fetchAllBrands();
   }, []); // Chỉ fetch 1 lần khi mount
 
-  // ✅ HIỂN THỊ TẤT CẢ BRANDS (Products không có brandName field nên không thể filter)
-  // Khi user chọn brand → ProductList sẽ gọi API /product-variants/category/{category}/brand/{brand}
+  // ✅ HIỂN THỊ BRANDS: Nếu có categoryBrands (từ category cụ thể) → chỉ hiển thị brands đó
+  // Nếu không có categoryBrands (category = 'all') → hiển thị tất cả brands
   const availableBrands = useMemo(() => {
+    // Nếu có categoryBrands và không rỗng → chỉ hiển thị brands trong category
+    if (categoryBrands && categoryBrands.length > 0) {
+      console.log(`✅ Available brands: ${categoryBrands.length} brands (filtered by category)`);
+      return categoryBrands;
+    }
+    // Nếu không có categoryBrands → hiển thị tất cả brands
     console.log(`✅ Available brands: ${allBrands.length} brands (all categories)`);
     return allBrands;
-  }, [allBrands]);
+  }, [allBrands, categoryBrands]);
 
   // ✅ XÓA BRANDS ĐÃ CHỌN nếu không còn tồn tại trong danh sách mới (khi đổi category)
   useEffect(() => {
@@ -218,11 +224,24 @@ const SearchFilters = ({ onFiltersChange, initialFilters = {}, currentProducts =
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Thương hiệu:
+            {categoryBrands && categoryBrands.length > 0 && (
+              <span className="ml-2 text-xs text-gray-500 font-normal">
+                ({categoryBrands.length} thương hiệu trong danh mục này)
+              </span>
+            )}
           </label>
-          {brandsLoading ? (
-            <div className="text-sm text-gray-500">Đang tải brands...</div>
+          {brandsLoading || loadingCategoryBrands ? (
+            <div className="space-y-2">
+              <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-4 bg-gray-200 rounded animate-pulse w-3/4"></div>
+              <div className="h-4 bg-gray-200 rounded animate-pulse w-1/2"></div>
+            </div>
           ) : availableBrands.length === 0 ? (
-            <div className="text-sm text-gray-500">Không có brands</div>
+            <div className="text-sm text-gray-500">
+              {categoryBrands && categoryBrands.length === 0 && categoryBrands !== null
+                ? 'Không có thương hiệu nào trong danh mục này'
+                : 'Không có brands'}
+            </div>
           ) : (
             <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
               {availableBrands.map(brand => (

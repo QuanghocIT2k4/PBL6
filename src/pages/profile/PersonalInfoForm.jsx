@@ -1,22 +1,45 @@
-import { useState, useEffect } from 'react';
-import Input from '../../components/ui/Input'; // ✅ SỬA: thêm đường dẫn đúng
-import Button from '../../components/ui/Button'; // ✅ SỬA: thêm đường dẫn đúng
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import Input from '../../components/ui/Input';
+import Button from '../../components/ui/Button';
 
-const PersonalInfoForm = ({ profile, onSubmit, loading }) => {
-  const [formData, setFormData] = useState({
-    name: '',
-    phone: '',
-    dateOfBirth: '',
-    gender: '',
-    address: ''
+const personalInfoSchema = z.object({
+  name: z.string().min(1, 'Tên là bắt buộc').trim(),
+  phone: z.string().optional().refine((val) => {
+    if (!val || val.trim() === '') return true;
+    return /^\d{10,11}$/.test(val.replace(/\s/g, ''));
+  }, {
+    message: 'Số điện thoại không hợp lệ'
+  }),
+  dateOfBirth: z.string().optional(),
+  gender: z.string().optional(),
+  address: z.string().optional()
+});
+
+const PersonalInfoForm = ({ profile, onSubmit: onSubmitForm, loading }) => {
+  const [submitError, setSubmitError] = useState('');
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+    reset
+  } = useForm({
+    resolver: zodResolver(personalInfoSchema),
+    defaultValues: {
+      name: '',
+      phone: '',
+      dateOfBirth: '',
+      gender: '',
+      address: ''
+    }
   });
-  
-  const [errors, setErrors] = useState({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (profile) {
-      setFormData({
+      reset({
         name: profile.name || '',
         phone: profile.phone || '',
         dateOfBirth: profile.dateOfBirth || '',
@@ -24,44 +47,13 @@ const PersonalInfoForm = ({ profile, onSubmit, loading }) => {
         address: profile.address || ''
       });
     }
-  }, [profile]);
+  }, [profile, reset]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+  const onSubmit = async (data) => {
+    setSubmitError('');
     
-    // Clear error when user types
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
-    }
-  };
-
-  const validateForm = () => {
-    const newErrors = {};
-    
-    if (!formData.name.trim()) {
-      newErrors.name = 'Tên là bắt buộc';
-    }
-    
-    if (formData.phone && !/^\d{10,11}$/.test(formData.phone.replace(/\s/g, ''))) {
-      newErrors.phone = 'Số điện thoại không hợp lệ';
-    }
-    
-    return newErrors;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    const newErrors = validateForm();
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-
-    setIsSubmitting(true);
     try {
-      const result = await onSubmit(formData);
+      const result = await onSubmitForm(data);
       if (result.success) {
         // Show success notification
         const notification = document.createElement('div');
@@ -78,10 +70,10 @@ const PersonalInfoForm = ({ profile, onSubmit, loading }) => {
           }, 300);
         }, 3000);
       } else {
-        setErrors({ submit: result.error });
+        setSubmitError(result.error);
       }
-    } finally {
-      setIsSubmitting(false);
+    } catch (error) {
+      setSubmitError('Đã xảy ra lỗi khi cập nhật thông tin');
     }
   };
 
@@ -104,33 +96,29 @@ const PersonalInfoForm = ({ profile, onSubmit, loading }) => {
     <div className="bg-white rounded-lg shadow-sm p-6">
       <h2 className="text-xl font-semibold text-gray-900 mb-6">Thông tin cá nhân</h2>
       
-      {errors.submit && (
+      {submitError && (
         <div className="mb-4 bg-red-50 border border-red-300 text-red-800 px-4 py-3 rounded-md text-sm">
-          {errors.submit}
+          {submitError}
         </div>
       )}
       
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Input
-            name="name"
+            {...register('name')}
             type="text"
             label="Họ và tên *"
             placeholder="Nhập họ và tên"
-            value={formData.name}
-            onChange={handleChange}
-            error={errors.name}
+            error={errors.name?.message}
             disabled={isSubmitting}
           />
           
           <Input
-            name="phone"
+            {...register('phone')}
             type="tel"
             label="Số điện thoại"
             placeholder="Nhập số điện thoại"
-            value={formData.phone}
-            onChange={handleChange}
-            error={errors.phone}
+            error={errors.phone?.message}
             disabled={isSubmitting}
           />
         </div>
@@ -141,10 +129,8 @@ const PersonalInfoForm = ({ profile, onSubmit, loading }) => {
               Ngày sinh
             </label>
             <input
-              name="dateOfBirth"
+              {...register('dateOfBirth')}
               type="date"
-              value={formData.dateOfBirth}
-              onChange={handleChange}
               disabled={isSubmitting}
               className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
@@ -155,9 +141,7 @@ const PersonalInfoForm = ({ profile, onSubmit, loading }) => {
               Giới tính
             </label>
             <select
-              name="gender"
-              value={formData.gender}
-              onChange={handleChange}
+              {...register('gender')}
               disabled={isSubmitting}
               className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
@@ -174,11 +158,9 @@ const PersonalInfoForm = ({ profile, onSubmit, loading }) => {
             Địa chỉ
           </label>
           <textarea
-            name="address"
+            {...register('address')}
             rows={3}
             placeholder="Nhập địa chỉ của bạn"
-            value={formData.address}
-            onChange={handleChange}
             disabled={isSubmitting}
             className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />

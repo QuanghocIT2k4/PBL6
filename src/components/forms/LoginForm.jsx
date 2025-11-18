@@ -1,68 +1,62 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { useAuth } from '../../context/AuthContext';
+import { login as loginService } from '../../services/common/authService';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 
 const LoginForm = ({ onSwitchToSignUp, onSwitchToForgotPassword }) => {
-  const navigate = useNavigate();
   const { login } = useAuth();
-  const [formData, setFormData] = useState({
-    email: '',
-    password: ''
+  const navigate = useNavigate();
+  const [generalError, setGeneralError] = useState('');
+
+  const loginSchema = z.object({
+    email: z.string({ required_error: 'Email là bắt buộc' })
+      .min(1, 'Email là bắt buộc')
+      .email('Email không hợp lệ'),
+    password: z.string({ required_error: 'Mật khẩu là bắt buộc' })
+      .min(1, 'Mật khẩu là bắt buộc')
   });
-  const [errors, setErrors] = useState({});
-  const [loading, setLoading] = useState(false);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    
-    // Clear error when user types
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting }
+  } = useForm({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: '',
+      password: ''
     }
-  };
+  });
 
-  const validateForm = () => {
-    const newErrors = {};
-    
-    if (!formData.email) {
-      newErrors.email = 'Email là bắt buộc';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Email không hợp lệ';
-    }
-    
-    if (!formData.password) {
-      newErrors.password = 'Mật khẩu là bắt buộc';
-    }
-    
-    return newErrors;
-  };
+  const onSubmit = async (data) => {
+    setGeneralError('');
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    const newErrors = validateForm();
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
+    try {
+      const result = await loginService({ email: data.email, password: data.password });
+
+      if (result.success) {
+        login(result.data.user);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        const userRoles = result.data.user.roles || [];
+        const isAdmin = userRoles.includes('ADMIN') || userRoles.includes('ROLE_ADMIN');
+        if (isAdmin) {
+          window.location.href = '/admin-dashboard/dashboard';
+        } else {
+          window.location.href = '/';
+        }
+      } else if (result.error) {
+        setGeneralError(result.error);
+      } else {
+        setGeneralError('Đăng nhập thất bại');
+      }
+    } catch (error) {
+      setGeneralError(error.message || 'Có lỗi xảy ra khi đăng nhập');
     }
-    
-    setLoading(true);
-    setErrors({}); // Clear previous errors
-    
-    const result = await login(formData.email, formData.password);
-    
-    if (result.success) {
-      // ✅ Login thành công → Chuyển về trang Home
-      navigate('/');
-    } else {
-      // ❌ Login thất bại → Hiển thị lỗi
-      setErrors({ general: result.error || 'Đăng nhập thất bại' });
-    }
-    
-    setLoading(false);
   };
 
   return (
@@ -87,23 +81,22 @@ const LoginForm = ({ onSwitchToSignUp, onSwitchToForgotPassword }) => {
 
         <div className="bg-white py-8 px-4 shadow rounded-lg sm:px-10">
           {/* Error Message */}
-          {errors.general && (
+          {generalError && (
             <div className="mb-4 bg-red-50 border border-red-300 text-red-800 px-4 py-3 rounded-md text-sm">
-              {errors.general}
+              {generalError}
             </div>
           )}
 
           {/* Form */}
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
             <Input
               name="email"
               type="email"
               label="Email"
               placeholder="Nhập email của bạn"
-              value={formData.email}
-              onChange={handleChange}
-              error={errors.email}
-              disabled={loading}
+              error={errors.email?.message}
+              disabled={isSubmitting}
+              {...register('email')}
             />
 
             <Input
@@ -111,11 +104,10 @@ const LoginForm = ({ onSwitchToSignUp, onSwitchToForgotPassword }) => {
               type="password"
               label="Mật khẩu"
               placeholder="Nhập mật khẩu"
-              value={formData.password}
-              onChange={handleChange}
-              error={errors.password}
-              disabled={loading}
+              error={errors.password?.message}
+              disabled={isSubmitting}
               showPasswordToggle
+              {...register('password')}
             />
 
             <div className="flex items-center justify-between">
@@ -142,7 +134,7 @@ const LoginForm = ({ onSwitchToSignUp, onSwitchToForgotPassword }) => {
 
             <Button
               type="submit"
-              loading={loading}
+              loading={isSubmitting}
               className="w-full"
             >
               Đăng nhập

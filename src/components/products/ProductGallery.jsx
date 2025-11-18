@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { getProductGallery } from '../../utils/imageUtils';
 
 const ProductGallery = ({ product, images = [] }) => {
@@ -38,36 +39,48 @@ const ProductGallery = ({ product, images = [] }) => {
 
   return (
     <div className="space-y-4">
-      {/* Main Image */}
-      <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden shadow-lg">
-        <img
-          src={galleryImages[currentImageIndex]}
-          alt={`${product?.name || 'Product'} - Image ${currentImageIndex + 1}`}
-          className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
-          loading="lazy"
-        />
+      {/* Main Image với Framer Motion */}
+      <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden shadow-lg relative">
+        <AnimatePresence mode="wait">
+          <motion.img
+            key={currentImageIndex}
+            src={galleryImages[currentImageIndex]}
+            alt={`${product?.name || 'Product'} - Image ${currentImageIndex + 1}`}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.1 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className="w-full h-full object-cover"
+            loading="lazy"
+            whileHover={{ scale: 1.05 }}
+          />
+        </AnimatePresence>
       </div>
 
-      {/* Thumbnail Images */}
+      {/* Thumbnail Images với Framer Motion */}
       {galleryImages.length > 1 && (
         <div className="flex space-x-3 overflow-x-auto pb-2">
           {galleryImages.map((image, index) => (
-            <button
+            <motion.button
               key={index}
               onClick={() => setCurrentImageIndex(index)}
-              className={`flex-shrink-0 w-20 h-20 bg-gray-100 rounded-lg overflow-hidden border-2 transition-all duration-300 hover:shadow-md ${
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
+              className={`flex-shrink-0 w-20 h-20 bg-gray-100 rounded-lg overflow-hidden border-2 ${
                 currentImageIndex === index 
-                  ? 'border-blue-500 shadow-lg scale-105' 
+                  ? 'border-blue-500 shadow-lg' 
                   : 'border-transparent hover:border-gray-300'
               }`}
             >
-              <img
+              <motion.img
                 src={image}
                 alt={`${product?.name || 'Product'} thumbnail ${index + 1}`}
                 className="w-full h-full object-cover"
                 loading="lazy"
+                animate={currentImageIndex === index ? { scale: 1.05 } : { scale: 1 }}
+                transition={{ duration: 0.2 }}
               />
-            </button>
+            </motion.button>
           ))}
         </div>
       )}
@@ -78,31 +91,35 @@ const ProductGallery = ({ product, images = [] }) => {
           {currentImageIndex + 1} / {galleryImages.length}
         </div>
         
-        {/* Navigation Arrows */}
+        {/* Navigation Arrows với Framer Motion */}
         {galleryImages.length > 1 && (
           <div className="flex space-x-2">
-            <button
+            <motion.button
               onClick={() => setCurrentImageIndex(
                 currentImageIndex === 0 ? galleryImages.length - 1 : currentImageIndex - 1
               )}
-              className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+              whileHover={{ scale: 1.1, backgroundColor: "#f3f4f6" }}
+              whileTap={{ scale: 0.9 }}
+              className="p-2 rounded-full hover:bg-gray-100"
               aria-label="Previous image"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path>
               </svg>
-            </button>
-            <button
+            </motion.button>
+            <motion.button
               onClick={() => setCurrentImageIndex(
                 currentImageIndex === galleryImages.length - 1 ? 0 : currentImageIndex + 1
               )}
-              className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+              whileHover={{ scale: 1.1, backgroundColor: "#f3f4f6" }}
+              whileTap={{ scale: 0.9 }}
+              className="p-2 rounded-full hover:bg-gray-100"
               aria-label="Next image"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
               </svg>
-            </button>
+            </motion.button>
           </div>
         )}
       </div>
