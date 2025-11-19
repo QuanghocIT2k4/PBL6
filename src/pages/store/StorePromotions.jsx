@@ -82,6 +82,71 @@ const StorePromotions = () => {
     });
   };
 
+  // Mapping tên danh mục tiếng Anh sang tiếng Việt
+  const categoryNameMap = {
+    'Phone': 'Điện thoại',
+    'Laptop': 'Laptop',
+    'Earphone': 'Tai nghe',
+    'Loudspeaker': 'Loa',
+    'Watch': 'Đồng hồ',
+    'All Products': 'Tất cả sản phẩm'
+  };
+
+  // Helper function để lấy tên danh mục từ categoryId
+  const getCategoryName = (categoryId) => {
+    if (!categoryId || !categories || categories.length === 0) return 'Không xác định';
+    const category = categories.find(cat => cat.id === categoryId);
+    if (!category) return 'Không xác định';
+    
+    // Chuyển sang tiếng Việt nếu có trong mapping, nếu không giữ nguyên
+    return categoryNameMap[category.name] || category.name;
+  };
+
+  // Helper function để check promotion đã hết hạn chưa
+  const isExpired = (promo) => {
+    return new Date(promo.endDate) < new Date();
+  };
+
+  // Helper function để get status hiển thị
+  const getPromotionStatus = (promo) => {
+    const now = new Date();
+    const startDate = new Date(promo.startDate);
+    const endDate = new Date(promo.endDate);
+
+    // Check if expired (endDate < now)
+    if (endDate < now) {
+      return {
+        label: 'EXPIRED',
+        color: 'from-red-500 to-pink-500',
+        isExpired: true
+      };
+    }
+
+    // Check if upcoming (startDate > now)
+    if (startDate > now) {
+      return {
+        label: 'UPCOMING',
+        color: 'from-yellow-500 to-orange-500',
+        isExpired: false
+      };
+    }
+    
+    // Check active/inactive (trong thời gian startDate - endDate)
+    if (promo.status === 'ACTIVE') {
+      return {
+        label: 'ACTIVE',
+        color: 'from-green-500 to-emerald-500',
+        isExpired: false
+      };
+    }
+    
+    return {
+      label: 'INACTIVE',
+      color: 'from-gray-400 to-gray-500',
+      isExpired: false
+    };
+  };
+
   const handleActivate = async (id) => {
     const result = await activatePromotion(id);
     if (result.success) {
@@ -285,10 +350,10 @@ const StorePromotions = () => {
       setCreating(false);
 
       if (result.success) {
-        showSuccess(result.message || 'Tạo khuyến mãi thành công!');
+        showSuccess('Khuyến mãi đã được tạo! Nhấn nút "Kích hoạt" để bắt đầu sử dụng.');
         setShowCreateModal(false);
         resetForm();
-        mutate();
+        mutate(); // Refresh list
       } else {
         const errorMsg = result.error || result.message || 'Không thể tạo khuyến mãi';
         console.error('❌ Create error:', errorMsg);
@@ -336,7 +401,7 @@ const StorePromotions = () => {
                 </div>
                 
                 {/* Stats Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mt-4">
                   <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-3 border border-blue-200 shadow-sm hover:shadow-md transition-shadow">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center shadow-sm">
@@ -360,7 +425,7 @@ const StorePromotions = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-gray-600 truncate">Đang hoạt động</p>
-                        <p className="text-lg font-bold text-gray-900">{promotions.filter(p => p.status === 'ACTIVE').length}</p>
+                        <p className="text-lg font-bold text-gray-900">{promotions.filter(p => !isExpired(p) && new Date(p.startDate) <= new Date() && p.status === 'ACTIVE').length}</p>
                       </div>
                     </div>
                   </div>
@@ -374,7 +439,21 @@ const StorePromotions = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-gray-600 truncate">Tạm dừng</p>
-                        <p className="text-lg font-bold text-gray-900">{promotions.filter(p => p.status === 'INACTIVE').length}</p>
+                        <p className="text-lg font-bold text-gray-900">{promotions.filter(p => !isExpired(p) && new Date(p.startDate) <= new Date() && p.status === 'INACTIVE').length}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-3 border border-orange-200 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center shadow-sm">
+                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-600 truncate">Sắp diễn ra</p>
+                        <p className="text-lg font-bold text-gray-900">{promotions.filter(p => new Date(p.startDate) > new Date()).length}</p>
                       </div>
                     </div>
                   </div>
@@ -388,7 +467,7 @@ const StorePromotions = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-gray-600 truncate">Hết hạn</p>
-                        <p className="text-lg font-bold text-gray-900">{promotions.filter(p => p.isExpired).length}</p>
+                        <p className="text-lg font-bold text-gray-900">{promotions.filter(p => isExpired(p)).length}</p>
                       </div>
                     </div>
                   </div>
@@ -397,18 +476,65 @@ const StorePromotions = () => {
             </div>
           </div>
 
-          {/* Filter */}
-          <div className="bg-white rounded-xl shadow-sm p-3 border border-gray-100">
-            <select
-              value={filter}
-              onChange={(e) => { setFilter(e.target.value); setCurrentPage(0); }}
-              className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white w-full max-w-xs"
-            >
-              <option value="ALL">Tất cả trạng thái</option>
-              <option value="ACTIVE">Đang hoạt động</option>
-              <option value="INACTIVE">Tạm dừng</option>
-              <option value="EXPIRED">Đã hết hạn</option>
-            </select>
+          {/* Filter Tabs - MODERN STYLE */}
+          <div className="bg-white rounded-xl shadow-sm p-2 border border-gray-100">
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={() => { setFilter('ALL'); setCurrentPage(0); }}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                  filter === 'ALL'
+                    ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white shadow-md'
+                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+                </svg>
+                Tất cả
+              </button>
+
+              <button
+                onClick={() => { setFilter('ACTIVE'); setCurrentPage(0); }}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                  filter === 'ACTIVE'
+                    ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-md'
+                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Đang hoạt động
+              </button>
+
+              <button
+                onClick={() => { setFilter('INACTIVE'); setCurrentPage(0); }}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                  filter === 'INACTIVE'
+                    ? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-md'
+                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Tạm dừng
+              </button>
+
+              <button
+                onClick={() => { setFilter('EXPIRED'); setCurrentPage(0); }}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                  filter === 'EXPIRED'
+                    ? 'bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-md'
+                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Đã hết hạn
+              </button>
+            </div>
           </div>
 
           {/* Promotions Grid */}
@@ -434,37 +560,30 @@ const StorePromotions = () => {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {promotions.map((promo) => (
-                  <div key={promo.id} className="group relative bg-white rounded-lg border-2 border-gray-200 overflow-hidden hover:border-purple-500 hover:shadow-lg transition-all duration-200">
+                  <div key={promo.id} className="group relative bg-white rounded-2xl overflow-hidden hover:shadow-2xl transition-all duration-300 flex flex-col border-2 border-gray-100 hover:border-transparent min-h-[420px]">
                     {/* Status Badge - Top Right */}
-                    <div className="absolute top-1.5 right-1.5 z-10">
-                      {promo.status === 'ACTIVE' && (
-                        <span className="px-1.5 py-0.5 bg-green-500 text-white text-[9px] font-bold rounded shadow-sm flex items-center gap-0.5">
-                          <span className="w-1 h-1 bg-white rounded-full animate-pulse"></span>
-                          ACTIVE
-                        </span>
-                      )}
-                      {promo.status === 'INACTIVE' && (
-                        <span className="px-1.5 py-0.5 bg-gray-400 text-white text-[9px] font-bold rounded shadow-sm">
-                          PAUSED
-                        </span>
-                      )}
-                      {promo.isExpired && (
-                        <span className="px-1.5 py-0.5 bg-red-500 text-white text-[9px] font-bold rounded shadow-sm">
-                          EXPIRED
-                        </span>
-                      )}
+                    <div className="absolute top-3 right-3 z-10">
+                      {(() => {
+                        const status = getPromotionStatus(promo);
+                        return (
+                          <span className={`px-2 py-1 bg-gradient-to-r ${status.color} text-white text-xs font-bold rounded-lg shadow-lg ${status.label === 'ACTIVE' ? 'flex items-center gap-1' : ''}`}>
+                            {status.label === 'ACTIVE' && <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>}
+                            {status.label}
+                          </span>
+                        );
+                      })()}
                     </div>
 
-                    {/* Header with Gradient */}
-                    <div className="relative bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 p-3 pt-5">
-                      <div className="absolute inset-0 bg-black/5"></div>
+                    {/* Header with Gradient - FRESH COLORS */}
+                    <div className="relative bg-gradient-to-br from-emerald-400 via-teal-400 to-cyan-400 p-4 pt-6">
+                      <div className="absolute inset-0 bg-white/5"></div>
                       <div className="relative">
-                        <h3 className="text-sm font-bold text-white mb-1.5 line-clamp-2 min-h-[2.25rem] leading-tight">
+                        <h3 className="text-sm font-bold text-white mb-1.5 line-clamp-2 min-h-[2.25rem] leading-tight drop-shadow">
                           {promo.title || promo.name || promo.code}
                         </h3>
-                        <div className="inline-flex items-center gap-1 bg-white/25 backdrop-blur-sm px-2 py-0.5 rounded">
+                        <div className="inline-flex items-center gap-1 bg-white/25 backdrop-blur-sm px-2 py-0.5 rounded shadow-sm">
                           <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                           </svg>
@@ -473,114 +592,141 @@ const StorePromotions = () => {
                       </div>
                     </div>
 
-                    {/* Content */}
-                    <div className="p-3">
-                      {/* Description */}
-                      <p className="text-[11px] text-gray-600 mb-2.5 line-clamp-2 min-h-[1.75rem] leading-snug">
-                        {promo.description || 'Không có mô tả'}
-                      </p>
-                      
-                      {/* Discount Value - Compact */}
-                      <div className="bg-gradient-to-br from-red-50 via-orange-50 to-yellow-50 rounded p-2.5 mb-2.5 border border-red-200">
-                        <div className="flex items-center justify-between mb-0.5">
-                          <span className="text-[9px] font-semibold text-gray-600">
-                            {promo.type === 'PERCENTAGE' ? 'Theo %' : 'Số tiền cố định'}
+                    {/* Content - FLEX GROW */}
+                    <div className="flex-1 p-3 flex flex-col">
+                      {/* Discount Type & Category */}
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-md text-[10px] font-semibold">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                          </svg>
+                          {promo.discountType === 'ORDER' && 'Áp dụng: Toàn bộ đơn hàng'}
+                          {promo.discountType === 'CATEGORY' && `Danh mục: ${getCategoryName(promo.categoryId)}`}
+                          {promo.discountType === 'PRODUCT' && 'Áp dụng: Sản phẩm'}
+                        </span>
+                        {promo.isNewUserOnly && (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 bg-amber-100 text-amber-700 rounded-md text-[10px] font-semibold">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                            </svg>
+                            Khách mới
                           </span>
-                          <div className="flex items-baseline gap-0.5">
-                            <span className="text-xl font-black text-red-600">{promo.discountValue}</span>
-                            <span className="text-base font-bold text-red-500">
+                        )}
+                      </div>
+
+                      {/* Discount Value - COMPACT & ELEGANT */}
+                      <div className={`relative rounded-lg p-2.5 mb-2 shadow-md overflow-hidden ${
+                        !promo.discountValue || promo.discountValue === 0 
+                          ? 'bg-gradient-to-br from-red-500 via-orange-500 to-yellow-500' 
+                          : 'bg-gradient-to-br from-fuchsia-500 via-purple-500 to-indigo-500'
+                      }`}>
+                        <div className="absolute inset-0 bg-white/5"></div>
+                        <div className="relative flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="text-[9px] font-semibold text-white/80 uppercase tracking-wide mb-0.5">
+                              {!promo.discountValue || promo.discountValue === 0 
+                                ? '⚠️ LỖI DỮ LIỆU' 
+                                : (promo.type === 'PERCENTAGE' ? 'Giảm giá' : 'Giảm tiền')
+                              }
+                            </div>
+                            {promo.maxDiscountValue && promo.discountValue > 0 && (
+                              <div className="text-[9px] text-white/70">
+                                Tối đa: {new Intl.NumberFormat('vi-VN').format(promo.maxDiscountValue)}₫
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-baseline gap-0.5 bg-white/15 backdrop-blur-sm px-2.5 py-1 rounded-md">
+                            <span className="text-lg font-black text-white drop-shadow tabular-nums">
+                              {!promo.discountValue || promo.discountValue === 0 
+                                ? '0' 
+                                : promo.type === 'PERCENTAGE' 
+                                  ? promo.discountValue 
+                                  : new Intl.NumberFormat('vi-VN').format(promo.discountValue)
+                              }
+                            </span>
+                            <span className="text-sm font-bold text-white/90">
                               {promo.type === 'PERCENTAGE' ? '%' : '₫'}
                             </span>
                           </div>
                         </div>
-                        {promo.maxDiscountValue && (
-                          <div className="mt-1 pt-1 border-t border-red-200 text-[9px] text-gray-600">
-                            Tối đa: {new Intl.NumberFormat('vi-VN').format(promo.maxDiscountValue)}₫
-                          </div>
-                        )}
                       </div>
 
-                      {/* Date Info */}
-                      <div className="space-y-1 mb-2.5 bg-gray-50 rounded p-2">
-                        <div className="flex items-center justify-between text-[9px]">
-                          <span className="text-gray-500 font-medium flex items-center gap-0.5">
-                            <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            Bắt đầu:
-                          </span>
-                          <span className="text-gray-900 font-semibold">{formatDate(promo.startDate)}</span>
+                      {/* Description */}
+                      <p className="text-[11px] text-gray-600 mb-2 line-clamp-2 flex-shrink-0 leading-snug">
+                        {promo.description || 'Không có mô tả'}
+                      </p>
+
+                      {/* Date Info - COMPACT */}
+                      <div className="space-y-1 mb-2 flex-shrink-0">
+                        <div className="flex items-center justify-between text-[10px] bg-blue-50 rounded-lg p-1.5">
+                          <span className="text-blue-700 font-medium">Bắt đầu:</span>
+                          <span className="text-blue-900 font-bold">{formatDate(promo.startDate)}</span>
                         </div>
-                        <div className="flex items-center justify-between text-[9px]">
-                          <span className="text-gray-500 font-medium flex items-center gap-0.5">
-                            <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            Kết thúc:
-                          </span>
-                          <span className="text-gray-900 font-semibold">{formatDate(promo.endDate)}</span>
+                        <div className="flex items-center justify-between text-[10px] bg-purple-50 rounded-lg p-1.5">
+                          <span className="text-purple-700 font-medium">Kết thúc:</span>
+                          <span className="text-purple-900 font-bold">{formatDate(promo.endDate)}</span>
                         </div>
                       </div>
 
-                      {/* Usage Count */}
-                      {promo.usageCount !== undefined && (
-                        <div className="flex items-center justify-between mb-2.5 bg-blue-50 rounded p-1.5">
-                          <span className="text-[9px] text-blue-700 font-medium flex items-center gap-0.5">
-                            <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                            </svg>
-                            Đã sử dụng:
-                          </span>
-                          <span className="text-blue-900 font-bold text-[10px]">{promo.usageCount} lần</span>
+                      {/* Additional Info */}
+                      {(promo.minOrderValue || promo.usageCount !== undefined) && (
+                        <div className="space-y-1 mb-2 flex-shrink-0">
+                          {promo.minOrderValue && (
+                            <div className="flex items-center justify-between text-[10px] bg-green-50 rounded-lg p-1.5">
+                              <span className="text-green-700 font-medium">Đơn tối thiểu:</span>
+                              <span className="text-green-900 font-bold">{new Intl.NumberFormat('vi-VN').format(promo.minOrderValue)}₫</span>
+                            </div>
+                          )}
+                          {promo.usageCount !== undefined && (
+                            <div className="flex items-center justify-between text-[10px] bg-orange-50 rounded-lg p-1.5">
+                              <span className="text-orange-700 font-medium">Đã dùng:</span>
+                              <span className="text-orange-900 font-bold">{promo.usageCount} lần</span>
+                            </div>
+                          )}
                         </div>
                       )}
 
-                      {/* Additional Info */}
-                      <div className="mb-2.5 space-y-1">
-                        {promo.minOrderValue && (
-                          <div className="flex items-center justify-between text-[9px] bg-purple-50 rounded p-1">
-                            <span className="text-purple-700 font-medium">Đơn tối thiểu:</span>
-                            <span className="text-purple-900 font-bold">{new Intl.NumberFormat('vi-VN').format(promo.minOrderValue)}₫</span>
-                          </div>
-                        )}
-                        {promo.discountType === 'CATEGORY' && promo.categoryName && (
-                          <div className="flex items-center justify-between text-[9px] bg-indigo-50 rounded p-1">
-                            <span className="text-indigo-700 font-medium">Áp dụng cho:</span>
-                            <span className="text-indigo-900 font-bold truncate ml-1">{promo.categoryName}</span>
-                          </div>
-                        )}
-                      </div>
+                      {/* Spacer */}
+                      <div className="flex-1"></div>
 
-                      {/* Action Buttons */}
-                      <div className="flex gap-1 pt-1.5 border-t border-gray-200">
+                      {/* Action Buttons - AT BOTTOM */}
+                      <div className="flex gap-2 mt-auto pt-3 border-t-2 border-gray-100">
                         <button
                           onClick={() => handleEdit(promo)}
-                          className="flex-1 flex items-center justify-center gap-0.5 px-1.5 py-1.5 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-all font-semibold text-[10px] border border-blue-200 hover:shadow-sm"
+                          className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg hover:from-indigo-600 hover:to-purple-600 transition-all font-semibold text-xs shadow-md hover:shadow-lg"
                           title="Chỉnh sửa"
                         >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
-                          <span className="hidden sm:inline">Sửa</span>
                         </button>
-                        {promo.status === 'ACTIVE' && (
+                        {isExpired(promo) ? (
+                          <button
+                            disabled
+                            className="px-3 py-2 bg-gray-300 text-gray-500 rounded-lg cursor-not-allowed font-semibold text-xs"
+                            title="Đã hết hạn"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </button>
+                        ) : promo.status === 'ACTIVE' ? (
                           <button
                             onClick={() => handleDeactivate(promo.id)}
-                            className="px-1.5 py-1.5 bg-yellow-50 text-yellow-700 rounded hover:bg-yellow-100 transition-all font-semibold text-[10px] border border-yellow-200 hover:shadow-sm"
+                            className="px-3 py-2 bg-gradient-to-r from-slate-500 to-gray-500 text-white rounded-lg hover:from-slate-600 hover:to-gray-600 transition-all font-semibold text-xs shadow-md hover:shadow-lg"
                             title="Tạm dừng"
                           >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                           </button>
-                        )}
-                        {promo.status === 'INACTIVE' && (
+                        ) : (
                           <button
                             onClick={() => handleActivate(promo.id)}
-                            className="px-1.5 py-1.5 bg-green-50 text-green-700 rounded hover:bg-green-100 transition-all font-semibold text-[10px] border border-green-200 hover:shadow-sm"
+                            className="px-3 py-2 bg-gradient-to-r from-teal-500 to-cyan-500 text-white rounded-lg hover:from-teal-600 hover:to-cyan-600 transition-all font-semibold text-xs shadow-md hover:shadow-lg"
                             title="Kích hoạt"
                           >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
@@ -588,10 +734,10 @@ const StorePromotions = () => {
                         )}
                         <button
                           onClick={() => handleDelete(promo.id)}
-                          className="px-1.5 py-1.5 bg-red-50 text-red-700 rounded hover:bg-red-100 transition-all font-semibold text-[10px] border border-red-200 hover:shadow-sm"
+                          className="px-3 py-2 bg-gradient-to-r from-rose-500 to-red-500 text-white rounded-lg hover:from-rose-600 hover:to-red-600 transition-all font-semibold text-xs shadow-md hover:shadow-lg"
                           title="Xóa"
                         >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
                         </button>
@@ -605,21 +751,23 @@ const StorePromotions = () => {
 
           {/* ✅ CREATE MODAL */}
           {showCreateModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 overflow-y-auto">
-              <div className="bg-white rounded-2xl max-w-4xl w-full p-8 my-8 shadow-2xl">
-        <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                    Tạo khuyến mãi mới
-                  </h2>
+            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+                <div className="sticky top-0 bg-white z-10 px-6 pt-6 pb-4 border-b">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                      Tạo khuyến mãi mới
+                    </h2>
           <button
                     onClick={() => { setShowCreateModal(false); resetForm(); }}
                     className="text-gray-400 hover:text-gray-600 text-2xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100"
           >
                     ✕
-          </button>
-        </div>
+                    </button>
+                  </div>
+                </div>
 
-                <form onSubmit={handleCreate} className="space-y-6">
+                <form onSubmit={handleCreate} className="p-6 space-y-5">
                   {/* Basic Info */}
                   <div className="grid grid-cols-2 gap-4">
           <div>
@@ -690,7 +838,7 @@ const StorePromotions = () => {
                       </div>
             <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Giá trị giảm <span className="text-red-600">*</span>
+                          {formData.type === 'PERCENTAGE' ? 'Phần trăm giảm (%)' : 'Số tiền giảm (₫)'} <span className="text-red-600">*</span>
                       </label>
               <input
                 type="number"
@@ -699,7 +847,8 @@ const StorePromotions = () => {
                         onChange={handleInputChange}
                         required
                           min="1"
-                          placeholder={formData.type === 'PERCENTAGE' ? "10" : "100000"}
+                          max={formData.type === 'PERCENTAGE' ? 100 : undefined}
+                          placeholder={formData.type === 'PERCENTAGE' ? "VD: 10 (giảm 10%)" : "VD: 50000 (giảm 50,000₫)"}
                           className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
@@ -775,20 +924,22 @@ const StorePromotions = () => {
                           className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Giảm tối đa (₫)
-                        </label>
-                        <input
-                          type="number"
-                          name="maxDiscountValue"
-                          value={formData.maxDiscountValue}
-                          onChange={handleInputChange}
-                        min="0"
-                          placeholder="VD: 200000"
-                          className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                      </div>
+                      {formData.type === 'PERCENTAGE' && (
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Giảm tối đa (₫)
+                          </label>
+                          <input
+                            type="number"
+                            name="maxDiscountValue"
+                            value={formData.maxDiscountValue}
+                            onChange={handleInputChange}
+                            min="0"
+                            placeholder="VD: 200000"
+                            className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+                      )}
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
                           Giới hạn sử dụng
@@ -885,21 +1036,23 @@ const StorePromotions = () => {
 
           {/* ✅ EDIT MODAL */}
           {showEditModal && editingPromo && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 overflow-y-auto">
-              <div className="bg-white rounded-2xl max-w-4xl w-full p-8 my-8 shadow-2xl">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                    Chỉnh sửa khuyến mãi
-                  </h2>
-                  <button
-                    onClick={() => { setShowEditModal(false); setEditingPromo(null); resetForm(); }}
-                    className="text-gray-400 hover:text-gray-600 text-2xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100"
-                  >
-                    ✕
-                  </button>
+            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+                <div className="sticky top-0 bg-white z-10 px-6 pt-6 pb-4 border-b">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                      Chỉnh sửa khuyến mãi
+                    </h2>
+                    <button
+                      onClick={() => { setShowEditModal(false); setEditingPromo(null); resetForm(); }}
+                      className="text-gray-400 hover:text-gray-600 text-2xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
 
-                <form onSubmit={handleUpdate} className="space-y-6">
+                <form onSubmit={handleUpdate} className="p-6 space-y-5">
                   {/* Same form fields as create */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -965,7 +1118,7 @@ const StorePromotions = () => {
                       </div>
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Giá trị giảm <span className="text-red-600">*</span>
+                          {formData.type === 'PERCENTAGE' ? 'Phần trăm giảm (%)' : 'Số tiền giảm (₫)'} <span className="text-red-600">*</span>
                         </label>
                         <input
                           type="number"
@@ -974,6 +1127,8 @@ const StorePromotions = () => {
                           onChange={handleInputChange}
                           required
                           min="1"
+                          max={formData.type === 'PERCENTAGE' ? 100 : undefined}
+                          placeholder={formData.type === 'PERCENTAGE' ? "VD: 10 (giảm 10%)" : "VD: 50000 (giảm 50,000₫)"}
                           className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
                         />
                       </div>
@@ -1047,19 +1202,21 @@ const StorePromotions = () => {
                           className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
                         />
                       </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Giảm tối đa (₫)
-                        </label>
-                        <input
-                          type="number"
-                          name="maxDiscountValue"
-                          value={formData.maxDiscountValue}
-                          onChange={handleInputChange}
-                          min="0"
-                          className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
-                        />
-                      </div>
+                      {formData.type === 'PERCENTAGE' && (
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Giảm tối đa (₫)
+                          </label>
+                          <input
+                            type="number"
+                            name="maxDiscountValue"
+                            value={formData.maxDiscountValue}
+                            onChange={handleInputChange}
+                            min="0"
+                            className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                          />
+                        </div>
+                      )}
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
                           Giới hạn sử dụng

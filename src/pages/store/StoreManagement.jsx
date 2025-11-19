@@ -3,12 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import StoreLayout from '../../layouts/StoreLayout';
 import { useStoreContext } from '../../context/StoreContext';
 import { createStore } from '../../services/b2c/b2cStoreService';
-import { useToast } from '../../hooks/useToast';
+import { useToast } from '../../context/ToastContext';
 
 const StoreManagement = () => {
   const navigate = useNavigate();
-  const { userStores, currentStore, selectStore, refreshStores } = useStoreContext();
-  const toast = useToast();
+  const { userStores, currentStore, selectStore, fetchUserStores } = useStoreContext();
+  const { success, error } = useToast();
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -48,12 +48,7 @@ const StoreManagement = () => {
     
     // Validation
     if (!formData.name.trim()) {
-      toast?.error('Vui lòng nhập tên cửa hàng');
-      return;
-    }
-    
-    if (!formData.phone.trim() || formData.phone.length < 10) {
-      toast?.error('Vui lòng nhập số điện thoại hợp lệ');
+      error('Vui lòng nhập tên cửa hàng');
       return;
     }
 
@@ -63,24 +58,26 @@ const StoreManagement = () => {
       const result = await createStore(formData);
       
       if (result.success) {
-        toast?.success('Tạo cửa hàng thành công! Đang chờ admin duyệt...');
+        success('Tạo cửa hàng thành công! Đang chờ admin duyệt...');
         // Refresh stores list
-        await refreshStores();
+        await fetchUserStores();
         // Reset form
         setFormData({
           name: '',
           description: '',
-          phone: '',
-          email: '',
-          address: '',
+          address: {
+            province: '',
+            ward: '',
+            homeAddress: '',
+          },
         });
         setShowCreateForm(false);
       } else {
-        toast?.error(result.error || 'Không thể tạo cửa hàng');
+        error(result.error || 'Không thể tạo cửa hàng');
       }
-    } catch (error) {
-      console.error('Error creating store:', error);
-      toast?.error('Đã có lỗi xảy ra, vui lòng thử lại');
+    } catch (err) {
+      console.error('Error creating store:', err);
+      error('Đã có lỗi xảy ra, vui lòng thử lại');
     } finally {
       setIsSubmitting(false);
     }
@@ -264,7 +261,7 @@ const StoreManagement = () => {
                     }`}
                     onClick={() => {
                       selectStore(store.id);
-                      toast?.success(`Đã chuyển sang ${store.name}`);
+                      success(`Đã chuyển sang ${store.name}`);
                     }}
                   >
                     <div className="flex items-start justify-between mb-3">

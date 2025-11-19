@@ -320,17 +320,25 @@ export const removeManyFromCart = async (cartItemIds) => {
 export const removeCartItemById = async (cartItemId) => {
   try {
     console.log('🗑️ Removing cart item by ID:', cartItemId);
+    console.log('🗑️ API endpoint:', `/api/v1/buyer/cart/${cartItemId}`);
+    console.log('🗑️ CartItemId type:', typeof cartItemId);
     
     const response = await cartApi.delete(`/api/v1/buyer/cart/${cartItemId}`);
     
-    console.log('✅ Remove cart item response:', response.data);
+    console.log('✅ Remove cart item response:', response);
+    console.log('✅ Response status:', response.status);
+    console.log('✅ Response data:', response.data);
 
     return {
       success: true,
       message: response.data.message || 'Đã xóa sản phẩm khỏi giỏ hàng',
+      data: response.data,
     };
   } catch (error) {
     console.error('❌ Error removing cart item:', error);
+    console.error('❌ Error response:', error.response);
+    console.error('❌ Error status:', error.response?.status);
+    console.error('❌ Error data:', error.response?.data);
     return {
       success: false,
       error: error.response?.data?.message || error.message,

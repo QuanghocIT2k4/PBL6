@@ -143,12 +143,6 @@ const MainLayout = ({ children }) => {
                   >
                     Cửa hàng B2C
                   </button>
-                  <button
-                    onClick={() => navigate('/sellers')}
-                    className="text-gray-600 hover:text-blue-600 transition-colors font-medium"
-                  >
-                    Người bán C2C
-                  </button>
                 </nav>
               </div>
 

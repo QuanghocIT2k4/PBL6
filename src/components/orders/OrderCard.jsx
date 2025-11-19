@@ -207,13 +207,6 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
                       <span className="text-orange-600 font-medium">{formatCurrency(item.price)}</span>
                     </div>
                   </div>
-
-                  {/* Price - Right Aligned */}
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-base font-semibold text-orange-600">
-                      {formatCurrency(item.price * item.quantity)}
-                    </p>
-                  </div>
                 </div>
               ))}
             </div>
@@ -330,20 +323,28 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
           </div>
         </div>
 
-        {/* Footer - Simple */}
-        <div className="bg-gray-50 px-5 py-4 border-t border-gray-100">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-6">
-              <div className="text-sm text-gray-600">
-                {getPaymentMethodLabel(paymentMethod)}
-              </div>
-              
-              {/* Review Button - Moved here */}
+        {/* Footer - With Price Breakdown */}
+        <div className="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 px-5 py-4 border-t border-gray-200">
+          <div className="flex items-start justify-between gap-4">
+            {/* Left: Payment Method */}
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+              </svg>
+              <span className="font-medium">Phương thức thanh toán: {getPaymentMethodLabel(paymentMethod)}</span>
+            </div>
+
+            {/* Right: Action Buttons */}
+            <div className="flex items-center gap-2">
+              {/* Review Button */}
               {canReview && (
                 <button
                   onClick={() => handleReviewClick(items[0])}
-                  className="text-sm text-orange-600 hover:text-orange-700 font-medium border border-orange-300 px-4 py-1.5 rounded-md hover:bg-orange-50 transition-colors"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white text-sm font-semibold rounded-lg hover:from-orange-600 hover:to-pink-600 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
                 >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+                  </svg>
                   Đánh giá
                 </button>
               )}
@@ -352,20 +353,105 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
               {canCancel && (
                 <button
                   onClick={handleCancelClick}
-                  className="text-sm text-red-600 hover:text-red-700 font-medium border border-red-300 px-4 py-1.5 rounded-md hover:bg-red-50 transition-colors"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white text-sm font-semibold rounded-lg hover:from-red-600 hover:to-pink-600 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
                 >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/>
+                  </svg>
                   Hủy đơn
                 </button>
               )}
             </div>
+          </div>
 
-            {/* Total */}
-            <div className="text-right">
-              <span className="text-xs text-gray-500 mr-2">Tổng tiền:</span>
-              <span className="text-xl font-bold text-orange-600">
-                {formatCurrency(calculatedTotal)}
-              </span>
-            </div>
+          {/* Price Breakdown */}
+          <div className="bg-white rounded-xl p-4 mt-3 shadow-sm border border-gray-200">
+            {(() => {
+              const subtotal = items.reduce((sum, item) => 
+                sum + (parseFloat(item.price || 0) * parseInt(item.quantity || 0)), 0
+              );
+              const shippingFee = parseFloat(order.shippingFee || orderDetail?.shippingFee || 30000);
+              const serviceFee = parseFloat(order.serviceFee || orderDetail?.serviceFee || order.platformFee || 0);
+              
+              // Tìm tất cả các field có thể chứa discount
+              const discount = parseFloat(order.discount || orderDetail?.discount || order.discountAmount || 0);
+              const promotionDiscount = parseFloat(order.promotionDiscount || orderDetail?.promotionDiscount || 0);
+              const voucherDiscount = parseFloat(order.voucherDiscount || orderDetail?.voucherDiscount || 0);
+              const couponDiscount = parseFloat(order.couponDiscount || orderDetail?.couponDiscount || 0);
+              
+              const total = calculatedTotal;
+
+              // Debug log
+              console.log('💰 [OrderCard] Order ID:', order.id);
+              console.log('💰 [OrderCard] Subtotal:', subtotal);
+              console.log('💰 [OrderCard] Shipping:', shippingFee);
+              console.log('💰 [OrderCard] Service Fee:', serviceFee);
+              console.log('💰 [OrderCard] Discount:', discount);
+              console.log('💰 [OrderCard] Promotion:', promotionDiscount);
+              console.log('💰 [OrderCard] Voucher:', voucherDiscount);
+              console.log('💰 [OrderCard] Coupon:', couponDiscount);
+              console.log('💰 [OrderCard] Total from backend:', total);
+              console.log('💰 [OrderCard] Calculated:', subtotal + shippingFee + serviceFee - discount - promotionDiscount - voucherDiscount - couponDiscount);
+              console.log('💰 [OrderCard] Full order object:', order);
+              console.log('💰 [OrderCard] Full orderDetail object:', orderDetail);
+
+              // Tổng tất cả giảm giá
+              const totalDiscount = discount + promotionDiscount + voucherDiscount + couponDiscount;
+
+              return (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Tạm tính:</span>
+                    <span className="font-medium text-gray-900">{formatCurrency(subtotal)}</span>
+                  </div>
+                  
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Phí vận chuyển:</span>
+                    <span className="font-medium text-gray-900">{formatCurrency(shippingFee)}</span>
+                  </div>
+                  
+                  {/* Phí dịch vụ nếu có */}
+                  {serviceFee > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Phí dịch vụ:</span>
+                      <span className="font-medium text-gray-900">{formatCurrency(serviceFee)}</span>
+                    </div>
+                  )}
+                  
+                  {/* Hiển thị khuyến mãi nếu có */}
+                  {(promotionDiscount > 0 || voucherDiscount > 0 || couponDiscount > 0) && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 flex items-center gap-1">
+                        <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                        </svg>
+                        Khuyến mãi:
+                      </span>
+                      <span className="font-medium text-orange-600">
+                        -{formatCurrency(promotionDiscount + voucherDiscount + couponDiscount)}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {/* Giảm giá khác */}
+                  {discount > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Giảm giá khác:</span>
+                      <span className="font-medium text-green-600">-{formatCurrency(discount)}</span>
+                    </div>
+                  )}
+                  
+                  <div className="border-t-2 border-dashed border-gray-300 pt-2 mt-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-base font-bold text-gray-900">Tổng tiền:</span>
+                      <span className="text-2xl font-black bg-gradient-to-r from-orange-600 to-pink-600 bg-clip-text text-transparent">
+                        {formatCurrency(total)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>

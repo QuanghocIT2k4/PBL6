@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import useSWR, { mutate } from 'swr';
+import AdminPageHeader from '../../components/admin/AdminPageHeader';
 import { getPendingProducts, approveProduct, rejectProduct } from '../../services/admin/adminProductService';
 import { useToast } from '../../context/ToastContext';
 import { getAllBrandsWithoutPagination } from '../../services/common/brandService';
@@ -84,26 +85,14 @@ const AdminProducts = () => {
   };
 
   return (
-    <div className="p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-200 to-cyan-200 rounded-2xl p-6">
-          <div className="bg-white rounded-2xl p-8 shadow-sm">
-            <div className="flex items-center gap-4">
-              <div className="w-20 h-20 bg-gradient-to-br from-blue-400 to-cyan-400 rounded-2xl flex items-center justify-center shadow-lg">
-                <span className="text-5xl">📦</span>
-              </div>
-              <div>
-                <h1 className="text-5xl font-bold mb-2">
-                  <span className="text-blue-600">Quản lý</span> <span className="text-cyan-600">Sản phẩm</span>
-                </h1>
-                <p className="text-gray-600 text-xl">Duyệt sản phẩm chờ xét duyệt</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Content */}
+    <div className="space-y-6">
+      <AdminPageHeader 
+        icon="📦"
+        title="Quản lý Sản phẩm"
+        subtitle="Duyệt và quản lý sản phẩm"
+      />
+      <div className="space-y-6">
+        {/* Products List */}
         <div className="bg-white rounded-xl shadow-sm border-2 border-gray-200 p-6">
           {isLoading ? (
             <div className="text-center py-12">

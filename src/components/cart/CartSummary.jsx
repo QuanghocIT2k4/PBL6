@@ -13,7 +13,7 @@ const CartSummary = ({ onCheckout }) => {
   const totalItems = getSelectedTotalItems();
   const totalPrice = getSelectedTotalPrice();
   const totalSavings = getSelectedTotalSavings();
-  const shippingFee = totalPrice >= 500000 ? 0 : 30000; // Free ship từ 500k
+  const shippingFee = 30000; // Luôn tính phí vận chuyển 30k
   const finalTotal = totalPrice + shippingFee;
 
   return (
@@ -38,20 +38,8 @@ const CartSummary = ({ onCheckout }) => {
 
         <div className="flex justify-between">
           <span>Phí vận chuyển:</span>
-          <span>
-            {shippingFee === 0 ? (
-              <span className="text-green-600">Miễn phí</span>
-            ) : (
-              `${formatPrice(shippingFee)}đ`
-            )}
-          </span>
+          <span>{formatPrice(shippingFee)}đ</span>
         </div>
-
-        {shippingFee > 0 && (
-          <div className="text-xs text-gray-500">
-            Mua thêm {formatPrice(500000 - totalPrice)}đ để được miễn phí vận chuyển
-          </div>
-        )}
 
         <div className="border-t pt-3">
           <div className="flex justify-between font-bold text-lg">
@@ -75,7 +63,6 @@ const CartSummary = ({ onCheckout }) => {
       <div className="mt-6 p-4 bg-blue-50 rounded-lg">
         <h3 className="font-medium text-blue-900 mb-2">Ưu đãi thêm:</h3>
         <ul className="text-sm text-blue-800 space-y-1">
-          <li>✓ Miễn phí vận chuyển đơn từ 500k</li>
           <li>✓ Đổi trả trong 7 ngày</li>
           <li>✓ Bảo hành chính hãng</li>
         </ul>

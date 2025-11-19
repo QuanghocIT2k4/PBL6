@@ -19,60 +19,68 @@ export const CartProvider = ({ children }) => {
   const lastAddRef = useRef({ id: null, timestamp: 0 }); // Track last add để chống duplicate
   const { user } = useAuth();
 
-  // Load cart từ backend hoặc localStorage khi khởi tạo
-  useEffect(() => {
-    const loadCart = async () => {
-      try {
-        // 🚫 BỎ QUA HOÀN TOÀN CHO ADMIN: Không load cart trên trang admin
-        const isAdmin = Array.isArray(user?.roles) && user.roles.includes('ROLE_ADMIN');
-        if (isAdmin) {
-          console.log('🛑 Admin role detected → skip loading cart');
-          setCartItems([]);
-          setIsInitialized(true);
-          return;
-        }
+  // ✅ Function để fetch cart (có thể gọi từ nhiều nơi)
+  const fetchCart = async () => {
+    try {
+      // 🚫 BỎ QUA HOÀN TOÀN CHO ADMIN: Không load cart trên trang admin
+      const isAdmin = Array.isArray(user?.roles) && user.roles.includes('ROLE_ADMIN');
+      if (isAdmin) {
+        console.log('🛑 Admin role detected → skip loading cart');
+        setCartItems([]);
+        return;
+      }
 
-        const token = localStorage.getItem('token');
+      const token = localStorage.getItem('token');
         
         // ✅ NẾU CÓ TOKEN, LOAD TỪ BACKEND
         if (token) {
           const result = await cartService.getCart();
           
           if (result.success && result.data) {
-            // TODO: Transform backend data to frontend format
-            // Tạm thời load từ localStorage
-            const savedCart = localStorage.getItem('cart');
-            if (savedCart) {
-              const parsed = JSON.parse(savedCart);
-              const normalized = Array.isArray(parsed)
-                ? parsed.map(item => ({ 
-                    ...item, 
-                    selected: item.selected !== false,
-                    addedAt: item.addedAt || new Date().toISOString(),
-                    options: item.options || {}
-                  }))
-                : [];
-              setCartItems(normalized);
-            } else {
-              setCartItems([]);
-            }
+            console.log('✅ Cart loaded from backend:', result.data);
+            // ✅ LOAD TỪ BACKEND RESPONSE - cartItems nằm trong result.data.cartItems
+            const backendCart = result.data.cartItems || [];
+            console.log('✅ Cart items:', backendCart);
+            console.log('✅ First cart item structure:', backendCart[0]);
+            
+            const normalized = backendCart.map(item => {
+              // ✅ Backend trả về structure mới: { id, productId, productName, imageUrl, quantity }
+              // Cần transform thành format frontend expect
+              
+              if (!item.productId || !item.productName) {
+                console.warn('⚠️ Cart item missing productId or productName:', item);
+                return null;
+              }
+              
+              // ✅ Tạo product object từ backend data
+              const product = {
+                id: item.productId,
+                name: item.productName,
+                image: item.imageUrl,
+                price: item.price || 0,
+                storeId: item.storeId, // ← QUAN TRỌNG: Copy storeId từ backend!
+                // Copy tất cả fields khác từ backend item
+                ...item
+              };
+              
+              return {
+                id: item.id,
+                product: product,
+                quantity: item.quantity || 1,
+                selected: true,
+                addedAt: item.createdAt || new Date().toISOString(),
+                options: item.options || {}
+              };
+            }).filter(item => item !== null); // Lọc bỏ items không hợp lệ
+            
+            console.log('✅ Normalized cart items:', normalized);
+            setCartItems(normalized);
+            // ✅ Sync to localStorage
+            localStorage.setItem('cart', JSON.stringify(normalized));
           } else {
-            // Fallback to localStorage
-            const savedCart = localStorage.getItem('cart');
-            if (savedCart) {
-              const parsed = JSON.parse(savedCart);
-              const normalized = Array.isArray(parsed)
-                ? parsed.map(item => ({ 
-                    ...item, 
-                    selected: item.selected !== false,
-                    addedAt: item.addedAt || new Date().toISOString(),
-                    options: item.options || {}
-                  }))
-                : [];
-              setCartItems(normalized);
-            } else {
-              setCartItems([]);
-            }
+            console.log('❌ Failed to load cart from backend, clearing cart');
+            setCartItems([]);
+            localStorage.removeItem('cart');
           }
         } else {
           // ✅ GUEST USER: LOAD TỪ LOCALSTORAGE
@@ -99,9 +107,11 @@ export const CartProvider = ({ children }) => {
       } finally {
         setIsInitialized(true);
       }
-    };
+  };
 
-    loadCart();
+  // Load cart từ backend hoặc localStorage khi khởi tạo
+  useEffect(() => {
+    fetchCart();
   }, [user?.roles]);
 
   // ✅ Theo dõi logout event và xóa giỏ hàng khi logout
@@ -267,16 +277,24 @@ export const CartProvider = ({ children }) => {
         // ✅ Dùng cartItemId thay vì productVariantId
         const result = await cartService.removeCartItemById(itemId);
         
-        if (!result.success) {
+        if (result.success) {
+          console.log('✅ Cart item removed successfully, fetching updated cart...');
+          // ✅ FETCH LẠI CART TỪ BACKEND ĐỂ ĐỒNG BỘ
+          await fetchCart();
+        } else {
           console.error('Failed to remove cart item:', result.error);
+          // Không update local state nếu API fail
+          return;
         }
       } catch (apiError) {
         console.error('Error removing cart item:', apiError);
+        // Không update local state nếu có lỗi
+        return;
       }
+    } else {
+      // ✅ Nếu không có token (offline), chỉ update localStorage
+      setCartItems(prevItems => prevItems.filter(item => item.id !== itemId));
     }
-
-    // ✅ CẬP NHẬT LOCALSTORAGE
-    setCartItems(prevItems => prevItems.filter(item => item.id !== itemId));
   };
 
   // Xóa tất cả sản phẩm

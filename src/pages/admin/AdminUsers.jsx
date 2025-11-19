@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import useSWR from 'swr';
+import AdminPageHeader from '../../components/admin/AdminPageHeader';
 import { getAllUsers, banUser, unbanUser } from '../../services/admin/adminUserService';
 import { useToast } from '../../context/ToastContext';
 
@@ -48,8 +49,17 @@ const AdminUsers = () => {
     }
   }, [users]);
 
-  // Filter by search
+  // Filter by search and role (client-side backup)
   const filteredUsers = users.filter(user => {
+    // Filter by role (client-side backup nếu backend không filter)
+    if (roleFilter) {
+      const userRoles = user.roles || (user.role ? [user.role] : []);
+      if (!userRoles.includes(roleFilter)) {
+        return false;
+      }
+    }
+    
+    // Filter by search
     if (!searchTerm) return true;
     const search = searchTerm.toLowerCase();
     return (
@@ -106,24 +116,15 @@ const AdminUsers = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-purple-200 to-pink-200 rounded-2xl p-6">
-          <div className="bg-white rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-400 to-pink-400 rounded-2xl flex items-center justify-center shadow-lg">
-                <span className="text-4xl">👥</span>
-              </div>
-              <div>
-                <h1 className="text-4xl font-bold mb-2">
-                  <span className="text-purple-600">Quản lý</span> <span className="text-pink-600">Người dùng</span>
-                </h1>
-                <p className="text-gray-600 text-lg">Tổng số: <span className="font-semibold">{totalElements}</span> người dùng</p>
-              </div>
-            </div>
-          </div>
-        </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <AdminPageHeader 
+        icon="👥"
+        title="Quản lý Người dùng"
+        subtitle="Quản lý tất cả người dùng trong hệ thống"
+      />
+
+      <div className="bg-white rounded-2xl p-6 shadow-sm">
 
         {/* Filters */}
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
@@ -139,20 +140,12 @@ const AdminUsers = () => {
                 Tất cả
               </button>
               <button
-                onClick={() => { setRoleFilter('BUYER'); setCurrentPage(0); }}
+                onClick={() => { setRoleFilter('USER'); setCurrentPage(0); }}
                 className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  roleFilter === 'BUYER' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  roleFilter === 'USER' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                🛒 Buyer
-              </button>
-              <button
-                onClick={() => { setRoleFilter('STORE'); setCurrentPage(0); }}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  roleFilter === 'STORE' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                🏪 Store
+                👤 User
               </button>
               <button
                 onClick={() => { setRoleFilter('ADMIN'); setCurrentPage(0); }}
@@ -228,8 +221,8 @@ const AdminUsers = () => {
                               const userRoles = user.roles || (user.role ? [user.role] : []);
                               
                               if (userRoles.length > 0) {
-                                // ✅ Ưu tiên hiển thị: ADMIN > STORE > BUYER/USER
-                                const priorityOrder = ['ADMIN', 'STORE', 'STORE_OWNER', 'BUYER', 'USER'];
+                                // ✅ Ưu tiên hiển thị: ADMIN > USER
+                                const priorityOrder = ['ADMIN', 'USER'];
                                 const sortedRoles = [...userRoles].sort((a, b) => {
                                   const indexA = priorityOrder.indexOf(a);
                                   const indexB = priorityOrder.indexOf(b);
@@ -243,13 +236,10 @@ const AdminUsers = () => {
                                   <span
                                     className={`px-3 py-1 rounded-full text-xs font-bold ${
                                       primaryRole === 'ADMIN' ? 'bg-red-100 text-red-800' :
-                                      primaryRole === 'STORE' || primaryRole === 'STORE_OWNER' ? 'bg-green-100 text-green-800' :
                                       'bg-blue-100 text-blue-800'
                                     }`}
                                   >
-                                    {primaryRole === 'ADMIN' ? '👑 Admin' :
-                                     primaryRole === 'STORE' || primaryRole === 'STORE_OWNER' ? '🏪 Store' :
-                                     '🛒 Buyer'}
+                                    {primaryRole === 'ADMIN' ? '👑 Admin' : '👤 User'}
                                   </span>
                                 );
                               } else {

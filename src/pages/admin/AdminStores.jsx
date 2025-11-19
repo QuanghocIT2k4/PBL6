@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import useSWR, { mutate } from 'swr';
+import AdminPageHeader from '../../components/admin/AdminPageHeader';
 import { getPendingStores, getApprovedStores, approveStore, rejectStore, updateStoreStatus, softDeleteStore } from '../../services/admin/adminStoreService';
 import { useToast } from '../../context/ToastContext';
 
@@ -119,25 +120,14 @@ const AdminStores = () => {
   };
 
   return (
-    <div className="p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-yellow-200 to-orange-200 rounded-2xl p-6">
-          <div className="bg-white rounded-2xl p-8 shadow-sm">
-            <div className="flex items-center gap-4">
-              <div className="w-20 h-20 bg-gradient-to-br from-yellow-400 to-orange-400 rounded-2xl flex items-center justify-center shadow-lg">
-                <span className="text-5xl">🏪</span>
-              </div>
-              <div>
-                <h1 className="text-5xl font-bold mb-2">
-                  <span className="text-yellow-600">Quản lý</span> <span className="text-orange-600">Cửa hàng</span>
-                </h1>
-                <p className="text-gray-600 text-xl">Duyệt và quản lý các cửa hàng trên hệ thống</p>
-              </div>
-            </div>
-          </div>
-        </div>
+    <div className="space-y-6">
+      <AdminPageHeader 
+        icon="🏪"
+        title="Quản lý Cửa hàng"
+        subtitle="Duyệt và quản lý các cửa hàng"
+      />
 
+      <div className="space-y-6">
         {/* Tabs */}
         <div className="bg-white rounded-xl shadow-sm border-2 border-gray-200">
           <div className="flex border-b">
@@ -305,7 +295,6 @@ const AdminStores = () => {
             )}
           </div>
         </div>
-      </div>
 
       {/* Reject Modal */}
       {showRejectModal && (
@@ -370,6 +359,7 @@ const AdminStores = () => {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };

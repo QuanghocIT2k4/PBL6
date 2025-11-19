@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getPendingVariants, approveVariant, rejectVariant } from '../../services/admin';
 import { useToast } from '../../context/ToastContext';
+import AdminPageHeader from '../../components/admin/AdminPageHeader';
 
 const AdminVariants = () => {
   const [variants, setVariants] = useState([]);
@@ -173,6 +174,12 @@ const AdminVariants = () => {
   }
 
   return (
+    <div className="space-y-6">
+      <AdminPageHeader 
+        icon="🎨"
+        title="Quản lý Biến thể"
+        subtitle="Duyệt và quản lý biến thể sản phẩm"
+      />
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -499,6 +506,7 @@ const AdminVariants = () => {
           </div>
         )}
       </div>
+    </div>
   );
 };
 

@@ -16,6 +16,7 @@ import api from '../common/api';
  * 
  * @param {Object} paymentData - Payment details
  * @param {number} paymentData.amount - Payment amount (VND)
+ * @param {string} paymentData.orderInfo - Order information (e.g., "Order #ORD123456")
  * @param {string} paymentData.bankCode - Bank code (optional, e.g., "NCB", "VNPAYQR")
  * @param {string} paymentData.language - Language ("vn" or "en")
  * 
@@ -24,6 +25,7 @@ import api from '../common/api';
  * @example
  * const result = await createPaymentUrl({
  *   amount: 1000000,
+ *   orderInfo: "Order #ORD123456 - Laptop ASUS",
  *   bankCode: "NCB",
  *   language: "vn"
  * });
@@ -38,6 +40,7 @@ export const createPaymentUrl = async (paymentData) => {
     
     const response = await api.post('/api/v1/buyer/payments/create_payment_url', {
       amount: paymentData.amount,
+      orderInfo: paymentData.orderInfo || `Order #${Date.now()}`, // Order information
       bankCode: paymentData.bankCode || '', // Optional
       language: paymentData.language || 'vn', // Default Vietnamese
     });
@@ -165,6 +168,7 @@ export const queryPayment = async (queryData) => {
  * @param {string} refundData.order_id - Order ID
  * @param {number} refundData.amount - Refund amount (VND)
  * @param {string} refundData.transaction_date - Original transaction date
+ * @param {string} refundData.reason - Refund reason (optional, e.g., "Customer requested cancellation")
  * @param {string} refundData.created_by - Admin username
  * @param {string} refundData.ip_address - IP address (optional)
  * 
@@ -176,6 +180,7 @@ export const queryPayment = async (queryData) => {
  *   order_id: "ORDER123",
  *   amount: 1000000,
  *   transaction_date: "20231118120000",
+ *   reason: "Customer requested cancellation",
  *   created_by: "admin"
  * });
  */
@@ -188,6 +193,7 @@ export const refundPayment = async (refundData) => {
       order_id: refundData.order_id,
       amount: refundData.amount,
       transaction_date: refundData.transaction_date,
+      reason: refundData.reason || '', // Refund reason
       created_by: refundData.created_by,
       ip_address: refundData.ip_address || '',
     });

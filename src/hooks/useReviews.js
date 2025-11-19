@@ -10,7 +10,7 @@ export const useReviews = (productId) => {
   const [submitting, setSubmitting] = useState(false);
 
   // Fetch reviews
-  const fetchReviews = useCallback(async (page = 1, filter = 'all', sortBy = 'newest') => {
+  const fetchReviews = useCallback(async (page = 0, filter = 'all', sortBy = 'newest') => {
     try {
       setLoading(true);
       setError(null);

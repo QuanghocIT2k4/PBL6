@@ -10,7 +10,7 @@ import { useAuth } from '../../context/AuthContext';
  * ReviewList Component
  * Displays list of reviews with stats, filtering, and pagination
  */
-const ReviewList = ({ productVariantId, onWriteReview }) => {
+const ReviewList = ({ productVariantId, onWriteReview, allowEdit = false }) => {
   const { user } = useAuth();
   const { success, error: showError } = useToast();
   const [currentPage, setCurrentPage] = useState(0);
@@ -134,16 +134,6 @@ const ReviewList = ({ productVariantId, onWriteReview }) => {
               </div>
             )}
           </div>
-
-          {/* Write Review Button */}
-          {user && onWriteReview && (
-            <button
-              onClick={() => onWriteReview()}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-            >
-              ✍️ Viết đánh giá
-            </button>
-          )}
         </div>
       </div>
 
@@ -155,19 +145,11 @@ const ReviewList = ({ productVariantId, onWriteReview }) => {
             <h3 className="text-xl font-semibold text-gray-900 mb-2">
               Chưa có đánh giá nào
             </h3>
-            <p className="text-gray-600 mb-4">
+            <p className="text-gray-600">
               {selectedRating || hasImagesOnly
                 ? 'Không tìm thấy đánh giá phù hợp với bộ lọc'
-                : 'Hãy là người đầu tiên đánh giá sản phẩm này!'}
+                : 'Chưa có đánh giá nào cho sản phẩm này'}
             </p>
-            {user && onWriteReview && (
-              <button
-                onClick={() => onWriteReview()}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-              >
-                Viết đánh giá ngay
-              </button>
-            )}
           </div>
         ) : (
           <>
@@ -177,8 +159,8 @@ const ReviewList = ({ productVariantId, onWriteReview }) => {
                 key={review.id}
                 review={review}
                 isOwner={user && user.id === review.user?.id}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
+                onEdit={allowEdit ? handleEdit : undefined}
+                onDelete={allowEdit ? handleDelete : undefined}
               />
             ))}
 

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
+import AdminPageHeader from '../../components/admin/AdminPageHeader';
 import { useToast } from '../../context/ToastContext';
 import Swal from 'sweetalert2';
 import {
   getAllWithdrawalRequests,
-  approveWithdrawal,
+  completeWithdrawal,
   rejectWithdrawal,
   formatCurrency,
   getWithdrawalStatusBadge,
@@ -61,16 +62,16 @@ const AdminWallets = () => {
     }
   };
 
-  const handleApprove = async () => {
+  const handleComplete = async () => {
     if (!selectedWithdrawal) return;
     
     setProcessing(true);
     
     try {
-      const result = await approveWithdrawal(selectedWithdrawal.id, approveNote);
+      const result = await completeWithdrawal(selectedWithdrawal.id, approveNote);
       
       if (result.success) {
-        success('Đã duyệt yêu cầu rút tiền!');
+        success('Đã hoàn tất chuyển tiền!');
         setShowApproveModal(false);
         setApproveNote('');
         setSelectedWithdrawal(null);
@@ -79,8 +80,8 @@ const AdminWallets = () => {
         showError(result.error);
       }
     } catch (err) {
-      console.error('Error approving withdrawal:', err);
-      showError('Không thể duyệt yêu cầu');
+      console.error('Error completing withdrawal:', err);
+      showError('Không thể hoàn tất rút tiền');
     } finally {
       setProcessing(false);
     }
@@ -171,21 +172,13 @@ const AdminWallets = () => {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="mb-8 flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">💰 Quản lý Ví & Rút tiền</h1>
-          <p className="text-gray-600">Quản lý ví của các cửa hàng và duyệt yêu cầu rút tiền</p>
-        </div>
-        <button
-          onClick={() => setShowRefundModal(true)}
-          className="px-6 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors"
-        >
-          ↩️ Hoàn tiền
-        </button>
-      </div>
-
+    <div className="space-y-6">
+      <AdminPageHeader 
+        icon="💰"
+        title="Quản lý Ví & Rút tiền"
+        subtitle="Xử lý yêu cầu rút tiền của cửa hàng"
+      />
+      <div className="space-y-6">
       {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-12">
@@ -198,7 +191,7 @@ const AdminWallets = () => {
         <div>
           {/* Filter */}
           <div className="mb-6 flex gap-3">
-            {['ALL', 'PENDING', 'APPROVED', 'REJECTED', 'COMPLETED'].map((status) => (
+            {['ALL', 'PENDING', 'REJECTED', 'COMPLETED'].map((status) => (
               <button
                 key={status}
                 onClick={() => setWithdrawalFilter(status)}
@@ -239,8 +232,7 @@ const AdminWallets = () => {
                     return (
                       <tr key={wd.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4">
-                          <p className="text-sm font-medium text-gray-900">{wd.storeName || 'N/A'}</p>
-                          <p className="text-xs text-gray-500">{wd.storeId}</p>
+                          <p className="text-sm font-medium text-gray-900">{wd.store?.name || wd.storeName || 'N/A'}</p>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="text-sm font-bold text-gray-900">
@@ -249,8 +241,8 @@ const AdminWallets = () => {
                         </td>
                         <td className="px-6 py-4">
                           <p className="text-sm text-gray-900">{wd.bankName}</p>
-                          <p className="text-xs text-gray-500">{wd.bankAccount}</p>
-                          <p className="text-xs text-gray-500">{wd.accountHolder}</p>
+                          <p className="text-xs text-gray-500">{wd.bankAccountNumber}</p>
+                          <p className="text-xs text-gray-500">{wd.bankAccountName}</p>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${badge.color}`}>
@@ -271,7 +263,7 @@ const AdminWallets = () => {
                                   }}
                                   className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                                 >
-                                  ✅ Duyệt
+                                  💰 Hoàn tất
                                 </button>
                                 <button
                                   onClick={() => {
@@ -290,11 +282,11 @@ const AdminWallets = () => {
                                   title: 'Chi tiết yêu cầu rút tiền',
                                   html: `
                                     <div class="text-left space-y-2">
-                                      <p><strong>Cửa hàng:</strong> ${wd.storeName || 'N/A'}</p>
+                                      <p><strong>Cửa hàng:</strong> ${wd.store?.name || wd.storeName || 'N/A'}</p>
                                       <p><strong>Số tiền:</strong> ${formatCurrency(wd.amount)}</p>
                                       <p><strong>Ngân hàng:</strong> ${wd.bankName}</p>
-                                      <p><strong>Số TK:</strong> ${wd.bankAccount}</p>
-                                      <p><strong>Chủ TK:</strong> ${wd.accountHolder}</p>
+                                      <p><strong>Số TK:</strong> ${wd.bankAccountNumber}</p>
+                                      <p><strong>Chủ TK:</strong> ${wd.bankAccountName}</p>
                                       <p><strong>Trạng thái:</strong> ${wd.status}</p>
                                       <p><strong>Thời gian:</strong> ${new Date(wd.createdAt).toLocaleString('vi-VN')}</p>
                                       <p><strong>Ghi chú:</strong> ${wd.note || 'Không có'}</p>
@@ -324,24 +316,25 @@ const AdminWallets = () => {
       {showApproveModal && selectedWithdrawal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-8">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">✅ Duyệt yêu cầu rút tiền</h2>
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">💰 Hoàn tất chuyển tiền</h2>
             
             <div className="mb-6 p-4 bg-gray-50 rounded-lg">
               <p className="text-sm text-gray-600 mb-2">Cửa hàng: <span className="font-semibold">{selectedWithdrawal.storeName}</span></p>
               <p className="text-sm text-gray-600 mb-2">Số tiền: <span className="font-semibold text-green-600">{formatCurrency(selectedWithdrawal.amount)}</span></p>
               <p className="text-sm text-gray-600 mb-2">Ngân hàng: <span className="font-semibold">{selectedWithdrawal.bankName}</span></p>
-              <p className="text-sm text-gray-600">Số TK: <span className="font-semibold">{selectedWithdrawal.bankAccount}</span></p>
+              <p className="text-sm text-gray-600">Số TK: <span className="font-semibold">{selectedWithdrawal.bankAccountNumber}</span></p>
+              <p className="text-sm text-gray-600">Chủ TK: <span className="font-semibold">{selectedWithdrawal.bankAccountName}</span></p>
             </div>
 
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Ghi chú (tùy chọn)
+                Ghi chú admin (tùy chọn)
               </label>
               <textarea
                 value={approveNote}
                 onChange={(e) => setApproveNote(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="Ghi chú thêm..."
+                placeholder="VD: Đã chuyển tiền vào tài khoản ngày 19/11/2025..."
                 rows="3"
               />
             </div>
@@ -359,11 +352,11 @@ const AdminWallets = () => {
                 Hủy
               </button>
               <button
-                onClick={handleApprove}
+                onClick={handleComplete}
                 disabled={processing}
                 className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
               >
-                {processing ? 'Đang xử lý...' : 'Xác nhận duyệt'}
+                {processing ? 'Đang xử lý...' : 'Xác nhận hoàn tất'}
               </button>
             </div>
           </div>
@@ -544,6 +537,7 @@ const AdminWallets = () => {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };

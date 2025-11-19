@@ -46,7 +46,12 @@ const CartItem = ({ item }) => {
     }
   };
 
-  const itemPrice = typeof item.product.price === 'number' ? item.product.price : parseInt(item.product.price.replace(/\./g, '')) || 0;
+  // ✅ Handle trường hợp product hoặc price undefined
+  const itemPrice = item.product?.price 
+    ? (typeof item.product.price === 'number' 
+        ? item.product.price 
+        : parseInt(item.product.price.replace(/\./g, '')) || 0)
+    : 0; // Fallback nếu không có price
   const totalPrice = itemPrice * item.quantity;
 
   return (

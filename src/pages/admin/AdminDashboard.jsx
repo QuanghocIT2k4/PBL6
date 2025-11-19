@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import useSWR from 'swr';
 import { Link } from 'react-router-dom';
+import AdminPageHeader from '../../components/admin/AdminPageHeader';
 import { getPendingStores } from '../../services/admin/adminStoreService';
 import { getPendingProducts } from '../../services/admin/adminProductService';
 import { getPendingVariants } from '../../services/admin/adminVariantService';
@@ -46,24 +47,13 @@ const AdminDashboard = () => {
   const totalPromotionsCount = promotionsData?.data?.totalElements || 0;
 
   return (
-    <div className="p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-slate-100 to-gray-100 rounded-2xl p-6">
-          <div className="bg-white rounded-2xl p-8 shadow-sm">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-slate-600 to-slate-700 rounded-2xl flex items-center justify-center shadow-lg">
-                <span className="text-4xl">👑</span>
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold mb-2">
-                  <span className="text-slate-700">Admin</span> <span className="text-slate-600">Dashboard</span>
-                </h1>
-                <p className="text-gray-600 text-base">Tổng quan hệ thống E-Commerce</p>
-              </div>
-            </div>
-          </div>
-        </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <AdminPageHeader 
+        icon="👑"
+        title="Admin Dashboard"
+        subtitle="Tổng quan hệ thống E-Commerce"
+      />
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
@@ -243,7 +233,6 @@ const AdminDashboard = () => {
             </div>
           </div>
         </div>
-      </div>
     </div>
   );
 };

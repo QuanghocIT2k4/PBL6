@@ -37,21 +37,31 @@ export const getStoreWallet = async (storeId) => {
  */
 export const getWithdrawalRequests = async (storeId, params = {}) => {
   try {
-    const { page = 0, size = 10, status } = params;
-    
-    // ⚠️ Backend uses 1-BASED pagination for withdrawals (different from orders!)
-    const backendPage = page + 1;
+    const { 
+      page = 0, 
+      size = 10, 
+      status,
+      sortBy = 'createdAt',
+      sortDir = 'desc'
+    } = params;
     
     console.log('📥 Fetching withdrawal requests:', { 
       storeId, 
-      frontendPage: page, 
-      backendPage, 
+      page, 
       size, 
-      status 
+      status,
+      sortBy,
+      sortDir
     });
     
     const response = await api.get(`/api/v1/b2c/wallet/store/${storeId}/withdrawals`, {
-      params: { page: backendPage, size, ...(status && { status }) },
+      params: { 
+        page, 
+        size, 
+        sortBy,
+        sortDir,
+        ...(status && { status }) 
+      },
     });
     
     console.log('✅ Withdrawal requests response:', response.data);
@@ -132,21 +142,31 @@ export const getWithdrawalRequestDetail = async (storeId, requestId) => {
  */
 export const getWalletTransactions = async (storeId, params = {}) => {
   try {
-    const { page = 0, size = 10, type } = params;
-    
-    // ⚠️ Backend uses 1-BASED pagination for transactions (different from orders!)
-    const backendPage = page + 1;
+    const { 
+      page = 0, 
+      size = 10, 
+      type,
+      sortBy = 'createdAt',
+      sortDir = 'desc'
+    } = params;
     
     console.log('📥 Fetching wallet transactions:', { 
       storeId, 
-      frontendPage: page, 
-      backendPage, 
+      page, 
       size, 
-      type 
+      type,
+      sortBy,
+      sortDir
     });
     
     const response = await api.get(`/api/v1/b2c/wallet/store/${storeId}/transactions`, {
-      params: { page: backendPage, size, ...(type && { type }) },
+      params: { 
+        page, 
+        size, 
+        sortBy,
+        sortDir,
+        ...(type && { type }) 
+      },
     });
     
     console.log('✅ Wallet transactions response:', response.data);

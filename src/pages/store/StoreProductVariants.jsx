@@ -14,6 +14,7 @@ const StoreProductVariants = () => {
   const { currentStore, loading: storeLoading } = useStoreContext();
   const toast = useToast();
   const [modal, setModal] = useState({ open: false, type: null, variant: null, value: '' });
+  const [detailModal, setDetailModal] = useState({ open: false, variant: null });
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
   const pageSize = 20;
@@ -282,16 +283,54 @@ const StoreProductVariants = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full md:w-56 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            </div>
+
+            {/* Status Filter Tabs */}
+            <div className="flex flex-wrap gap-2 mt-4">
+              <button
+                onClick={() => setStatusFilter('ALL')}
+                className={`px-5 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-2 ${
+                  statusFilter === 'ALL' 
+                    ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
               >
-                <option value="ALL">Tất cả trạng thái</option>
-                <option value="APPROVED">Đã duyệt</option>
-                <option value="PENDING">Chờ duyệt</option>
-                <option value="REJECTED">Từ chối</option>
-              </select>
+                <span className={`w-2 h-2 rounded-full ${statusFilter === 'ALL' ? 'bg-white' : 'bg-purple-500'}`}></span>
+                Tất cả trạng thái
+              </button>
+              <button
+                onClick={() => setStatusFilter('APPROVED')}
+                className={`px-5 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-2 ${
+                  statusFilter === 'APPROVED' 
+                    ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${statusFilter === 'APPROVED' ? 'bg-white' : 'bg-green-500'}`}></span>
+                Đã duyệt
+              </button>
+              <button
+                onClick={() => setStatusFilter('PENDING')}
+                className={`px-5 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-2 ${
+                  statusFilter === 'PENDING' 
+                    ? 'bg-gradient-to-r from-yellow-500 to-amber-600 text-white shadow-lg' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${statusFilter === 'PENDING' ? 'bg-white' : 'bg-yellow-500'}`}></span>
+                Chờ duyệt
+              </button>
+              <button
+                onClick={() => setStatusFilter('REJECTED')}
+                className={`px-5 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-2 ${
+                  statusFilter === 'REJECTED' 
+                    ? 'bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${statusFilter === 'REJECTED' ? 'bg-white' : 'bg-red-500'}`}></span>
+                Từ chối
+              </button>
             </div>
           </div>
 
@@ -323,75 +362,89 @@ const StoreProductVariants = () => {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {filteredVariants.map((variant) => (
                     <div
                       key={variant.id}
-                      className="border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg hover:border-blue-300 transition-all bg-white group"
+                      onClick={() => setDetailModal({ open: true, variant })}
+                      className="group relative bg-white rounded-2xl overflow-hidden hover:shadow-2xl transition-all duration-300 flex flex-col border-2 border-gray-100 hover:border-blue-400 cursor-pointer"
                     >
-                      <div className="aspect-square bg-gradient-to-br from-gray-50 to-gray-100 relative overflow-hidden">
+                      {/* Status Badge */}
+                      <div className="absolute top-3 right-3 z-10">
+                        {(() => {
+                          const badge = getApprovalBadge(deriveApprovalStatus(variant));
+                          return (
+                            <span className={`px-2.5 py-1 rounded-lg text-xs font-bold shadow-lg ${badge.className}`}>
+                              {badge.icon} {badge.label}
+                            </span>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Image */}
+                      <div className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 relative overflow-hidden">
                         {variant.primaryImage || variant.images?.[0] ? (
                           <img
                             src={variant.primaryImage || variant.images[0]}
                             alt={variant.productName || variant.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-gray-300 text-5xl group-hover:scale-110 transition-transform duration-300">
-                            🎨
+                          <div className="w-full h-full flex items-center justify-center">
+                            <div className="text-gray-300 text-6xl group-hover:scale-110 transition-transform duration-300">
+                              🎨
+                            </div>
                           </div>
                         )}
-                        {/* Approval badge */}
-                        <div className="absolute top-2 right-2">
-                          {(() => {
-                            const badge = getApprovalBadge(deriveApprovalStatus(variant));
-                            return (
-                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border ${badge.className}`}>
-                                {badge.icon} {badge.label}
-                              </span>
-                            );
-                          })()}
-                        </div>
+                        
                         {/* Stock badge */}
-                        {((variant.stock ?? variant.stockQuantity ?? 0) <= 0) && (
-                          <div className="absolute bottom-2 left-2 bg-red-600/90 text-white px-2 py-0.5 rounded text-[10px] font-medium">
-                            Hết hàng
-                          </div>
-                        )}
-                        {((variant.stock ?? variant.stockQuantity ?? 0) > 0) && ((variant.stock ?? variant.stockQuantity ?? 0) < 10) && (
-                          <div className="absolute bottom-2 left-2 bg-yellow-500/90 text-white px-2 py-0.5 rounded text-[10px] font-medium">
-                            Sắp hết
-                          </div>
-                        )}
+                        <div className="absolute bottom-3 left-3">
+                          {((variant.stock ?? variant.stockQuantity ?? 0) <= 0) ? (
+                            <span className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold shadow-lg">
+                              Hết hàng
+                            </span>
+                          ) : ((variant.stock ?? variant.stockQuantity ?? 0) < 10) ? (
+                            <span className="px-3 py-1.5 bg-yellow-500 text-white rounded-lg text-xs font-bold shadow-lg">
+                              Sắp hết
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
-                      <div className="p-4">
-                        <h3 className="font-bold text-gray-900 line-clamp-2 mb-2 text-sm leading-tight">
+
+                      {/* Content */}
+                      <div className="flex-1 p-2.5 flex flex-col">
+                        {/* Product Name */}
+                        <h3 className="font-bold text-gray-900 line-clamp-1 mb-1.5 text-xs leading-tight">
                           {variant.productName || variant.name}
                         </h3>
+
+                        {/* Attributes */}
                         {variant.attributes && Object.keys(variant.attributes).length > 0 && (
-                          <div className="flex flex-wrap gap-1 mb-3">
-                            {Object.entries(variant.attributes).slice(0, 3).map(([key, value]) => (
-                              <span key={key} className="px-2 py-1 bg-blue-50 text-blue-700 text-[10px] rounded-md border border-blue-200 font-medium">
+                          <div className="flex flex-wrap gap-1 mb-1.5">
+                            {Object.entries(variant.attributes).slice(0, 2).map(([key, value]) => (
+                              <span key={key} className="px-1.5 py-0.5 bg-gradient-to-r from-blue-50 to-cyan-50 text-blue-700 text-[9px] rounded border border-blue-200 font-semibold">
                                 {key}: {value}
                               </span>
                             ))}
-                            {Object.keys(variant.attributes).length > 3 && (
-                              <span className="px-2 py-1 bg-gray-50 text-gray-600 text-[10px] rounded-md border border-gray-200">
-                                +{Object.keys(variant.attributes).length - 3}
+                            {Object.keys(variant.attributes).length > 2 && (
+                              <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-[9px] rounded border border-gray-300 font-semibold">
+                                +{Object.keys(variant.attributes).length - 2}
                               </span>
                             )}
                           </div>
                         )}
-                        <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
-                          <div>
-                            <p className="text-xs text-gray-500 mb-0.5">Giá bán</p>
-                            <p className="text-base font-bold text-red-600">
+
+                        {/* Price & Stock */}
+                        <div className="mt-auto pt-1.5 border-t border-gray-100">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[9px] font-medium text-gray-500">Giá bán</span>
+                            <span className="text-[9px] font-medium text-gray-500">Tồn kho</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-black text-red-600">
                               {formatPrice(variant.price)}
                             </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-xs text-gray-500 mb-0.5">Tồn kho</p>
-                            <p className={`text-sm font-semibold ${
+                            <p className={`text-sm font-bold ${
                               (variant.stock ?? variant.stockQuantity ?? 0) <= 0 
                                 ? 'text-red-600' 
                                 : (variant.stock ?? variant.stockQuantity ?? 0) < 10 
@@ -403,21 +456,17 @@ const StoreProductVariants = () => {
                           </div>
                         </div>
                         {/* Actions - Improved design */}
-                        <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                        <div className="mt-1.5 pt-1.5 border-t border-gray-100 flex items-center justify-between gap-1">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              // ✅ Navigate đến variant detail page
-                              if (variant.id) {
-                                navigate(`/store-dashboard/product-variants/${variant.id}`);
-                              } else {
-                                toast?.error?.('Không tìm thấy ID biến thể');
-                              }
+                              // Mở modal chi tiết thay vì navigate
+                              setDetailModal({ open: true, variant });
                             }}
-                            className="flex-1 px-3 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-semibold rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-1.5"
+                            className="flex-1 px-2 py-1.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-[10px] font-semibold rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-1"
                             title="Xem chi tiết biến thể"
                           >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                             </svg>
@@ -429,10 +478,10 @@ const StoreProductVariants = () => {
                                 e.stopPropagation();
                                 openModal(e, 'price', variant);
                               }}
-                              className="p-2 bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-100 transition-colors"
+                              className="p-1.5 bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-100 transition-colors"
                               title="Cập nhật giá"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-3.866 0-7 1.79-7 4s3.134 4 7 4 7-1.79 7-4-3.134-4-7-4z"/>
                               </svg>
                             </button>
@@ -444,7 +493,7 @@ const StoreProductVariants = () => {
                               className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
                               title="Cập nhật tồn kho"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h18v4H3zM3 13h18v8H3zM7 7v6M12 7v6M17 7v6"/>
                               </svg>
                             </button>
@@ -456,7 +505,7 @@ const StoreProductVariants = () => {
                               className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
                               title="Xóa biến thể"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2"/>
                               </svg>
                             </button>
@@ -654,6 +703,149 @@ const StoreProductVariants = () => {
                 >
                   {modal.type === 'delete' ? 'Xóa biến thể' : 'Xác nhận'}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Detail Modal */}
+        {detailModal.open && detailModal.variant && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setDetailModal({ open: false, variant: null })}>
+            <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              {/* Header */}
+              <div className="sticky top-0 bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 text-white px-6 py-5 flex items-center justify-between z-10">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center">
+                    <span className="text-2xl">🎨</span>
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">Chi tiết biến thể</h2>
+                    <p className="text-sm text-white/80 mt-0.5">{detailModal.variant.productName || detailModal.variant.name}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDetailModal({ open: false, variant: null })}
+                  className="w-10 h-10 rounded-xl bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
+                >
+                  <span className="text-2xl">✕</span>
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Image */}
+                  <div className="space-y-4">
+                    <div className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl overflow-hidden">
+                      {detailModal.variant.primaryImage || detailModal.variant.images?.[0] ? (
+                        <img
+                          src={detailModal.variant.primaryImage || detailModal.variant.images[0]}
+                          alt={detailModal.variant.productName || detailModal.variant.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-300 text-8xl">
+                          🎨
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Info */}
+                  <div className="space-y-6">
+                    {/* Basic Info */}
+                    <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-5 border-2 border-blue-100">
+                      <h3 className="text-sm font-bold text-blue-900 mb-4 flex items-center gap-2">
+                        <span className="text-lg">📋</span>
+                        Thông tin cơ bản
+                      </h3>
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-xs text-blue-700 font-medium mb-1">Tên biến thể</p>
+                          <p className="text-base font-bold text-gray-900">{detailModal.variant.productName || detailModal.variant.name}</p>
+                        </div>
+                        {detailModal.variant.attributes && Object.keys(detailModal.variant.attributes).length > 0 && (
+                          <div>
+                            <p className="text-xs text-blue-700 font-medium mb-2">Thuộc tính</p>
+                            <div className="flex flex-wrap gap-2">
+                              {Object.entries(detailModal.variant.attributes).map(([key, value]) => (
+                                <span key={key} className="px-3 py-1.5 bg-white text-blue-700 text-xs rounded-lg border border-blue-200 font-semibold">
+                                  {key}: {value}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Price & Stock */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-5 border-2 border-green-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-2xl">💰</span>
+                          <h3 className="text-sm font-bold text-green-900">Giá bán</h3>
+                        </div>
+                        <p className="text-2xl font-black text-green-600">
+                          {formatPrice(detailModal.variant.price)}
+                        </p>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-2xl p-5 border-2 border-yellow-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-2xl">📦</span>
+                          <h3 className="text-sm font-bold text-yellow-900">Tồn kho</h3>
+                        </div>
+                        <p className={`text-2xl font-black ${
+                          (detailModal.variant.stock ?? detailModal.variant.stockQuantity ?? 0) <= 0 
+                            ? 'text-red-600' 
+                            : (detailModal.variant.stock ?? detailModal.variant.stockQuantity ?? 0) < 10 
+                            ? 'text-yellow-600' 
+                            : 'text-green-600'
+                        }`}>
+                          {detailModal.variant.stock ?? detailModal.variant.stockQuantity ?? 0}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Status */}
+                    <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-5 border-2 border-purple-100">
+                      <h3 className="text-sm font-bold text-purple-900 mb-3 flex items-center gap-2">
+                        <span className="text-lg">⚡</span>
+                        Trạng thái
+                      </h3>
+                      <div className="inline-block">
+                        {(() => {
+                          const badge = getApprovalBadge(deriveApprovalStatus(detailModal.variant));
+                          return (
+                            <span className={`px-4 py-2 rounded-xl text-sm font-bold ${badge.className}`}>
+                              {badge.icon} {badge.label}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 mt-6 pt-6 border-t-2">
+                  <button
+                    onClick={() => setDetailModal({ open: false, variant: null })}
+                    className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 font-semibold transition-colors"
+                  >
+                    Đóng
+                  </button>
+                  <button
+                    onClick={() => {
+                      setDetailModal({ open: false, variant: null });
+                      navigate(`/store-dashboard/product-variants/${detailModal.variant.id}`);
+                    }}
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 font-semibold shadow-lg transition-all"
+                  >
+                    Chỉnh sửa chi tiết
+                  </button>
+                </div>
               </div>
             </div>
           </div>

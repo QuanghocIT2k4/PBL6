@@ -80,8 +80,8 @@ const CheckoutPage = () => {
 
   const productTotal = getSelectedTotalPrice();
   const discount = appliedPromotion?.discount || 0;
-  // ⚠️ Phí ship được tính ở backend, frontend chỉ hiển thị "Miễn phí"
-  const finalTotal = Math.max(0, productTotal - discount);
+  const shippingFee = 30000; // Phí vận chuyển cố định 30k
+  const finalTotal = Math.max(0, productTotal - discount + shippingFee);
   
   // Debug log
   useEffect(() => {
@@ -120,6 +120,13 @@ const CheckoutPage = () => {
   };
 
   const storeId = getStoreId();
+  
+  // Debug log storeId
+  useEffect(() => {
+    console.log('🏪 [Checkout] StoreId:', storeId);
+    console.log('🏪 [Checkout] Items:', items);
+    console.log('🏪 [Checkout] First product:', items[0]?.product);
+  }, [storeId, items]);
 
   const placeOrder = async () => {
     if (isPlacingOrder) return; // Prevent double submission
@@ -458,7 +465,7 @@ const CheckoutPage = () => {
                   <span>-{formatPrice(discount)}đ</span>
                 </div>
               )}
-              <div className="flex justify-between"><span>Phí vận chuyển</span><span>Miễn phí</span></div>
+              <div className="flex justify-between"><span>Phí vận chuyển</span><span>{formatPrice(shippingFee)}đ</span></div>
               <div className="border-t pt-2 font-semibold text-lg flex justify-between">
                 <span>Tổng cộng</span>
                 <span className="text-red-600">

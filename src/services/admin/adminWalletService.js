@@ -13,12 +13,8 @@ export const getAllWithdrawalRequests = async (params = {}) => {
   try {
     const { page = 0, size = 10, status, sortBy = 'createdAt', sortDir = 'desc' } = params;
     
-    // ⚠️ Backend uses 1-BASED pagination for admin withdrawals
-    const backendPage = page + 1;
-    
     console.log('📥 Fetching all withdrawal requests:', { 
-      frontendPage: page, 
-      backendPage, 
+      page, 
       size, 
       status, 
       sortBy, 
@@ -27,7 +23,7 @@ export const getAllWithdrawalRequests = async (params = {}) => {
     
     const response = await api.get('/api/v1/admin/withdrawals', {
       params: {
-        page: backendPage,
+        page,
         size,
         sortBy,
         sortDir,
@@ -52,30 +48,33 @@ export const getAllWithdrawalRequests = async (params = {}) => {
 };
 
 /**
- * 2. APPROVE WITHDRAWAL REQUEST
- * PUT /api/v1/admin/withdrawals/{withdrawalId}/approve
+ * 2. COMPLETE WITHDRAWAL REQUEST
+ * PUT /api/v1/admin/withdrawals/{withdrawalId}/complete
+ * Mark withdrawal as completed after money transfer (auto-deducts from wallet)
  */
-export const approveWithdrawal = async (withdrawalId, note = '') => {
+export const completeWithdrawal = async (withdrawalId, adminNote = '') => {
   try {
-    console.log('✅ Approving withdrawal:', { withdrawalId, note });
+    console.log('💰 Completing withdrawal:', { withdrawalId, adminNote });
     
-    const response = await api.put(`/api/v1/admin/withdrawals/${withdrawalId}/approve`, {
-      note,
-    });
+    const response = await api.put(
+      `/api/v1/admin/withdrawals/${withdrawalId}/complete`,
+      null,
+      { params: { adminNote } }
+    );
     
-    console.log('✅ Withdrawal approved:', response.data);
+    console.log('✅ Withdrawal completed:', response.data);
     
     return {
       success: true,
       data: response.data.data || response.data,
-      message: 'Đã duyệt yêu cầu rút tiền',
+      message: 'Đã hoàn tất chuyển tiền',
     };
   } catch (error) {
-    console.error('❌ Error approving withdrawal:', error);
+    console.error('❌ Error completing withdrawal:', error);
     
     return {
       success: false,
-      error: error.response?.data?.message || 'Không thể duyệt yêu cầu rút tiền',
+      error: error.response?.data?.message || 'Không thể hoàn tất rút tiền',
     };
   }
 };
@@ -136,7 +135,7 @@ export const getWithdrawalStatusBadge = (status) => {
 
 export default {
   getAllWithdrawalRequests,
-  approveWithdrawal,
+  completeWithdrawal,
   rejectWithdrawal,
   formatCurrency,
   getWithdrawalStatusBadge,

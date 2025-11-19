@@ -7,7 +7,7 @@ import { useToast } from '../../context/ToastContext';
 
 const reviewSchema = z.object({
   rating: z.number().min(1, 'Vui lòng chọn số sao đánh giá').max(5),
-  comment: z.string().min(10, 'Nhận xét phải có ít nhất 10 ký tự').trim(),
+  comment: z.string().optional().default(''),
   images: z.array(z.string().url('URL hình ảnh không hợp lệ')).max(5, 'Tối đa 5 hình ảnh').optional().default([])
 });
 
@@ -179,7 +179,7 @@ const ReviewForm = ({ productVariantId, orderId, existingReview = null, onSucces
       {/* Comment Section */}
       <div>
         <label className="block text-sm font-bold text-gray-900 mb-3">
-          Nhận xét của bạn <span className="text-red-500">*</span>
+          Nhận xét của bạn <span className="text-gray-400 text-xs">(Tùy chọn)</span>
         </label>
         <textarea
           {...register('comment')}
@@ -187,17 +187,14 @@ const ReviewForm = ({ productVariantId, orderId, existingReview = null, onSucces
           className={`w-full px-4 py-3 border-2 rounded-xl focus:ring-2 transition-all resize-none ${
             errors.comment ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
           }`}
-          placeholder="Chia sẻ cảm nhận của bạn về sản phẩm này... (Bắt buộc)"
+          placeholder="Chia sẻ cảm nhận của bạn về sản phẩm này... (Tùy chọn)"
           disabled={isSubmitting}
         />
         {errors.comment && (
           <p className="mt-1 text-sm text-red-600">{errors.comment.message}</p>
         )}
-        <div className="flex items-center justify-between mt-2">
+        <div className="flex items-center justify-end mt-2">
           <p className="text-xs text-gray-500">
-            Tối thiểu 10 ký tự
-          </p>
-          <p className={`text-xs ${comment.length >= 10 ? 'text-green-600' : 'text-gray-400'}`}>
             {comment.length} ký tự
           </p>
         </div>
@@ -263,7 +260,7 @@ const ReviewForm = ({ productVariantId, orderId, existingReview = null, onSucces
         
         <button
           type="submit"
-          disabled={isSubmitting || rating === 0 || !comment.trim()}
+          disabled={isSubmitting || rating === 0}
           className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-bold hover:from-blue-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
         >
           {isSubmitting ? (

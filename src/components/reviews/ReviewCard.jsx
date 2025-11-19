@@ -73,7 +73,7 @@ const ReviewCard = ({ review, onEdit, onDelete, isOwner = false }) => {
 
             <div>
               <p className="font-semibold text-gray-900">
-                {user.fullName || 'Người dùng'}
+                {user.fullName || user.name || user.username || 'Người dùng'}
               </p>
               <div className="flex items-center space-x-2">
                 {/* Stars */}
@@ -101,22 +101,26 @@ const ReviewCard = ({ review, onEdit, onDelete, isOwner = false }) => {
             </div>
           </div>
 
-          {/* Edit/Delete Actions (if owner) */}
-          {isOwner && (
+          {/* Edit/Delete Actions (only show if owner AND functions provided) */}
+          {isOwner && (onEdit || onDelete) && (
             <div className="flex items-center space-x-2">
-              <button
-                onClick={() => onEdit && onEdit(review)}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-              >
-                Sửa
-              </button>
-              <span className="text-gray-300">|</span>
-              <button
-                onClick={() => onDelete && onDelete(id)}
-                className="text-sm text-red-600 hover:text-red-700 font-medium"
-              >
-                Xóa
-              </button>
+              {onEdit && (
+                <button
+                  onClick={() => onEdit(review)}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  Sửa
+                </button>
+              )}
+              {onEdit && onDelete && <span className="text-gray-300">|</span>}
+              {onDelete && (
+                <button
+                  onClick={() => onDelete(id)}
+                  className="text-sm text-red-600 hover:text-red-700 font-medium"
+                >
+                  Xóa
+                </button>
+              )}
             </div>
           )}
         </div>

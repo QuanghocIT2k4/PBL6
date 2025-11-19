@@ -21,13 +21,26 @@ const StoreWallet = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview'); // overview, withdrawals
   
+  // ✅ Tính available balance (số dư khả dụng)
+  const getAvailableBalance = () => {
+    if (!wallet || !withdrawals) return 0;
+    
+    // Tính tổng số tiền đang chờ rút (PENDING)
+    const pendingAmount = withdrawals
+      .filter(w => w.status === 'PENDING')
+      .reduce((sum, w) => sum + (parseFloat(w.amount) || 0), 0);
+    
+    // Available = Total - Pending
+    return (wallet.balance || 0) - pendingAmount;
+  };
+  
   // Withdrawal form
   const [showWithdrawalForm, setShowWithdrawalForm] = useState(false);
   const [withdrawalForm, setWithdrawalForm] = useState({
     amount: '',
     bankName: '',
-    bankAccount: '',
-    accountHolder: '',
+    bankAccountNumber: '',
+    bankAccountName: '',
     note: '',
   });
   const [submitting, setSubmitting] = useState(false);
@@ -71,12 +84,13 @@ const StoreWallet = () => {
       return;
     }
     
-    if (parseFloat(withdrawalForm.amount) > wallet?.balance) {
-      showError('Số tiền rút vượt quá số dư khả dụng');
+    const availableBalance = getAvailableBalance();
+    if (parseFloat(withdrawalForm.amount) > availableBalance) {
+      showError(`Số tiền rút vượt quá số dư khả dụng (${formatCurrency(availableBalance)})`);
       return;
     }
     
-    if (!withdrawalForm.bankName || !withdrawalForm.bankAccount || !withdrawalForm.accountHolder) {
+    if (!withdrawalForm.bankName || !withdrawalForm.bankAccountNumber || !withdrawalForm.bankAccountName) {
       showError('Vui lòng nhập đầy đủ thông tin ngân hàng');
       return;
     }
@@ -87,8 +101,8 @@ const StoreWallet = () => {
       const result = await createWithdrawalRequest(storeId, {
         amount: parseFloat(withdrawalForm.amount),
         bankName: withdrawalForm.bankName,
-        bankAccount: withdrawalForm.bankAccount,
-        accountHolder: withdrawalForm.accountHolder,
+        bankAccountNumber: withdrawalForm.bankAccountNumber,
+        bankAccountName: withdrawalForm.bankAccountName,
         note: withdrawalForm.note,
       });
       
@@ -100,8 +114,8 @@ const StoreWallet = () => {
         setWithdrawalForm({
           amount: '',
           bankName: '',
-          bankAccount: '',
-          accountHolder: '',
+          bankAccountNumber: '',
+          bankAccountName: '',
           note: '',
         });
         
@@ -130,36 +144,72 @@ const StoreWallet = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">💰 Ví của tôi</h1>
-        <p className="text-gray-600">Quản lý số dư và giao dịch</p>
-      </div>
-
-      {/* Wallet Overview Card */}
-      <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl p-8 text-white mb-8 shadow-xl">
-        <div className="flex justify-between items-start">
-          <div>
-            <p className="text-blue-100 mb-2">Số dư khả dụng</p>
-            <h2 className="text-4xl font-bold mb-4">{formatCurrency(wallet?.balance || 0)}</h2>
-            <div className="flex gap-6 text-sm">
-              <div>
-                <p className="text-blue-100">Tổng thu nhập</p>
-                <p className="font-semibold">{formatCurrency(wallet?.totalEarned || 0)}</p>
+    <div className="space-y-6">
+      {/* Header with gradient background - ĐỒNG BỘ */}
+      <div className="bg-gradient-to-r from-cyan-200 to-blue-200 rounded-2xl p-6">
+        <div className="relative bg-white rounded-2xl border border-gray-100 p-8 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-emerald-400 rounded-xl flex items-center justify-center shadow-lg">
+                <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
               </div>
               <div>
-                <p className="text-blue-100">Đã rút</p>
-                <p className="font-semibold">{formatCurrency(wallet?.totalWithdrawn || 0)}</p>
+                <h1 className="text-3xl font-bold">
+                  <span className="text-green-600">Ví</span> <span className="text-blue-600">của tôi</span>
+                </h1>
+                <p className="text-gray-600 mt-1">Quản lý số dư và giao dịch</p>
               </div>
             </div>
+            <button
+              onClick={() => setShowWithdrawalForm(true)}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl font-semibold hover:from-green-600 hover:to-emerald-600 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+              </svg>
+              Rút tiền
+            </button>
           </div>
-          <button
-            onClick={() => setShowWithdrawalForm(true)}
-            className="bg-white text-blue-600 px-6 py-3 rounded-lg font-semibold hover:bg-blue-50 transition-colors"
-          >
-            💸 Rút tiền
-          </button>
+        </div>
+      </div>
+
+      {/* Wallet Balance Card - COMPACT STYLE */}
+      <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border-2 border-green-200 shadow-lg">
+        <div className="flex items-center justify-between gap-6">
+          {/* Left: Balance */}
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center shadow-md">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Số dư khả dụng</p>
+              <p className="text-3xl font-black bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+                {formatCurrency(getAvailableBalance())}
+              </p>
+              {wallet?.balance !== getAvailableBalance() && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Tổng: {formatCurrency(wallet?.balance || 0)} (Đang chờ rút: {formatCurrency((wallet?.balance || 0) - getAvailableBalance())})
+                </p>
+              )}
+              <p className="text-xs text-gray-500 mt-1">Có thể rút về tài khoản ngân hàng</p>
+            </div>
+          </div>
+
+          {/* Right: Stats */}
+          <div className="flex gap-4">
+            <div className="bg-white rounded-xl p-4 text-center shadow-sm min-w-[140px]">
+              <p className="text-xs text-gray-600 mb-1">Tổng thu nhập</p>
+              <p className="text-xl font-bold text-blue-600">{formatCurrency(wallet?.totalEarned || 0)}</p>
+            </div>
+            <div className="bg-white rounded-xl p-4 text-center shadow-sm min-w-[140px]">
+              <p className="text-xs text-gray-600 mb-1">Đã rút</p>
+              <p className="text-xl font-bold text-orange-600">{formatCurrency(wallet?.totalWithdrawn || 0)}</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -192,32 +242,50 @@ const StoreWallet = () => {
       {/* Tab Content */}
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white rounded-lg p-6 shadow-md">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-gray-600 font-medium">Chờ duyệt</h3>
-              <span className="text-2xl">⏳</span>
+          {/* Chờ duyệt */}
+          <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-xl p-6 border-2 border-yellow-200 hover:shadow-lg transition-all">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-yellow-400 to-orange-400 rounded-xl flex items-center justify-center shadow-md">
+                <span className="text-2xl">⏳</span>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-600">Chờ duyệt</h3>
+                <p className="text-xs text-gray-500">Đang chờ xử lý</p>
+              </div>
             </div>
-            <p className="text-2xl font-bold text-yellow-600">
+            <p className="text-4xl font-black text-yellow-700">
               {withdrawals.filter(w => w.status === 'PENDING').length}
             </p>
           </div>
           
-          <div className="bg-white rounded-lg p-6 shadow-md">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-gray-600 font-medium">Đã duyệt</h3>
-              <span className="text-2xl">✅</span>
+          {/* Đã duyệt */}
+          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6 border-2 border-green-200 hover:shadow-lg transition-all">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-emerald-400 rounded-xl flex items-center justify-center shadow-md">
+                <span className="text-2xl">✅</span>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-600">Đã duyệt</h3>
+                <p className="text-xs text-gray-500">Đã hoàn tất</p>
+              </div>
             </div>
-            <p className="text-2xl font-bold text-green-600">
+            <p className="text-4xl font-black text-green-700">
               {withdrawals.filter(w => ['APPROVED', 'COMPLETED'].includes(w.status)).length}
             </p>
           </div>
           
-          <div className="bg-white rounded-lg p-6 shadow-md">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-gray-600 font-medium">Bị từ chối</h3>
-              <span className="text-2xl">❌</span>
+          {/* Bị từ chối */}
+          <div className="bg-gradient-to-br from-red-50 to-pink-50 rounded-xl p-6 border-2 border-red-200 hover:shadow-lg transition-all">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-red-400 to-pink-400 rounded-xl flex items-center justify-center shadow-md">
+                <span className="text-2xl">❌</span>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-600">Bị từ chối</h3>
+                <p className="text-xs text-gray-500">Không được duyệt</p>
+              </div>
             </div>
-            <p className="text-2xl font-bold text-red-600">
+            <p className="text-4xl font-black text-red-700">
               {withdrawals.filter(w => w.status === 'REJECTED').length}
             </p>
           </div>
@@ -276,8 +344,8 @@ const StoreWallet = () => {
                                   <div class="text-left space-y-2">
                                     <p><strong>Số tiền:</strong> ${formatCurrency(result.data.amount)}</p>
                                     <p><strong>Ngân hàng:</strong> ${result.data.bankName}</p>
-                                    <p><strong>Số TK:</strong> ${result.data.bankAccount}</p>
-                                    <p><strong>Chủ TK:</strong> ${result.data.accountHolder}</p>
+                                    <p><strong>Số TK:</strong> ${result.data.bankAccountNumber}</p>
+                                    <p><strong>Chủ TK:</strong> ${result.data.bankAccountName}</p>
                                     <p><strong>Trạng thái:</strong> ${result.data.status}</p>
                                     <p><strong>Ghi chú:</strong> ${result.data.note || 'Không có'}</p>
                                   </div>
@@ -333,7 +401,7 @@ const StoreWallet = () => {
                   required
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Số dư khả dụng: {formatCurrency(wallet?.balance || 0)}
+                  Số dư khả dụng: {formatCurrency(getAvailableBalance())}
                 </p>
               </div>
 
@@ -357,8 +425,8 @@ const StoreWallet = () => {
                 </label>
                 <input
                   type="text"
-                  value={withdrawalForm.bankAccount}
-                  onChange={(e) => setWithdrawalForm({ ...withdrawalForm, bankAccount: e.target.value })}
+                  value={withdrawalForm.bankAccountNumber}
+                  onChange={(e) => setWithdrawalForm({ ...withdrawalForm, bankAccountNumber: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Nhập số tài khoản"
                   required
@@ -371,8 +439,8 @@ const StoreWallet = () => {
                 </label>
                 <input
                   type="text"
-                  value={withdrawalForm.accountHolder}
-                  onChange={(e) => setWithdrawalForm({ ...withdrawalForm, accountHolder: e.target.value })}
+                  value={withdrawalForm.bankAccountName}
+                  onChange={(e) => setWithdrawalForm({ ...withdrawalForm, bankAccountName: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Nhập tên chủ tài khoản"
                   required

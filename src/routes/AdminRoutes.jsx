@@ -9,6 +9,7 @@ import AdminProducts from '../pages/admin/AdminProducts';
 import AdminVariants from '../pages/admin/AdminVariants';
 import AdminPromotions from '../pages/admin/AdminPromotions';
 import AdminWallets from '../pages/admin/AdminWallets';
+import AdminRevenue from '../pages/admin/AdminRevenue';
 
 const AdminRoutes = () => {
   return (
@@ -22,6 +23,7 @@ const AdminRoutes = () => {
           <Route path="/variants" element={<AdminVariants />} />
           <Route path="/promotions" element={<AdminPromotions />} />
           <Route path="/wallets" element={<AdminWallets />} />
+          <Route path="/revenue" element={<AdminRevenue />} />
         </Routes>
       </AdminLayout>
     </AdminAuthGuard>

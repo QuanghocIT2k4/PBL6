@@ -4,7 +4,6 @@ import ProductGallery from '../../components/products/ProductGallery';
 import ProductInfo from '../../components/products/ProductInfo';
 import ProductSpecifications from '../../components/products/ProductSpecifications';
 import ShopInfo from '../../components/products/ShopInfo';
-import ProductComments from '../../components/products/ProductComments';
 import ProductSection from '../../components/common/ProductSection';
 import ReviewList from '../../components/reviews/ReviewList';
 import ReviewForm from '../../components/reviews/ReviewForm';
@@ -208,11 +207,6 @@ const ProductDetail = () => {
             productVariantId={id}
             onWriteReview={handleWriteReview}
           />
-        </div>
-
-        {/* PHẦN 3.5: Comments (100% width) */}
-        <div className="mb-12">
-          <ProductComments productId={product.id} />
         </div>
 
         {/* ✅ PHẦN 4: Related Products (100% width) */}
