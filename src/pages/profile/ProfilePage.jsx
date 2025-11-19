@@ -34,7 +34,6 @@ const ProfilePage = () => {
   const tabs = [
     { id: 'personal', name: 'Thông tin cá nhân', icon: '👤' },
     { id: 'password', name: 'Đổi mật khẩu', icon: '🔒' },
-    { id: 'orders', name: 'Lịch sử đơn hàng', icon: '📦' },
     { id: 'addresses', name: 'Địa chỉ giao hàng', icon: '📍' },
     { id: 'preferences', name: 'Tùy chỉnh', icon: '⚙️' }
   ];

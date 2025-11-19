@@ -60,9 +60,10 @@ export const getStoreAvailablePromotions = async (storeId, params = {}) => {
 
     console.log('🎁 Fetching store available promotions:', { storeId, orderValue, page, size });
 
-    // ✅ FIXED: Đúng endpoint theo Swagger
-    const response = await api.get(`/api/v1/b2c/promotions/store/${storeId}`, {
+    // ✅ FIXED: Đúng endpoint theo Swagger - BUYER API
+    const response = await api.get(`/api/v1/buyer/promotions/store/${storeId}/available`, {
       params: {
+        orderValue,  // ✅ THÊM orderValue - REQUIRED!
         page,
         size,
         sortBy,
@@ -96,10 +97,20 @@ export const getStoreAvailablePromotions = async (storeId, params = {}) => {
         responseData = response.data.data;
       } else {
         // Backend returned success: false
-        console.warn('⚠️ Backend returned success: false', response.data);
+        console.error('❌ Backend returned success: false', {
+          error: response.data.error,
+          message: response.data.message,
+          fullResponse: response.data
+        });
+        // ⚠️ Trả về empty array thay vì error để UI vẫn hiển thị được
         return {
-          success: false,
-          error: response.data.error || response.data.message || 'Không có khuyến mãi nào khả dụng',
+          success: true,
+          data: {
+            content: [],
+            totalElements: 0,
+            totalPages: 0
+          },
+          error: response.data.error || response.data.message
         };
       }
     } 

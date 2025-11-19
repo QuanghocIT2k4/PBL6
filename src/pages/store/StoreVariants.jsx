@@ -68,6 +68,12 @@ const StoreVariants = () => {
   });
 
   const handleEditPrice = (variant) => {
+    // ✅ Chặn edit nếu chưa được duyệt
+    if (variant.status !== 'APPROVED') {
+      toast?.error('Chỉ có thể sửa giá/tồn kho của biến thể đã được duyệt');
+      return;
+    }
+    
     setSelectedVariant(variant);
     setEditData({ price: variant.price, stock: variant.stock });
     setShowEditModal(true);
@@ -75,6 +81,13 @@ const StoreVariants = () => {
 
   const handleUpdatePrice = async () => {
     if (!selectedVariant) return;
+
+    // ✅ Double check status
+    if (selectedVariant.status !== 'APPROVED') {
+      toast?.error('Chỉ có thể cập nhật giá của biến thể đã được duyệt');
+      setShowEditModal(false);
+      return;
+    }
 
     try {
       const result = await updateVariantPrice(selectedVariant.id, editData.price);
@@ -93,6 +106,13 @@ const StoreVariants = () => {
 
   const handleUpdateStock = async () => {
     if (!selectedVariant) return;
+
+    // ✅ Double check status
+    if (selectedVariant.status !== 'APPROVED') {
+      toast?.error('Chỉ có thể cập nhật tồn kho của biến thể đã được duyệt');
+      setShowEditModal(false);
+      return;
+    }
 
     try {
       const result = await updateVariantStock(selectedVariant.id, editData.stock);
@@ -338,8 +358,13 @@ const StoreVariants = () => {
                     <div className="flex gap-1 justify-end">
                       <button
                         onClick={() => handleEditPrice(variant)}
-                        className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
-                        title="Sửa giá & tồn kho"
+                        disabled={variant.status !== 'APPROVED'}
+                        className={`p-2 rounded-lg transition-colors ${
+                          variant.status === 'APPROVED'
+                            ? 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        }`}
+                        title={variant.status === 'APPROVED' ? 'Sửa giá & tồn kho' : 'Chỉ sửa được khi đã duyệt'}
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />

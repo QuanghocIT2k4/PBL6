@@ -19,6 +19,8 @@ const AdminPromotions = () => {
   const [issuerFilter, setIssuerFilter] = useState('all'); // 'all' | 'platform' | 'store'
   const [currentPage, setCurrentPage] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [promotionToDelete, setPromotionToDelete] = useState(null);
   const pageSize = 20;
 
   // Form state
@@ -133,16 +135,23 @@ const AdminPromotions = () => {
   };
 
   // Handle delete
-  const handleDelete = async (promoId) => {
-    if (!confirm('Bạn có chắc muốn xóa khuyến mãi này?')) return;
+  const handleDeleteClick = (promo) => {
+    setPromotionToDelete(promo);
+    setShowDeleteModal(true);
+  };
 
-    const result = await deletePromotion(promoId);
+  const confirmDelete = async () => {
+    if (!promotionToDelete) return;
+
+    const result = await deletePromotion(promotionToDelete.id);
 
     if (result.success) {
-      showToast('Xóa khuyến mãi thành công', 'success');
+      showToast('Xóa khuyến mãi thành công!', 'success');
+      setShowDeleteModal(false);
+      setPromotionToDelete(null);
       mutate();
     } else {
-      showToast(result.error, 'error');
+      showToast(result.error || 'Không thể xóa khuyến mãi', 'error');
     }
   };
 
@@ -425,7 +434,7 @@ const AdminPromotions = () => {
                               </button>
                             )}
                             <button
-                              onClick={() => handleDelete(promo.id)}
+                              onClick={() => handleDeleteClick(promo)}
                               className="px-3 py-2 bg-gradient-to-r from-rose-500 to-red-500 text-white rounded-lg hover:from-rose-600 hover:to-red-600 transition-all font-semibold text-xs"
                             >
                               Xóa
@@ -539,7 +548,7 @@ const AdminPromotions = () => {
                               </button>
                             )}
                             <button
-                              onClick={() => handleDelete(promo.id)}
+                              onClick={() => handleDeleteClick(promo)}
                               className="px-3 py-2 bg-gradient-to-r from-rose-500 to-red-500 text-white rounded-lg hover:from-rose-600 hover:to-red-600 transition-all font-semibold text-xs"
                             >
                               Xóa
@@ -820,6 +829,64 @@ const AdminPromotions = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && promotionToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)}></div>
+          <div className="relative bg-white w-[90%] max-w-md rounded-3xl shadow-2xl overflow-hidden">
+            {/* Gradient Header */}
+            <div className="bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 px-6 py-5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center">
+                  <span className="text-2xl">🗑️</span>
+                </div>
+                <h3 className="text-xl font-bold text-white">Xóa khuyến mãi</h3>
+              </div>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors"
+              >
+                <span className="text-xl">✕</span>
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 py-5">
+              <div className="mb-5 p-4 bg-gradient-to-br from-red-50 to-pink-50 rounded-2xl border-2 border-red-100">
+                <p className="text-gray-800 font-semibold mb-2">
+                  Bạn có chắc chắn muốn xóa khuyến mãi này?
+                </p>
+                <div className="mt-3 p-3 bg-white rounded-xl border border-red-200">
+                  <p className="text-sm text-gray-600 mb-1">Mã khuyến mãi:</p>
+                  <p className="font-bold text-red-600">{promotionToDelete.code}</p>
+                  <p className="text-sm text-gray-600 mt-2 mb-1">Tiêu đề:</p>
+                  <p className="font-semibold text-gray-900">{promotionToDelete.title}</p>
+                </div>
+                <p className="text-sm text-red-600 mt-3 font-medium">
+                  ⚠️ Hành động này không thể hoàn tác!
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-gray-50 border-t-2 border-gray-100 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="px-6 py-3 rounded-xl border-2 border-gray-300 text-gray-700 font-semibold hover:bg-gray-100 transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-6 py-3 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold hover:from-red-700 hover:to-rose-700 shadow-lg transition-all"
+              >
+                🗑️ Xóa khuyến mãi
+              </button>
+            </div>
           </div>
         </div>
       )}

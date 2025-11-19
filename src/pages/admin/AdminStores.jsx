@@ -210,22 +210,58 @@ const AdminStores = () => {
                             {getStatusBadge(store.status)}
                           </div>
 
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
+                          <div className="grid grid-cols-3 gap-4 text-sm mb-4">
                             <div>
                               <span className="text-gray-500 block">👤 Chủ shop:</span>
-                              <span className="font-medium">{String(store.ownerName || store.owner?.name || 'N/A')}</span>
+                              <span className="font-medium">
+                                {(() => {
+                                  // Debug log
+                                  console.log('🔍 Store owner data:', {
+                                    storeId: store.id,
+                                    storeName: store.name,
+                                    ownerName: store.ownerName,
+                                    owner: store.owner,
+                                    ownerId: store.ownerId,
+                                    fullStore: store
+                                  });
+                                  
+                                  return store.ownerName || 
+                                         store.owner?.name || 
+                                         store.owner?.username || 
+                                         store.owner?.fullName ||
+                                         'N/A';
+                                })()}
+                              </span>
                             </div>
                             <div>
                               <span className="text-gray-500 block">📧 Email:</span>
-                              <span className="font-medium">{String(store.email || store.owner?.email || 'N/A')}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500 block">📞 SĐT:</span>
-                              <span className="font-medium">{String(store.phone || store.contactPhone || 'N/A')}</span>
+                              <span className="font-medium">
+                                {store.email || 
+                                 store.contactEmail || 
+                                 store.owner?.email || 
+                                 'N/A'}
+                              </span>
                             </div>
                             <div>
                               <span className="text-gray-500 block">📍 Địa chỉ:</span>
-                              <span className="font-medium">{String(store.address || store.location || 'N/A')}</span>
+                              <span className="font-medium">
+                                {(() => {
+                                  // Parse address object
+                                  if (typeof store.address === 'string') {
+                                    return store.address;
+                                  } else if (typeof store.address === 'object' && store.address !== null) {
+                                    const addr = store.address;
+                                    return [
+                                      addr.street,
+                                      addr.ward,
+                                      addr.district,
+                                      addr.city,
+                                      addr.province
+                                    ].filter(Boolean).join(', ') || 'N/A';
+                                  }
+                                  return store.location || 'N/A';
+                                })()}
+                              </span>
                             </div>
                           </div>
 

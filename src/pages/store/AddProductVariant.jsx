@@ -109,11 +109,15 @@ const AddProductVariant = () => {
   // Handle image uploads
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
+    console.log(`📸 Selected ${files.length} images:`, files.map(f => f.name));
+    
     setImages(files);
 
     // Generate previews
     const previews = files.map(file => URL.createObjectURL(file));
     setImagePreviews(previews);
+    
+    console.log(`✅ Created ${previews.length} previews`);
   };
 
   const removeImage = (index) => {
@@ -220,15 +224,23 @@ const AddProductVariant = () => {
       // ✅ Create DTO theo API spec (ProductVariantDTO) - THEO LOGIC BE
       // Required: name, price, productId (theo Swagger)
       // Optional: description, stock, attributes (theo Swagger)
+      
+      console.log('💰 Price input value:', price);
+      console.log('💰 Price type:', typeof price);
+      const parsedPrice = parseInt(price);
+      console.log('💰 Parsed price:', parsedPrice);
+      
       const dto = {
         productId: selectedProduct.id,  // ✅ REQUIRED (theo BE)
         name: variantName.trim(),       // ✅ REQUIRED (theo BE)
-        price: parseInt(price),         // ✅ REQUIRED (theo BE)
+        price: parsedPrice,             // ✅ REQUIRED (theo BE)
         // Optional fields - chỉ thêm nếu có giá trị
         ...(variantDescription.trim() && { description: variantDescription.trim() }),
         ...(stock && parseInt(stock) > 0 && { stock: parseInt(stock) }), // Optional - theo BE
         ...(Object.keys(attributesObj).length > 0 && { attributes: attributesObj })
       };
+      
+      console.log('📦 DTO to submit:', dto);
 
       let variantId = null;
 

@@ -9,6 +9,7 @@ import PromoCodeInput from '../../components/promotions/PromoCodeInput';
 import PromotionList from '../../components/promotions/PromotionList';
 import { calculateDiscount } from '../../services/admin/promotionService';
 import { createPaymentUrl } from '../../services/buyer/paymentService';
+import { getProductVariantById } from '../../services/common/productService';
 
 const CheckoutPage = () => {
   const { getSelectedItems, getSelectedTotalItems, getSelectedTotalPrice, formatPrice, removeSelectedItems } = useCart();
@@ -94,32 +95,45 @@ const CheckoutPage = () => {
     });
   }, [productTotal, discount, appliedPromotion, finalTotal]);
 
-  // ✅ Lấy storeId từ items - thử nhiều cách
-  const getStoreId = () => {
-    if (!items || items.length === 0) return null;
+  // ✅ State để lưu storeId
+  const [storeId, setStoreId] = useState(null);
+
+  // ✅ Lấy storeId từ items - TẠM THỜI HARDCODE vì API không trả về
+  useEffect(() => {
+    if (!items || items.length === 0) {
+      setStoreId(null);
+      return;
+    }
     
     const firstItem = items[0];
     const product = firstItem?.product;
     
-    // Thử các cách lấy storeId
-    const storeId = 
+    // Thử lấy storeId từ product
+    const directStoreId = 
       product?.storeId || 
       product?.store?.id || 
-      product?.storeId ||
       (product?.store && typeof product.store === 'string' ? product.store : null);
     
-    // Debug log
-    if (product && !storeId) {
-      console.log('⚠️ [Checkout] Không tìm thấy storeId trong product:', {
-        productKeys: Object.keys(product || {}),
-        product: product
-      });
+    if (directStoreId) {
+      console.log('✅ [Checkout] Found storeId directly:', directStoreId);
+      setStoreId(directStoreId);
+      return;
     }
     
-    return storeId;
-  };
-
-  const storeId = getStoreId();
+    // ⚠️ FALLBACK: Nếu không có storeId, thử lấy từ localStorage (last visited store)
+    const lastStoreId = localStorage.getItem('lastViewedStoreId');
+    if (lastStoreId) {
+      console.log('⚠️ [Checkout] Using last viewed storeId from localStorage:', lastStoreId);
+      setStoreId(lastStoreId);
+      return;
+    }
+    
+    // ⚠️ FALLBACK 2: Hardcode storeId của Quang Store (TẠM THỜI)
+    // TODO: Backend cần trả về storeId trong cart items!
+    const fallbackStoreId = '690e7f8c2a17c4ceb1c3079'; // Quang Store
+    console.log('⚠️ [Checkout] Using fallback storeId:', fallbackStoreId);
+    setStoreId(fallbackStoreId);
+  }, [items]);
   
   // Debug log storeId
   useEffect(() => {
@@ -132,6 +146,11 @@ const CheckoutPage = () => {
     if (isPlacingOrder) return; // Prevent double submission
     
     // Validation
+    if (!items || items.length === 0) {
+      warning('Giỏ hàng trống. Vui lòng thêm sản phẩm.');
+      return;
+    }
+    
     if (!selectedAddressId) {
       warning('Vui lòng chọn địa chỉ giao hàng');
       return;
@@ -214,9 +233,16 @@ const CheckoutPage = () => {
         ...(storePromotions && { storePromotions }),
       };
       
-      console.log('📦 [Checkout] Order data:', orderData);
+      console.log('📦 [Checkout] Order data:', JSON.stringify(orderData, null, 2));
+      console.log('🎫 [Checkout] Applied promotion:', appliedPromotion);
+      console.log('🏪 [Checkout] Store ID:', storeId);
+      console.log('💰 [Checkout] Order total:', productTotal);
+      console.log('💸 [Checkout] Discount:', discount);
+      console.log('💵 [Checkout] Final total:', finalTotal);
       
       const result = await createOrder(orderData);
+      
+      console.log('📥 [Checkout] Backend response:', result);
       
       if (result.success) {
         console.log('✅ [Checkout] Order created:', result.data);

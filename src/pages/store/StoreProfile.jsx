@@ -4,7 +4,7 @@ import StoreStatusGuard from '../../components/store/StoreStatusGuard';
 import StorePageHeader from '../../components/store/StorePageHeader';
 import { useStoreContext } from '../../context/StoreContext';
 import { useToast } from '../../context/ToastContext';
-import { updateStore, uploadStoreLogo, uploadStoreBanner } from '../../services/b2c/b2cStoreService';
+import { updateStore, uploadStoreLogo, uploadStoreBanner, getMyStores } from '../../services/b2c/b2cStoreService';
 
 const StoreProfile = () => {
   const { currentStore, setCurrentStore } = useStoreContext();
@@ -46,43 +46,135 @@ const StoreProfile = () => {
   };
 
   const handleLogoUpload = async (e) => {
+    console.log('🎯 Logo upload triggered!', e);
+    
     const file = e.target.files?.[0];
-    if (!file) return;
+    console.log('📁 Selected file:', file);
+    
+    if (!file) {
+      console.log('❌ No file selected');
+      return;
+    }
+
+    console.log('📊 File info:', {
+      name: file.name,
+      type: file.type,
+      size: `${(file.size / 1024).toFixed(2)} KB`
+    });
 
     if (file.size > 5 * 1024 * 1024) {
       showError('Kích thước file không được vượt quá 5MB');
       return;
     }
 
+    console.log('📤 Uploading logo...');
     setUploading(prev => ({ ...prev, logo: true }));
+    
     const result = await uploadStoreLogo(currentStore.id, file);
+    console.log('📥 Upload result:', result);
+    
     setUploading(prev => ({ ...prev, logo: false }));
 
     if (result.success) {
       showSuccess(result.message);
-      setCurrentStore(result.data);
+      console.log('✅ Success! Logo uploaded:', result.data);
+      
+      // Fetch lại store data để lấy logo mới từ DB
+      console.log('🔄 Fetching updated store data...');
+      const storesResult = await getMyStores();
+      
+      if (storesResult.success && storesResult.data?.length > 0) {
+        const updatedStore = storesResult.data.find(s => s.id === currentStore.id);
+        
+        if (updatedStore) {
+          console.log('✅ Store fetched! Full store data:', updatedStore);
+          console.log('🔍 logoUrl:', updatedStore.logoUrl);
+          console.log('🔍 bannerUrl:', updatedStore.bannerUrl);
+          console.log('⚠️ Are they the same?', updatedStore.logoUrl === updatedStore.bannerUrl);
+          
+          // Map backend fields to frontend format
+          const mappedStore = {
+            ...updatedStore,
+            logo: updatedStore.logoUrl,      // Backend: logoUrl → Frontend: logo
+            banner: updatedStore.bannerUrl,  // Backend: bannerUrl → Frontend: banner
+            storeName: updatedStore.name     // Backend: name → Frontend: storeName
+          };
+          
+          setCurrentStore(mappedStore);
+          console.log('✅ Logo updated successfully!');
+        } else {
+          console.error('❌ Store not found in list!');
+        }
+      } else {
+        console.error('❌ Failed to fetch stores:', storesResult);
+      }
     } else {
+      console.error('❌ Upload failed:', result.error);
       showError(result.error);
     }
   };
 
   const handleBannerUpload = async (e) => {
+    console.log('🎯 Banner upload triggered!', e);
+    
     const file = e.target.files?.[0];
-    if (!file) return;
+    console.log('📁 Selected file:', file);
+    
+    if (!file) {
+      console.log('❌ No file selected');
+      return;
+    }
+
+    console.log('📊 File info:', {
+      name: file.name,
+      type: file.type,
+      size: `${(file.size / 1024).toFixed(2)} KB`
+    });
 
     if (file.size > 10 * 1024 * 1024) {
       showError('Kích thước file không được vượt quá 10MB');
       return;
     }
 
+    console.log('📤 Uploading banner...');
     setUploading(prev => ({ ...prev, banner: true }));
+    
     const result = await uploadStoreBanner(currentStore.id, file);
+    console.log('📥 Upload result:', result);
+    
     setUploading(prev => ({ ...prev, banner: false }));
 
     if (result.success) {
       showSuccess(result.message);
-      setCurrentStore(result.data);
+      console.log('✅ Success! Banner uploaded:', result.data);
+      
+      // Fetch lại store data để lấy banner mới từ DB
+      console.log('🔄 Fetching updated store data...');
+      const storesResult = await getMyStores();
+      
+      if (storesResult.success && storesResult.data?.length > 0) {
+        const updatedStore = storesResult.data.find(s => s.id === currentStore.id);
+        
+        if (updatedStore) {
+          console.log('✅ Store fetched! Full store data:', updatedStore);
+          console.log('🔍 logoUrl:', updatedStore.logoUrl);
+          console.log('🔍 bannerUrl:', updatedStore.bannerUrl);
+          console.log('⚠️ Are they the same?', updatedStore.logoUrl === updatedStore.bannerUrl);
+          
+          // Map backend fields to frontend format
+          const mappedStore = {
+            ...updatedStore,
+            logo: updatedStore.logoUrl,
+            banner: updatedStore.bannerUrl,
+            storeName: updatedStore.name
+          };
+          
+          setCurrentStore(mappedStore);
+          console.log('✅ Banner updated successfully!');
+        }
+      }
     } else {
+      console.error('❌ Upload failed:', result.error);
       showError(result.error);
     }
   };

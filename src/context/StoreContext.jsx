@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { getStoresByOwnerId } from '../services/common/storeService';
+import { getMyStores } from '../services/b2c/b2cStoreService';
 import { useAuth } from './AuthContext';
 
 const StoreContext = createContext();
@@ -30,17 +30,21 @@ export const StoreProvider = ({ children }) => {
     try {
       setLoading(true);
       
-      // ✅ Gọi API lấy stores của user hiện tại
-      const result = await getStoresByOwnerId(user.id, {
-        page: 0,
-        size: 50,
-        sortBy: 'createdAt',
-        sortDir: 'desc',
-      });
+      // ✅ Gọi B2C API mới để lấy stores
+      const result = await getMyStores();
       
       if (result.success) {
         const data = result.data;
-        const storeList = Array.isArray(data) ? data : data.content || [];
+        const rawStoreList = Array.isArray(data) ? data : data.content || [];
+        
+        // ✅ Map backend fields to frontend format
+        const storeList = rawStoreList.map(store => ({
+          ...store,
+          logo: store.logoUrl,           // Backend: logoUrl → Frontend: logo
+          banner: store.bannerUrl,       // Backend: bannerUrl → Frontend: banner
+          storeName: store.name,         // Backend: name → Frontend: storeName
+        }));
+        
         setUserStores(storeList);
         
         // Load selected store from localStorage

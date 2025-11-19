@@ -550,27 +550,36 @@ const StoreProductVariants = () => {
         {/* Modern Modal for price/stock update and delete confirm */}
         {modal.open && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"></div>
-            <div className="relative bg-white w-[90%] max-w-md rounded-2xl shadow-2xl border border-gray-200">
-              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-                <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600">⚙️</span>
-                  {modal.type === 'price' && 'Cập nhật giá'}
-                  {modal.type === 'stock' && 'Cập nhật tồn kho'}
-                  {modal.type === 'delete' && 'Xóa biến thể'}
-                </h3>
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={closeModal}></div>
+            <div className="relative bg-white w-[90%] max-w-md rounded-3xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              {/* Gradient Header */}
+              <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 px-6 py-5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center">
+                    <span className="text-2xl">
+                      {modal.type === 'price' && '💰'}
+                      {modal.type === 'stock' && '📦'}
+                      {modal.type === 'delete' && '🗑️'}
+                    </span>
+                  </div>
+                  <h3 className="text-xl font-bold text-white">
+                    {modal.type === 'price' && 'Cập nhật giá'}
+                    {modal.type === 'stock' && 'Cập nhật tồn kho'}
+                    {modal.type === 'delete' && 'Xóa biến thể'}
+                  </h3>
+                </div>
                 <button
                   onClick={closeModal}
-                  className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
+                  className="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors"
                 >
-                  ✕
+                  <span className="text-xl">✕</span>
                 </button>
               </div>
-              <div className="px-5 py-4">
+              <div className="px-6 py-5">
                 {/* Variant summary */}
                 {modal.variant && (
-                  <div className="flex items-start gap-3 mb-4">
-                    <div className="w-12 h-12 rounded-lg bg-gray-50 overflow-hidden border border-gray-100 flex-shrink-0">
+                  <div className="flex items-start gap-3 mb-5 p-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl border-2 border-blue-100">
+                    <div className="w-14 h-14 rounded-xl bg-white overflow-hidden border-2 border-white shadow-sm flex-shrink-0">
                       {modal.variant.primaryImage || modal.variant.images?.[0] ? (
                         <img
                           src={modal.variant.primaryImage || modal.variant.images?.[0]}
@@ -582,13 +591,13 @@ const StoreProductVariants = () => {
                       )}
                     </div>
                     <div className="flex-1">
-                      <div className="font-semibold text-gray-900 text-sm">
+                      <div className="font-bold text-gray-900 text-base">
                         {modal.variant.productName || modal.variant.name}
                       </div>
                       {modal.variant.attributes && Object.keys(modal.variant.attributes).length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1">
+                        <div className="mt-2 flex flex-wrap gap-1.5">
                           {Object.entries(modal.variant.attributes).map(([k, v]) => (
-                            <span key={k} className="px-1.5 py-0.5 rounded border border-gray-200 text-[10px] text-gray-700 bg-gray-50">{k}: {v}</span>
+                            <span key={k} className="px-2 py-1 rounded-lg border-2 border-blue-200 text-xs font-semibold text-blue-700 bg-white">{k}: {v}</span>
                           ))}
                         </div>
                       )}
@@ -605,103 +614,60 @@ const StoreProductVariants = () => {
                   <div>
                     {modal.type === 'price' ? (
                       <>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Giá bán</label>
-                        <div className="flex items-stretch rounded-lg border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-blue-600 focus-within:border-transparent">
-                          <span className="px-3 bg-gray-50 text-gray-600 flex items-center">₫</span>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Giá bán</label>
+                        <div className="flex items-stretch rounded-xl border-2 border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-blue-600 focus-within:border-blue-600">
+                          <span className="px-4 bg-gradient-to-r from-blue-50 to-purple-50 text-blue-700 font-semibold flex items-center border-r-2 border-gray-300">₫</span>
                           <input
                             type="text"
                             inputMode="numeric"
                             value={formatNumber(modal.value)}
                             onChange={(e) => setModal(prev => ({ ...prev, value: String(parseNumber(e.target.value)) }))}
                             onKeyDown={(e) => { if (e.key === 'Enter') submitModal(); }}
-                            className="flex-1 px-3 py-2 outline-none"
-                            placeholder="0"
+                            className="flex-1 px-4 py-3 outline-none text-lg font-semibold"
+                            placeholder="Nhập giá mới"
                           />
                         </div>
-                        <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
-                          <span>Giá hiện tại: {formatPrice(modal.variant?.price || 0)}</span>
-                          <span>VND</span>
-                        </div>
-                        {/* Presets */}
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {[50000, 100000, 200000].map((delta) => (
-                            <button
-                              key={delta}
-                              onClick={() => setModal(prev => ({ ...prev, value: String(parseNumber(prev.value) + delta) }))}
-                              className="px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-xs hover:bg-blue-100"
-                            >
-                              +{(delta).toLocaleString('vi-VN')}đ
-                            </button>
-                          ))}
-                          {[50000, 100000].map((delta) => (
-                            <button
-                              key={`minus-${delta}`}
-                              onClick={() => setModal(prev => ({ ...prev, value: String(Math.max(0, parseNumber(prev.value) - delta)) }))}
-                              className="px-3 py-1.5 rounded-full bg-rose-50 text-rose-700 border border-rose-100 text-xs hover:bg-rose-100"
-                            >
-                              -{(delta).toLocaleString('vi-VN')}đ
-                            </button>
-                          ))}
+                        <div className="mt-3 flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Giá hiện tại:</span>
+                          <span className="font-bold text-purple-600">{formatPrice(modal.variant?.price || 0)}</span>
                         </div>
                       </>
                     ) : (
                       <>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Tồn kho</label>
-                        <div className="flex items-stretch rounded-lg border border-gray-300 overflow-hidden">
-                          <button
-                            onClick={() => setModal(prev => ({ ...prev, value: String(Math.max(0, parseInt(prev.value || '0', 10) - 1)) }))}
-                            className="px-3 bg-gray-50 hover:bg-gray-100 text-gray-700"
-                          >
-                            −
-                          </button>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Tồn kho</label>
+                        <div className="rounded-xl border-2 border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-green-600 focus-within:border-green-600">
                           <input
                             type="number"
                             min="0"
                             value={modal.value}
                             onChange={(e) => setModal(prev => ({ ...prev, value: e.target.value.replace(/[^\d]/g, '') }))}
                             onKeyDown={(e) => { if (e.key === 'Enter') submitModal(); }}
-                            className="flex-1 px-3 py-2 outline-none"
-                            placeholder="0"
+                            className="w-full px-4 py-3 outline-none text-lg font-semibold text-center"
+                            placeholder="Nhập số lượng"
                           />
-                          <button
-                            onClick={() => setModal(prev => ({ ...prev, value: String(parseInt(prev.value || '0', 10) + 1) }))}
-                            className="px-3 bg-gray-50 hover:bg-gray-100 text-gray-700"
-                          >
-                            +
-                          </button>
                         </div>
-                        {/* Presets */}
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {[5, 10, 20, 50].map((delta) => (
-                            <button
-                              key={delta}
-                              onClick={() => setModal(prev => ({ ...prev, value: String(parseInt(prev.value || '0', 10) + delta) }))}
-                              className="px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-100 text-xs hover:bg-green-100"
-                            >
-                              +{delta}
-                            </button>
-                          ))}
+                        <div className="mt-3 flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Kho hiện tại:</span>
+                          <span className="font-bold text-green-600">{modal.variant?.stock ?? modal.variant?.stockQuantity ?? 0}</span>
                         </div>
-                        <p className="mt-2 text-xs text-gray-500">Kho hiện tại: {modal.variant?.stock ?? modal.variant?.stockQuantity ?? 0}</p>
                       </>
                     )}
                   </div>
                 )}
               </div>
-              <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
+              <div className="px-6 py-4 bg-gray-50 border-t-2 border-gray-100 flex items-center justify-end gap-3">
                 <button
                   onClick={closeModal}
-                  className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50"
+                  className="px-6 py-3 rounded-xl border-2 border-gray-300 text-gray-700 font-semibold hover:bg-gray-100 transition-colors"
                 >
                   Quay lại
                 </button>
                 <button
                   onClick={submitModal}
-                  className={`px-4 py-2 rounded-lg text-white ${
-                    modal.type === 'delete' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
-                  }`}
+                  disabled={modal.submitting}
+                  className="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 shadow-lg transition-all"
                 >
-                  {modal.type === 'delete' ? 'Xóa biến thể' : 'Xác nhận'}
+                  {modal.submitting ? '⏳ Đang xử lý...' : modal.type === 'delete' ? '🗑️ Xóa' : '✅ Xác nhận'}
                 </button>
               </div>
             </div>
@@ -734,21 +700,50 @@ const StoreProductVariants = () => {
               {/* Content */}
               <div className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Image */}
+                  {/* Images - Show all */}
                   <div className="space-y-4">
-                    <div className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl overflow-hidden">
-                      {detailModal.variant.primaryImage || detailModal.variant.images?.[0] ? (
-                        <img
-                          src={detailModal.variant.primaryImage || detailModal.variant.images[0]}
-                          alt={detailModal.variant.productName || detailModal.variant.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-300 text-8xl">
-                          🎨
-                        </div>
-                      )}
-                    </div>
+                    {(() => {
+                      const images = detailModal.variant.images || detailModal.variant.imageUrls || [];
+                      const primaryImage = detailModal.variant.primaryImage || images[0];
+                      
+                      return (
+                        <>
+                          {/* Primary Image */}
+                          <div className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl overflow-hidden">
+                            {primaryImage ? (
+                              <img
+                                src={primaryImage}
+                                alt={detailModal.variant.productName || detailModal.variant.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-gray-300 text-8xl">
+                                🎨
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* All Images Grid */}
+                          {images.length > 1 && (
+                            <div>
+                              <p className="text-sm font-semibold text-gray-700 mb-2">Tất cả hình ảnh ({images.length})</p>
+                              <div className="grid grid-cols-4 gap-2">
+                                {images.map((img, idx) => (
+                                  <div key={idx} className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                                    <img src={img} alt={`Image ${idx + 1}`} className="w-full h-full object-cover" />
+                                    {idx === 0 && (
+                                      <div className="absolute top-1 left-1 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded">
+                                        Chính
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
 
                   {/* Info */}
@@ -829,21 +824,12 @@ const StoreProductVariants = () => {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex gap-3 mt-6 pt-6 border-t-2">
+                <div className="flex justify-center pt-4">
                   <button
                     onClick={() => setDetailModal({ open: false, variant: null })}
-                    className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 font-semibold transition-colors"
+                    className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 font-semibold shadow-lg transition-all"
                   >
                     Đóng
-                  </button>
-                  <button
-                    onClick={() => {
-                      setDetailModal({ open: false, variant: null });
-                      navigate(`/store-dashboard/product-variants/${detailModal.variant.id}`);
-                    }}
-                    className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 font-semibold shadow-lg transition-all"
-                  >
-                    Chỉnh sửa chi tiết
                   </button>
                 </div>
               </div>

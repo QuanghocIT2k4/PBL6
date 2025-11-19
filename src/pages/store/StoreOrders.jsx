@@ -194,15 +194,6 @@ const StoreOrders = () => {
   const totalPages = ordersData?.data?.totalPages || 0;
   const totalElements = ordersData?.data?.totalElements || 0;
 
-  // ✅ Debug: Log order structure để xem backend trả về gì
-  if (orders.length > 0) {
-    console.log('📦 [StoreOrders] Sample order structure:', {
-      orderId: orders[0].id,
-      shippingAddress: orders[0].shippingAddress,
-      allKeys: Object.keys(orders[0]),
-    });
-  }
-
   // Filter by search term (client-side)
   const filteredOrders = orders.filter(order => {
     if (!searchTerm) return true;
@@ -427,11 +418,12 @@ const StoreOrders = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filteredOrders.map((order) => {
                 const badge = getStatusBadge(order.status);
+                // ⚠️ Backend chỉ trả về buyer.username, không có fullName
+                // TODO: Yêu cầu backend bổ sung buyerName vào order response
                 const customerName = order.shippingAddress?.recipientName ||
                                    order.shippingAddress?.fullName || 
                                    order.shippingAddress?.name ||
-                                   order.buyer?.fullName ||
-                                   order.buyer?.name ||
+                                   order.buyer?.username ||  // Tạm dùng username
                                    'Khách hàng';
                 
                 return (

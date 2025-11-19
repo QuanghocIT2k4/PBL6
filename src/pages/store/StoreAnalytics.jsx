@@ -2,16 +2,25 @@ import React, { useState, useEffect } from 'react';
 import StoreLayout from '../../layouts/StoreLayout';
 import StoreStatusGuard from '../../components/store/StoreStatusGuard';
 import { useStoreContext } from '../../context/StoreContext';
+import { getStoreOrders } from '../../services/b2c/b2cOrderService';
+import { getProductsByStore } from '../../services/b2c/b2cProductService';
 import { 
   getDashboardAnalytics,
   getRevenueAnalytics,
+  getRevenueByDateRange,
   getOrderAnalytics,
+  getOrderStatusAnalytics,
   getProductAnalytics,
   getTopProducts,
   getCustomerAnalytics,
   getTopCustomers,
-  getSalesTrend,
+  getCustomerGrowth,
+  getReviewAnalytics,
+  getRatingDistribution,
   getInventoryAnalytics,
+  getSalesTrend,
+  getSalesByCategory,
+  getPerformanceMetrics,
 } from '../../services/b2c/b2cAnalyticsService';
 
 const StoreAnalytics = () => {
@@ -27,61 +36,76 @@ const StoreAnalytics = () => {
       
       setLoading(true);
       try {
-        console.log('📊 Fetching analytics for store:', currentStore.id);
+        console.log('📊 Calculating analytics for store:', currentStore.id);
         
-        // Fetch all analytics in parallel
-        const [
-          dashboardResult,
-          revenueResult,
-          orderResult,
-          productResult,
-          topProductsResult,
-          customerResult,
-        ] = await Promise.all([
-          getDashboardAnalytics(currentStore.id),
-          getRevenueAnalytics(currentStore.id),
-          getOrderAnalytics(currentStore.id),
-          getProductAnalytics(currentStore.id),
-          getTopProducts(currentStore.id, 5),
-          getCustomerAnalytics(currentStore.id),
+        // ⚠️ Backend analytics APIs toàn lỗi 500 → Skip và tính trực tiếp từ orders/products
+        console.warn('⚠️ Skipping analytics APIs (all return 500), calculating from orders/products...');
+        
+        // Calculate analytics from orders and products
+        const [ordersResult, productsResult] = await Promise.all([
+          getStoreOrders({ storeId: currentStore.id, page: 0, size: 1000 }),
+          getProductsByStore(currentStore.id, { page: 0, size: 1000 }),
         ]);
-
-        // Combine results into analytics data structure
-        // ⚠️ Backend analytics có thể chưa ready → Safely handle
-        const hasAnySuccess = dashboardResult.success || revenueResult.success || 
-                             orderResult.success || productResult.success;
         
-        if (hasAnySuccess) {
-          const data = {
-            revenue: (revenueResult.success && revenueResult.data) 
-              ? revenueResult.data 
-              : { total: 0, growth: 0, chart: [] },
-            orders: (orderResult.success && orderResult.data)
-              ? orderResult.data
-              : { total: 0, growth: 0, chart: [] },
-            products: (productResult.success && productResult.data)
-              ? productResult.data
-              : { total: 0, active: 0, inactive: 0, topSelling: [] },
-            customers: (customerResult.success && customerResult.data)
-              ? customerResult.data
-              : { total: 0, new: 0, returning: 0, chart: [] },
+        if (ordersResult.success && ordersResult.data) {
+          const orders = ordersResult.data.content || ordersResult.data;
+          const products = productsResult.success ? (productsResult.data.content || productsResult.data) : [];
+          
+          // Calculate order status
+          const orderStatus = {
+            pending: orders.filter(o => o.status === 'PENDING').length,
+            processing: orders.filter(o => o.status === 'PROCESSING').length,
+            shipped: orders.filter(o => o.status === 'SHIPPED').length,
+            delivered: orders.filter(o => o.status === 'DELIVERED').length,
+            cancelled: orders.filter(o => o.status === 'CANCELLED').length,
           };
           
-          // Update top selling from topProductsResult
-          if (topProductsResult.success && Array.isArray(topProductsResult.data)) {
-            data.products.topSelling = topProductsResult.data;
-          }
+          // Calculate revenue
+          const totalRevenue = orders
+            .filter(o => o.status === 'DELIVERED')
+            .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
           
-          setAnalyticsData(data);
-          console.log('✅ Analytics loaded (partial or full):', data);
+          // Calculate products stats
+          const productsStats = {
+            total: products.length,
+            active: products.filter(p => p.status === 'APPROVED').length,
+            inactive: products.filter(p => p.status !== 'APPROVED').length,
+            topSelling: [],
+          };
+          
+          setAnalyticsData({
+            revenue: { total: totalRevenue, growth: 0, chart: [] },
+            orders: { total: orders.length, growth: 0, chart: [] },
+            orderStatus,
+            products: productsStats,
+            customers: { total: 0, new: 0, returning: 0, chart: [] },
+            topCustomers: [],
+            customerGrowth: { growth: 0, chart: [] },
+            reviews: { total: 0, average: 0, chart: [] },
+            ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+            inventory: { total: productsStats.total, lowStock: 0, outOfStock: 0 },
+            salesTrend: { chart: [] },
+            salesByCategory: [],
+            performance: { conversionRate: 0, avgOrderValue: totalRevenue / (orders.length || 1), customerLifetimeValue: 0 },
+          });
+          
+          console.log('✅ Analytics calculated from orders/products');
         } else {
-          console.warn('⚠️ Backend analytics not ready');
-          // Set empty data instead of mock
+          // Set empty data if calculation fails
           setAnalyticsData({
             revenue: { total: 0, growth: 0, chart: [] },
             orders: { total: 0, growth: 0, chart: [] },
+            orderStatus: { pending: 0, processing: 0, shipped: 0, delivered: 0, cancelled: 0 },
             products: { total: 0, active: 0, inactive: 0, topSelling: [] },
             customers: { total: 0, new: 0, returning: 0, chart: [] },
+            topCustomers: [],
+            customerGrowth: { growth: 0, chart: [] },
+            reviews: { total: 0, average: 0, chart: [] },
+            ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+            inventory: { total: 0, lowStock: 0, outOfStock: 0 },
+            salesTrend: { chart: [] },
+            salesByCategory: [],
+            performance: { conversionRate: 0, avgOrderValue: 0, customerLifetimeValue: 0 },
           });
         }
       } catch (error) {
@@ -90,8 +114,17 @@ const StoreAnalytics = () => {
         setAnalyticsData({
           revenue: { total: 0, growth: 0, chart: [] },
           orders: { total: 0, growth: 0, chart: [] },
+          orderStatus: { pending: 0, processing: 0, shipped: 0, delivered: 0, cancelled: 0 },
           products: { total: 0, active: 0, inactive: 0, topSelling: [] },
           customers: { total: 0, new: 0, returning: 0, chart: [] },
+          topCustomers: [],
+          customerGrowth: { growth: 0, chart: [] },
+          reviews: { total: 0, average: 0, chart: [] },
+          ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+          inventory: { total: 0, lowStock: 0, outOfStock: 0 },
+          salesTrend: { chart: [] },
+          salesByCategory: [],
+          performance: { conversionRate: 0, avgOrderValue: 0, customerLifetimeValue: 0 },
         });
       } finally {
         setLoading(false);
@@ -101,183 +134,8 @@ const StoreAnalytics = () => {
     fetchAnalytics();
   }, [currentStore?.id, timeRange]);
 
-  // Mock data động theo chi nhánh (FALLBACK)
-  const getAnalyticsByBranch = (branchId) => {
-    const branchAnalytics = {
-      'branch-1': { // Hải Châu - Điện thoại cao cấp
-        revenue: {
-          total: 125000000,
-          growth: 18.5,
-          chart: [
-            { month: 'T1', revenue: 35000000 },
-            { month: 'T2', revenue: 42000000 },
-            { month: 'T3', revenue: 48000000 },
-            { month: 'T4', revenue: 55000000 },
-            { month: 'T5', revenue: 62000000 },
-            { month: 'T6', revenue: 70000000 },
-            { month: 'T7', revenue: 85000000 },
-            { month: 'T8', revenue: 125000000 }
-          ]
-        },
-        orders: {
-          total: 456,
-          growth: 12.3,
-          chart: [
-            { month: 'T1', orders: 125 },
-            { month: 'T2', orders: 142 },
-            { month: 'T3', orders: 138 },
-            { month: 'T4', orders: 161 },
-            { month: 'T5', orders: 158 },
-            { month: 'T6', orders: 167 },
-            { month: 'T7', orders: 182 },
-            { month: 'T8', orders: 198 }
-          ]
-        },
-        products: {
-          total: 25,
-          active: 22,
-          inactive: 3,
-          topSelling: [
-            { name: 'iPhone 15 Pro Max 256GB', sales: 45, revenue: 1575000000 },
-            { name: 'Samsung Galaxy S24 Ultra 512GB', sales: 38, revenue: 1216000000 },
-            { name: 'MacBook Air M2 256GB', sales: 32, revenue: 896000000 },
-            { name: 'Dell XPS 13 512GB', sales: 28, revenue: 700000000 },
-            { name: 'AirPods Pro 2', sales: 25, revenue: 162500000 }
-          ]
-        },
-        customers: {
-          total: 289,
-          new: 67,
-          returning: 222,
-          chart: [
-            { month: 'T1', customers: 32 },
-            { month: 'T2', customers: 45 },
-            { month: 'T3', customers: 38 },
-            { month: 'T4', customers: 52 },
-            { month: 'T5', customers: 49 },
-            { month: 'T6', customers: 55 },
-            { month: 'T7', customers: 62 },
-            { month: 'T8', customers: 67 }
-          ]
-        }
-      },
-      'branch-2': { // Thanh Khê - Laptop và phụ kiện
-        revenue: {
-          total: 85000000,
-          growth: 12.8,
-          chart: [
-            { month: 'T1', revenue: 25000000 },
-            { month: 'T2', revenue: 30000000 },
-            { month: 'T3', revenue: 35000000 },
-            { month: 'T4', revenue: 40000000 },
-            { month: 'T5', revenue: 45000000 },
-            { month: 'T6', revenue: 50000000 },
-            { month: 'T7', revenue: 65000000 },
-            { month: 'T8', revenue: 85000000 }
-          ]
-        },
-        orders: {
-          total: 289,
-          growth: 8.5,
-          chart: [
-            { month: 'T1', orders: 75 },
-            { month: 'T2', orders: 85 },
-            { month: 'T3', orders: 82 },
-            { month: 'T4', orders: 95 },
-            { month: 'T5', orders: 88 },
-            { month: 'T6', orders: 92 },
-            { month: 'T7', orders: 105 },
-            { month: 'T8', orders: 89 }
-          ]
-        },
-        products: {
-          total: 18,
-          active: 16,
-          inactive: 2,
-          topSelling: [
-            { name: 'Dell XPS 13 512GB', sales: 28, revenue: 700000000 },
-            { name: 'MacBook Air M2 256GB', sales: 25, revenue: 700000000 },
-            { name: 'ASUS ROG Strix G15', sales: 22, revenue: 484000000 },
-            { name: 'Sony WH-1000XM5', sales: 18, revenue: 153000000 },
-            { name: 'AirPods Pro 2', sales: 15, revenue: 97500000 }
-          ]
-        },
-        customers: {
-          total: 189,
-          new: 45,
-          returning: 144,
-          chart: [
-            { month: 'T1', customers: 22 },
-            { month: 'T2', customers: 28 },
-            { month: 'T3', customers: 25 },
-            { month: 'T4', customers: 32 },
-            { month: 'T5', customers: 29 },
-            { month: 'T6', customers: 35 },
-            { month: 'T7', customers: 38 },
-            { month: 'T8', customers: 45 }
-          ]
-        }
-      },
-      'branch-3': { // Sơn Trà (chờ duyệt) - Dữ liệu thấp
-        revenue: {
-          total: 15000000,
-          growth: 0,
-          chart: [
-            { month: 'T1', revenue: 0 },
-            { month: 'T2', revenue: 0 },
-            { month: 'T3', revenue: 0 },
-            { month: 'T4', revenue: 0 },
-            { month: 'T5', revenue: 0 },
-            { month: 'T6', revenue: 0 },
-            { month: 'T7', revenue: 0 },
-            { month: 'T8', revenue: 15000000 }
-          ]
-        },
-        orders: {
-          total: 1,
-          growth: 0,
-          chart: [
-            { month: 'T1', orders: 0 },
-            { month: 'T2', orders: 0 },
-            { month: 'T3', orders: 0 },
-            { month: 'T4', orders: 0 },
-            { month: 'T5', orders: 0 },
-            { month: 'T6', orders: 0 },
-            { month: 'T7', orders: 0 },
-            { month: 'T8', orders: 1 }
-          ]
-        },
-        products: {
-          total: 5,
-          active: 3,
-          inactive: 2,
-          topSelling: [
-            { name: 'Samsung Galaxy Tab S9', sales: 1, revenue: 15000000 }
-          ]
-        },
-        customers: {
-          total: 1,
-          new: 0,
-          returning: 0,
-          chart: [
-            { month: 'T1', customers: 0 },
-            { month: 'T2', customers: 0 },
-            { month: 'T3', customers: 0 },
-            { month: 'T4', customers: 0 },
-            { month: 'T5', customers: 0 },
-            { month: 'T6', customers: 0 },
-            { month: 'T7', customers: 0 },
-            { month: 'T8', customers: 0 }
-          ]
-        }
-      }
-    };
-    
-    return branchAnalytics[branchId] || branchAnalytics['branch-1'];
-  };
-
-  // Show loading or use mock data as fallback
-  const displayData = analyticsData || (currentStore ? getAnalyticsByBranch(currentStore.id) : getAnalyticsByBranch('branch-1'));
+  // Use only real data from backend
+  const displayData = analyticsData;
 
   const formatPrice = (price) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -446,6 +304,175 @@ const StoreAnalytics = () => {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+
+          {/* Order Status & Inventory */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Order Status */}
+            <div className="bg-white rounded-lg border border-gray-100 p-6 shadow-sm">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">📦 Trạng thái đơn hàng</h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">⏳</span>
+                    <span className="font-medium text-gray-700">Chờ xử lý</span>
+                  </div>
+                  <span className="text-lg font-bold text-yellow-600">{formatNumber(displayData?.orderStatus?.pending || 0)}</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🔄</span>
+                    <span className="font-medium text-gray-700">Đang xử lý</span>
+                  </div>
+                  <span className="text-lg font-bold text-blue-600">{formatNumber(displayData?.orderStatus?.processing || 0)}</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🚚</span>
+                    <span className="font-medium text-gray-700">Đang giao</span>
+                  </div>
+                  <span className="text-lg font-bold text-purple-600">{formatNumber(displayData?.orderStatus?.shipped || 0)}</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">✅</span>
+                    <span className="font-medium text-gray-700">Đã giao</span>
+                  </div>
+                  <span className="text-lg font-bold text-green-600">{formatNumber(displayData?.orderStatus?.delivered || 0)}</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">❌</span>
+                    <span className="font-medium text-gray-700">Đã hủy</span>
+                  </div>
+                  <span className="text-lg font-bold text-red-600">{formatNumber(displayData?.orderStatus?.cancelled || 0)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Inventory Status */}
+            <div className="bg-white rounded-lg border border-gray-100 p-6 shadow-sm">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">📦 Tình trạng kho</h3>
+              <div className="space-y-4">
+                <div className="p-4 bg-green-50 rounded-lg border-2 border-green-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-600">Tổng sản phẩm</span>
+                    <span className="text-2xl font-bold text-green-600">{formatNumber(displayData?.inventory?.total || 0)}</span>
+                  </div>
+                  <div className="h-2 bg-green-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-green-500" style={{ width: '100%' }}></div>
+                  </div>
+                </div>
+                <div className="p-4 bg-yellow-50 rounded-lg border-2 border-yellow-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-600">⚠️ Sắp hết hàng</span>
+                    <span className="text-2xl font-bold text-yellow-600">{formatNumber(displayData?.inventory?.lowStock || 0)}</span>
+                  </div>
+                  <div className="h-2 bg-yellow-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-yellow-500" style={{ 
+                      width: `${displayData?.inventory?.total > 0 ? (displayData.inventory.lowStock / displayData.inventory.total) * 100 : 0}%` 
+                    }}></div>
+                  </div>
+                </div>
+                <div className="p-4 bg-red-50 rounded-lg border-2 border-red-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-600">🚫 Hết hàng</span>
+                    <span className="text-2xl font-bold text-red-600">{formatNumber(displayData?.inventory?.outOfStock || 0)}</span>
+                  </div>
+                  <div className="h-2 bg-red-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-red-500" style={{ 
+                      width: `${displayData?.inventory?.total > 0 ? (displayData.inventory.outOfStock / displayData.inventory.total) * 100 : 0}%` 
+                    }}></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Reviews & Performance */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Reviews */}
+            <div className="bg-white rounded-lg border border-gray-100 p-6 shadow-sm">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">⭐ Đánh giá</h3>
+              <div className="flex items-center gap-6 mb-6">
+                <div className="text-center">
+                  <div className="text-4xl font-bold text-yellow-500">{displayData?.reviews?.average?.toFixed(1) || '0.0'}</div>
+                  <div className="text-sm text-gray-500 mt-1">{formatNumber(displayData?.reviews?.total || 0)} đánh giá</div>
+                </div>
+                <div className="flex-1 space-y-2">
+                  {[5, 4, 3, 2, 1].map(star => {
+                    const count = displayData?.ratingDistribution?.[star] || 0;
+                    const total = Object.values(displayData?.ratingDistribution || {}).reduce((a, b) => a + b, 0);
+                    const percentage = total > 0 ? (count / total) * 100 : 0;
+                    return (
+                      <div key={star} className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600 w-12">{star} ⭐</span>
+                        <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div className="h-full bg-yellow-400" style={{ width: `${percentage}%` }}></div>
+                        </div>
+                        <span className="text-sm text-gray-600 w-12 text-right">{count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Performance Metrics */}
+            <div className="bg-white rounded-lg border border-gray-100 p-6 shadow-sm">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">🎯 Hiệu suất</h3>
+              <div className="space-y-4">
+                <div className="p-4 bg-blue-50 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-600">Tỷ lệ chuyển đổi</span>
+                    <span className="text-2xl font-bold text-blue-600">{displayData?.performance?.conversionRate?.toFixed(1) || '0.0'}%</span>
+                  </div>
+                  <div className="mt-2 h-2 bg-blue-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-500" style={{ width: `${displayData?.performance?.conversionRate || 0}%` }}></div>
+                  </div>
+                </div>
+                <div className="p-4 bg-green-50 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-600">Giá trị đơn TB</span>
+                    <span className="text-xl font-bold text-green-600">{formatPrice(displayData?.performance?.avgOrderValue || 0)}</span>
+                  </div>
+                </div>
+                <div className="p-4 bg-purple-50 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-600">CLV khách hàng</span>
+                    <span className="text-xl font-bold text-purple-600">{formatPrice(displayData?.performance?.customerLifetimeValue || 0)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Top Customers */}
+          <div className="bg-white rounded-lg border border-gray-100 p-6 shadow-sm">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">🏆 Khách hàng hàng đầu</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {(displayData?.topCustomers || []).map((customer, index) => (
+                <div key={index} className="p-4 bg-gradient-to-br from-orange-50 to-yellow-50 rounded-lg border border-orange-200">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 bg-orange-200 rounded-full flex items-center justify-center">
+                      <span className="text-lg font-bold text-orange-600">#{index + 1}</span>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-900">{customer.name || 'Khách hàng'}</p>
+                      <p className="text-sm text-gray-500">{formatNumber(customer.orders || 0)} đơn hàng</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-orange-600">{formatPrice(customer.totalSpent || 0)}</p>
+                  </div>
+                </div>
+              ))}
+              {(!displayData?.topCustomers || displayData.topCustomers.length === 0) && (
+                <div className="col-span-full text-center py-8 text-gray-500">
+                  Chưa có dữ liệu khách hàng
+                </div>
+              )}
             </div>
           </div>
 

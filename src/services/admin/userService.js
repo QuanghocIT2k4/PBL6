@@ -2,72 +2,34 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+import api from '../common/api';
+
 export const userService = {
   // Get user profile
   async getUserProfile(userId) {
-    await delay(300);
-    
-    // TODO: Thay bằng real API
-    // const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
-    //   headers: {
-    //     'Authorization': `Bearer ${localStorage.getItem('token')}`
-    //   }
-    // });
-    
-    // Mock implementation
-    let user = JSON.parse(localStorage.getItem('user') || '{}');
-    
-    // Nếu chưa có user, tạo user mặc định
-    if (!user.id) {
-      const defaultUser = {
-        id: 'user_001',
-        email: 'seller@techstore.com',
-        name: 'Quang Nguyễn',
-        avatar: null,
-        phone: '',
-        address: '',
-        dateOfBirth: '',
-        gender: '',
-        preferences: {
-          newsletter: true,
-          promotions: true,
-          notifications: true
-        },
-        stats: {
-          totalOrders: 12,
-          totalSpent: 45690000,
-          memberSince: '2024-01-15'
-        }
+    try {
+      // ✅ Gọi API thật
+      const response = await api.get('/api/v1/users/current');
+      
+      if (response.data.success && response.data.data) {
+        return {
+          success: true,
+          data: response.data.data
+        };
+      }
+      
+      return {
+        success: false,
+        error: 'Không thể lấy thông tin user'
       };
-      localStorage.setItem('user', JSON.stringify(defaultUser));
-      user = defaultUser;
+    } catch (error) {
+      console.error('getUserProfile error:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
     
-    const mockProfile = {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      avatar: user.avatar || null,
-      phone: user.phone || '',
-      address: user.address || '',
-      dateOfBirth: user.dateOfBirth || '',
-      gender: user.gender || '',
-      preferences: user.preferences || {
-        newsletter: true,
-        promotions: true,
-        notifications: true
-      },
-      stats: user.stats || {
-        totalOrders: 12,
-        totalSpent: 45690000,
-        memberSince: '2024-01-15'
-      }
-    };
-    
-    return {
-      success: true,
-      data: mockProfile
-    };
   },
 
   // Update user profile

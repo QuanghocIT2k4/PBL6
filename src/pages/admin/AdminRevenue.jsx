@@ -356,55 +356,62 @@ const AdminRevenue = () => {
                         Order ID
                       </th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        Cửa Hàng
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        Tổng Đơn
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                         Phí Dịch Vụ
                       </th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                         Trạng Thái
                       </th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                        Mô Tả
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                         Ngày Tạo
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                        Cập Nhật
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {revenues.map((revenue) => (
-                      <tr key={revenue.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-mono text-purple-600">
-                            #{revenue.orderId?.substring(0, 8)}...
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-bold text-green-600">
-                            {formatCurrency(revenue.serviceFee || 5000)}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {getStatusBadge(revenue.status)}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-gray-700 max-w-xs truncate">
-                            {revenue.description || '-'}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-600">
-                            {formatDate(revenue.createdAt)}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-600">
-                            {formatDate(revenue.updatedAt)}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    {revenues.map((revenue) => {
+                      // Calculate order total and fee percentage
+                      const orderTotal = revenue.orderTotal || revenue.totalAmount || 0;
+                      const serviceFee = revenue.serviceFee || 0;
+                      const feePercentage = orderTotal > 0 && serviceFee > 0 ? ((serviceFee / orderTotal) * 100).toFixed(1) : 0;
+                      
+                      return (
+                        <tr key={revenue.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-mono text-purple-600">
+                              #{revenue.orderId?.substring(0, 8)}...
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">
+                              {revenue.storeName || revenue.store?.name || '-'}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-semibold text-gray-900">
+                              {orderTotal > 0 ? formatCurrency(orderTotal) : '-'}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-bold text-green-600">
+                              {serviceFee > 0 ? formatCurrency(serviceFee) : '-'}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {getStatusBadge(revenue.status)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-600">
+                              {formatDate(revenue.createdAt)}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

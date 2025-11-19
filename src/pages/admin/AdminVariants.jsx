@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getPendingVariants, approveVariant, rejectVariant } from '../../services/admin';
+import { getStoreById } from '../../services/common/storeService';
 import { useToast } from '../../context/ToastContext';
 import AdminPageHeader from '../../components/admin/AdminPageHeader';
 
@@ -9,6 +10,9 @@ const AdminVariants = () => {
   const [filter, setFilter] = useState('PENDING'); // PENDING, APPROVED, REJECTED, all
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState(null);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [variantToReject, setVariantToReject] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
   const toast = useToast();
 
   // Chuẩn hóa trạng thái duyệt từ nhiều nguồn/format khác nhau (đồng bộ với Store)
@@ -53,7 +57,50 @@ const AdminVariants = () => {
       
       if (result.success) {
         const list = Array.isArray(result.data) ? result.data : (result.data?.content || result.data || []);
-        setVariants(list);
+        
+        // ✅ Fetch store names cho variants có storeId
+        console.log('🔄 Fetching store names for', list.length, 'variants');
+        
+        const variantsWithStoreNames = await Promise.all(
+          list.map(async (variant) => {
+            // Nếu đã có store object từ backend
+            if (variant.store?.name) {
+              return {
+                ...variant,
+                storeName: variant.store.name
+              };
+            }
+            
+            // Nếu chỉ có storeId, fetch store info
+            if (variant.storeId && !variant.storeName) {
+              try {
+                console.log('📞 Fetching store:', variant.storeId);
+                const storeResult = await getStoreById(variant.storeId);
+                console.log('📥 Store result:', storeResult);
+                
+                if (storeResult.success && storeResult.data) {
+                  // Backend trả về store.name, không phải storeName
+                  const storeName = storeResult.data.name || storeResult.data.storeName;
+                  console.log('✅ Got store name:', storeName);
+                  return {
+                    ...variant,
+                    storeName,
+                    store: storeResult.data  // Lưu full store object
+                  };
+                } else {
+                  console.warn('⚠️ Store fetch failed:', storeResult.error);
+                }
+              } catch (err) {
+                console.error('❌ Failed to fetch store:', variant.storeId, err);
+              }
+            }
+            return variant;
+          })
+        );
+        
+        console.log('✅ Variants with store names:', variantsWithStoreNames);
+        
+        setVariants(variantsWithStoreNames);
       } else {
         console.error('Failed to fetch variants:', result.error);
         toast?.error('Không thể tải danh sách biến thể');
@@ -94,28 +141,32 @@ const AdminVariants = () => {
     }
   };
 
-  const handleReject = async (variantId) => {
-    const reason = prompt('Nhập lý do từ chối:');
-    if (!reason) return;
+  const handleRejectClick = (variant) => {
+    setVariantToReject(variant);
+    setShowRejectModal(true);
+  };
+
+  const confirmReject = async () => {
+    if (!variantToReject || !rejectReason.trim()) {
+      toast?.error('Vui lòng nhập lý do từ chối');
+      return;
+    }
 
     try {
-      // ✅ Gọi API thật để từ chối biến thể
-      const result = await rejectVariant(variantId, reason);
+      const result = await rejectVariant(variantToReject.id, rejectReason);
       
       if (result.success) {
         toast?.success('Đã từ chối biến thể. Lý do đã được gửi tới seller.');
         
-        // Cập nhật UI ngay
-        setVariants(prevVariants => 
-          prevVariants.map(variant => 
-            variant.id === variantId 
-              ? { ...variant, status: 'REJECTED', rejectionReason: reason }
-              : variant
-          )
-        );
+        setVariants(prev => prev.map(v => 
+          v.id === variantToReject.id 
+            ? { ...v, status: 'REJECTED', rejectionReason: rejectReason }
+            : v
+        ));
         
-        // Refresh danh sách
-        setTimeout(() => fetchVariants(), 500);
+        setShowRejectModal(false);
+        setVariantToReject(null);
+        setRejectReason('');
       } else {
         toast?.error(result.error || 'Không thể từ chối biến thể');
       }
@@ -194,13 +245,27 @@ const AdminVariants = () => {
           {(variants || []).map((variant) => {
             const variantStatus = variant.status || 'PENDING'; // Default to PENDING if undefined
             
+            // 🔍 Try multiple field names for image
+            const imageUrl = 
+              variant.primaryImageUrl || 
+              (variant.imageUrls && variant.imageUrls[0]) ||
+              variant.imageUrl ||
+              (variant.images && variant.images[0]) ||
+              variant.image ||
+              variant.variantImageUrl;
+            
+            // 🔍 Debug: Log if no image found
+            if (!imageUrl) {
+              console.log('🖼️ No image for variant:', variant.name, 'All fields:', variant);
+            }
+            
             return (
               <div key={variant.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-200">
                 {/* Image */}
                 <div className="relative h-48 bg-gradient-to-br from-gray-100 to-gray-200">
-                  {variant.primaryImageUrl || (variant.imageUrls && variant.imageUrls[0]) ? (
+                  {imageUrl ? (
                     <img
-                      src={variant.primaryImageUrl || variant.imageUrls[0]}
+                      src={imageUrl}
                       alt={variant.name || variant.variantName}
                       className="w-full h-full object-cover"
                     />
@@ -256,22 +321,18 @@ const AdminVariants = () => {
                     </div>
                   )}
                   
-                  {/* Price & Stock */}
+                  {/* Price & Store */}
                   <div className="space-y-2 mb-3 pb-3 border-b border-gray-100">
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-600">Giá:</span>
                       <span className="text-sm font-bold text-purple-600">{formatCurrency(variant.price)}</span>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-600">Tồn kho:</span>
-                      <span className={`text-sm font-semibold ${variant.stock < 10 ? 'text-red-600' : 'text-green-600'}`}>
-                        {variant.stock} {variant.stock < 10 && '⚠️'}
-                      </span>
-                    </div>
-                    {variant.seller && (
+                    {(variant.storeName || variant.storeId) && (
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-600">Người bán:</span>
-                        <span className="text-xs font-medium text-gray-900">{variant.seller}</span>
+                        <span className="text-xs text-gray-600">Cửa hàng:</span>
+                        <span className="text-xs font-medium text-gray-900">
+                          {variant.storeName || (variant.storeId ? `ID: ${variant.storeId.slice(0, 8)}...` : '')}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -306,7 +367,7 @@ const AdminVariants = () => {
                             ✓ Duyệt
                           </button>
                           <button
-                            onClick={() => handleReject(variant.id)}
+                            onClick={() => handleRejectClick(variant)}
                             className="flex-1 bg-red-50 text-red-600 py-2 px-3 rounded-lg hover:bg-red-100 transition-colors text-xs font-medium"
                           >
                             ✗ Từ chối
@@ -315,7 +376,7 @@ const AdminVariants = () => {
                       )}
                       {variantStatus === 'APPROVED' && (
                         <button
-                          onClick={() => handleReject(variant.id)}
+                          onClick={() => handleRejectClick(variant)}
                           className="w-full bg-red-50 text-red-600 py-2 px-3 rounded-lg hover:bg-red-100 transition-colors text-xs font-medium"
                         >
                           ↩️ Thu hồi
@@ -365,23 +426,29 @@ const AdminVariants = () => {
 
               <div className="space-y-6">
                 {/* Images */}
-                {selectedVariant.imageUrls && selectedVariant.imageUrls.length > 0 && (
-                  <div>
-                    <h4 className="font-semibold text-gray-900 mb-3">Hình ảnh ({selectedVariant.imageUrls.length})</h4>
-                    <div className="grid grid-cols-4 gap-3">
-                      {selectedVariant.imageUrls.map((url, index) => (
-                        <div key={index} className="relative">
-                          <img src={url} alt={`Image ${index + 1}`} className="w-full h-32 object-cover rounded-lg" />
-                          {index === 0 && (
-                            <div className="absolute top-1 left-1 bg-purple-500 text-white text-xs px-2 py-1 rounded">
-                              Ảnh chính
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                {(() => {
+                  // Try multiple field names
+                  const images = selectedVariant.imageUrls || selectedVariant.images || [];
+                  console.log('🖼️ Modal images:', images, 'Variant:', selectedVariant);
+                  
+                  return images.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold text-gray-900 mb-3">Hình ảnh ({images.length})</h4>
+                      <div className="grid grid-cols-4 gap-3">
+                        {images.map((url, index) => (
+                          <div key={index} className="relative">
+                            <img src={url} alt={`Image ${index + 1}`} className="w-full h-32 object-cover rounded-lg" />
+                            {index === 0 && (
+                              <div className="absolute top-1 left-1 bg-purple-500 text-white text-xs px-2 py-1 rounded">
+                                Ảnh chính
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* Basic Info */}
                 <div>
@@ -400,14 +467,10 @@ const AdminVariants = () => {
                       <p className="font-medium text-purple-600">{formatCurrency(selectedVariant.price)}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Tồn kho</p>
-                      <p className={`font-medium ${selectedVariant.stock < 10 ? 'text-red-600' : 'text-green-600'}`}>
-                        {selectedVariant.stock}
+                      <p className="text-sm text-gray-600">Cửa hàng</p>
+                      <p className="font-medium text-gray-900">
+                        {selectedVariant.storeName || (selectedVariant.storeId ? `Store ID: ${selectedVariant.storeId.slice(0, 8)}...` : 'N/A')}
                       </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Người bán</p>
-                      <p className="font-medium text-gray-900">{selectedVariant.seller || 'N/A'}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-600">Trạng thái</p>
@@ -500,6 +563,68 @@ const AdminVariants = () => {
                   className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-6 py-2 rounded-lg font-medium transition-colors"
                 >
                   Đóng
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Reject Modal */}
+        {showRejectModal && variantToReject && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowRejectModal(false)}></div>
+            <div className="relative bg-white w-[90%] max-w-md rounded-3xl shadow-2xl overflow-hidden">
+              {/* Gradient Header */}
+              <div className="bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 px-6 py-5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center">
+                    <span className="text-2xl">❌</span>
+                  </div>
+                  <h3 className="text-xl font-bold text-white">Từ chối biến thể</h3>
+                </div>
+                <button
+                  onClick={() => setShowRejectModal(false)}
+                  className="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors"
+                >
+                  <span className="text-xl">✕</span>
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="px-6 py-5">
+                <div className="mb-4 p-4 bg-gradient-to-br from-red-50 to-pink-50 rounded-2xl border-2 border-red-100">
+                  <p className="text-sm text-gray-600 mb-1">Biến thể:</p>
+                  <p className="font-bold text-gray-900">{variantToReject.name}</p>
+                </div>
+
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Lý do từ chối <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="Nhập lý do từ chối (VD: Hình ảnh không rõ ràng, thông tin không đầy đủ...)"
+                  rows={4}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none resize-none"
+                />
+                <p className="text-xs text-gray-500 mt-2">
+                  ⚠️ Lý do từ chối sẽ được gửi tới người bán
+                </p>
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 bg-gray-50 border-t-2 border-gray-100 flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setShowRejectModal(false)}
+                  className="px-6 py-3 rounded-xl border-2 border-gray-300 text-gray-700 font-semibold hover:bg-gray-100 transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  onClick={confirmReject}
+                  className="px-6 py-3 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold hover:from-red-700 hover:to-rose-700 shadow-lg transition-all"
+                >
+                  ❌ Từ chối
                 </button>
               </div>
             </div>

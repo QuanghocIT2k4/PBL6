@@ -172,7 +172,14 @@ export const updateProduct = async (productId, productData) => {
 export const createProductVariantWithFormData = async (formData) => {
   try {
     console.log('🆕 [B2C] Creating product variant with FormData');
-    const response = await api.post('/api/v1/b2c/product-variants/create', formData);
+    
+    // ✅ Set header multipart/form-data
+    const response = await api.post('/api/v1/b2c/product-variants/create', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    
     console.log('✅ [B2C] Product variant created:', response.data);
     if (response.data.success) {
       return { success: true, data: response.data.data };

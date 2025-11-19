@@ -1,14 +1,71 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useToast } from '../../context/ToastContext';
 import Button from '../../components/ui/Button'; // ✅ SỬA: thêm đường dẫn đúng
 
 const ProfileHeader = ({ profile, onAvatarUpload, updating }) => {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
-  const { error: showError } = useToast();
+  const { error: showError, success: showSuccess, info: showInfo } = useToast();
+
+  // Debug: Log profile data
+  useEffect(() => {
+    console.log('👤 Profile data:', profile);
+    console.log('🖼️ Avatar URL:', profile?.avatar);
+    console.log('🖼️ Avatar exists:', !!profile?.avatar);
+  }, [profile]);
 
   const handleAvatarClick = () => {
     fileInputRef.current?.click();
+  };
+
+  // Convert PNG to JPG if needed
+  const convertToJPG = (file) => {
+    return new Promise((resolve) => {
+      if (file.type === 'image/jpeg' || file.type === 'image/jpg') {
+        resolve(file);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0);
+          
+          canvas.toBlob((blob) => {
+            // Generate proper filename
+            let newFilename = file.name.replace(/\.\w+$/, '.jpg');
+            
+            // If original name doesn't have extension, add .jpg
+            if (!newFilename.endsWith('.jpg')) {
+              newFilename = newFilename + '.jpg';
+            }
+            
+            // Fallback if name is invalid
+            if (!newFilename || newFilename === '.jpg') {
+              newFilename = 'avatar_' + Date.now() + '.jpg';
+            }
+            
+            console.log(' Converting:', file.name, ' ', newFilename);
+            
+            const jpgFile = new File([blob], newFilename, {
+              type: 'image/jpeg',
+              lastModified: Date.now()
+            });
+            resolve(jpgFile);
+          }, 'image/jpeg', 0.9);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
   };
 
   const handleFileChange = async (e) => {
@@ -28,10 +85,39 @@ const ProfileHeader = ({ profile, onAvatarUpload, updating }) => {
 
     setUploading(true);
     try {
-      const result = await onAvatarUpload(file);
-      if (!result.success) {
-        showError(result.error || 'Lỗi upload ảnh');
+      // Show info about file
+      showInfo(`Đang xử lý ảnh: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`);
+      
+      // Convert PNG to JPG if needed
+      const processedFile = await convertToJPG(file);
+      
+      if (processedFile.type !== file.type) {
+        showInfo(`Đã chuyển đổi ${file.type} → ${processedFile.type}`);
       }
+      
+      console.log('📤 Uploading:', processedFile.type, processedFile.name);
+      showInfo('Đang upload lên server...');
+      
+      const result = await onAvatarUpload(processedFile);
+      
+      console.log('📥 Upload result:', result);
+      console.log('📥 Avatar URL:', result.data?.avatar || result.data?.avatarUrl);
+      
+      if (result.success) {
+        showSuccess('Upload avatar thành công! Đang tải lại...');
+        
+        // Backend không trả về avatar URL đúng format
+        // Phải reload để fetch lại profile từ API
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      } else {
+        console.error('❌ Upload failed:', result.error);
+        showError(`Lỗi: ${result.error || 'Không thể upload ảnh'}`);
+      }
+    } catch (error) {
+      console.error('❌ Exception:', error);
+      showError(`Lỗi: ${error.message}`);
     } finally {
       setUploading(false);
     }
@@ -59,8 +145,20 @@ const ProfileHeader = ({ profile, onAvatarUpload, updating }) => {
                 src={profile.avatar} 
                 alt="Avatar" 
                 className="w-full h-full object-cover"
+                onError={(e) => {
+                  console.error('❌ Avatar load failed:', profile.avatar);
+                  console.error('❌ Error event:', e);
+                  // Fallback to initial
+                  e.target.style.display = 'none';
+                }}
+                onLoad={() => {
+                  console.log('✅ Avatar loaded successfully:', profile.avatar);
+                }}
               />
-            ) : (
+            ) : null}
+            
+            {/* Fallback letter */}
+            {!profile?.avatar && (
               <span className="text-3xl text-gray-600">
                 {profile?.name?.charAt(0)?.toUpperCase() || 'U'}
               </span>
@@ -98,7 +196,7 @@ const ProfileHeader = ({ profile, onAvatarUpload, updating }) => {
         {/* User Info */}
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-gray-900 mb-1">
-            {profile?.name || 'Chưa cập nhật tên'}
+            {profile?.fullName || profile?.name || 'Chưa cập nhật tên'}
           </h1>
           <p className="text-gray-600 mb-2">{profile?.email}</p>
           

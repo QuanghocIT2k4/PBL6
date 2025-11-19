@@ -263,15 +263,29 @@ const AdminProducts = () => {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-gray-500 block">Danh mục:</span>
-                  <span className="font-medium">{selectedProduct.categoryName || 'N/A'}</span>
+                  <span className="font-medium">
+                    {selectedProduct.categoryName || 
+                     selectedProduct.category?.name || 
+                     selectedProduct.category || 
+                     'N/A'}
+                  </span>
                 </div>
                 <div>
                   <span className="text-gray-500 block">Cửa hàng:</span>
-                  <span className="font-medium">{selectedProduct.storeName || 'N/A'}</span>
+                  <span className="font-medium">
+                    {selectedProduct.storeName || 
+                     selectedProduct.store?.name || 
+                     selectedProduct.store?.storeName ||
+                     'N/A'}
+                  </span>
                 </div>
                 <div>
                   <span className="text-gray-500 block">Thương hiệu:</span>
-                  <span className="font-medium">{selectedProduct.brand || 'N/A'}</span>
+                  <span className="font-medium">
+                    {selectedProduct.brand || 
+                     brandMap[selectedProduct.brandId] || 
+                     'N/A'}
+                  </span>
                 </div>
                 <div>
                   <span className="text-gray-500 block">Trạng thái:</span>

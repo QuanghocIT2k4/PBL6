@@ -33,9 +33,18 @@ const PromotionList = ({
     { revalidateOnFocus: false }
   );
 
-  // ✅ Fetch store promotions
+  // ✅ Debug: Check why store promotions not fetching
+  console.log('🔍 [PromotionList] SWR Key check:', {
+    showList,
+    orderTotal,
+    storeId,
+    willFetch: !!(orderTotal && storeId),  // ✅ Bỏ check showList
+    key: orderTotal && storeId ? ['store-promotions', storeId, orderTotal] : null
+  });
+
+  // ✅ Fetch store promotions - BỎ CHECK showList để fetch ngay khi có storeId
   const { data: storeData, isLoading: loadingStore, error: storeError } = useSWR(
-    showList && orderTotal && storeId ? ['store-promotions', storeId, orderTotal] : null,
+    orderTotal && storeId ? ['store-promotions', storeId, orderTotal] : null,  // ✅ Bỏ showList
     async () => {
       console.log('🛒 [PromotionList] Fetching store promotions:', { storeId, orderTotal });
       try {
@@ -62,12 +71,20 @@ const PromotionList = ({
     }
   );
 
-  // Debug log
+  // Debug log - ALWAYS log, not just when showList
   useEffect(() => {
-    if (showList) {
-      console.log('🛒 [PromotionList] Props:', { storeId, orderTotal, hasStoreId: !!storeId });
-    }
-  }, [showList, storeId, orderTotal]);
+    console.log('🛒 [PromotionList] Component state:', { 
+      showList,
+      storeId, 
+      orderTotal, 
+      hasStoreId: !!storeId,
+      activeTab,
+      storeDataExists: !!storeData,
+      storeDataSuccess: storeData?.success,
+      storeError,
+      loadingStore
+    });
+  }, [showList, storeId, orderTotal, activeTab, storeData, storeError, loadingStore]);
 
   // Get promotions based on active tab
   const getPromotions = () => {

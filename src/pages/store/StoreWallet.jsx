@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from '../../context/ToastContext';
 import StoreLayout from '../../layouts/StoreLayout';
 import Swal from 'sweetalert2';
+import { useStoreInfo } from '../../hooks/useStoreInfo';
 import {
   getStoreWallet,
   getWithdrawalRequests,
@@ -14,7 +15,9 @@ import {
 
 const StoreWallet = () => {
   const { storeId } = useParams();
+  const navigate = useNavigate();
   const { success, error: showError } = useToast();
+  const { storeInfo, loading: storeLoading } = useStoreInfo(storeId);
   
   const [wallet, setWallet] = useState(null);
   const [withdrawals, setWithdrawals] = useState([]);
@@ -45,22 +48,48 @@ const StoreWallet = () => {
   });
   const [submitting, setSubmitting] = useState(false);
 
+  // ✅ Load wallet data immediately, check status after
   useEffect(() => {
-    loadWalletData();
+    if (storeId) {
+      loadWalletData();
+    }
   }, [storeId]);
+
+  // ✅ Check store status - redirect nếu không approved
+  useEffect(() => {
+    console.log('🔍 [Wallet] Store status check:', {
+      storeLoading,
+      storeInfo,
+      status: storeInfo?.status,
+      storeId,
+    });
+    
+    // Chỉ check khi đã load xong VÀ có storeInfo
+    if (!storeLoading && storeInfo) {
+      if (storeInfo.status && storeInfo.status !== 'APPROVED') {
+        console.warn('⚠️ [Wallet] Store not approved:', storeInfo.status);
+        showError('Cửa hàng chưa được duyệt. Không thể truy cập ví.');
+        navigate(`/store-dashboard/${storeId}`);
+      } else {
+        console.log('✅ [Wallet] Store approved, access granted');
+      }
+    }
+  }, [storeInfo, storeLoading, storeId, navigate, showError]);
 
   const loadWalletData = async () => {
     setLoading(true);
     
     try {
-      // Load wallet info
-      const walletResult = await getStoreWallet(storeId);
+      // ✅ Load wallet và withdrawals PARALLEL để nhanh hơn
+      const [walletResult, wdResult] = await Promise.all([
+        getStoreWallet(storeId),
+        getWithdrawalRequests(storeId, { page: 0, size: 10 }),
+      ]);
+      
       if (walletResult.success) {
         setWallet(walletResult.data);
       }
       
-      // Load withdrawal requests
-      const wdResult = await getWithdrawalRequests(storeId, { page: 0, size: 10 });
       if (wdResult.success) {
         const wdData = wdResult.data?.content || wdResult.data;
         setWithdrawals(Array.isArray(wdData) ? wdData : []);
@@ -135,10 +164,29 @@ const StoreWallet = () => {
     }
   };
 
-  if (loading) {
+  if (loading || storeLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  // ✅ Show blocked message if store not approved (chỉ khi đã có storeInfo)
+  if (storeInfo && storeInfo.status && storeInfo.status !== 'APPROVED') {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center max-w-md p-8 bg-white rounded-2xl shadow-lg">
+          <div className="text-6xl mb-4">🔒</div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Chức năng bị khóa</h2>
+          <p className="text-gray-600 mb-4">
+            Cửa hàng của bạn chưa được duyệt. Vui lòng chờ admin phê duyệt để sử dụng chức năng Ví & Rút tiền.
+          </p>
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-800 rounded-lg font-medium">
+            <span>⏳</span>
+            <span>Trạng thái: {storeInfo?.status || 'PENDING'}</span>
+          </div>
+        </div>
       </div>
     );
   }
@@ -190,12 +238,6 @@ const StoreWallet = () => {
               <p className="text-3xl font-black bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
                 {formatCurrency(getAvailableBalance())}
               </p>
-              {wallet?.balance !== getAvailableBalance() && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Tổng: {formatCurrency(wallet?.balance || 0)} (Đang chờ rút: {formatCurrency((wallet?.balance || 0) - getAvailableBalance())})
-                </p>
-              )}
-              <p className="text-xs text-gray-500 mt-1">Có thể rút về tài khoản ngân hàng</p>
             </div>
           </div>
 
@@ -204,6 +246,10 @@ const StoreWallet = () => {
             <div className="bg-white rounded-xl p-4 text-center shadow-sm min-w-[140px]">
               <p className="text-xs text-gray-600 mb-1">Tổng thu nhập</p>
               <p className="text-xl font-bold text-blue-600">{formatCurrency(wallet?.totalEarned || 0)}</p>
+            </div>
+            <div className="bg-white rounded-xl p-4 text-center shadow-sm min-w-[140px]">
+              <p className="text-xs text-gray-600 mb-1">Đang chờ rút</p>
+              <p className="text-xl font-bold text-yellow-600">{formatCurrency((wallet?.balance || 0) - getAvailableBalance())}</p>
             </div>
             <div className="bg-white rounded-xl p-4 text-center shadow-sm min-w-[140px]">
               <p className="text-xs text-gray-600 mb-1">Đã rút</p>
