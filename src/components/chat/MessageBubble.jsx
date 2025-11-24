@@ -11,8 +11,11 @@ const MessageBubble = ({
   showAvatar = true,
   onDelete,
   recipientAvatar = null, // Avatar của người nhận (để hiển thị khi đã đọc)
-  isLastOwnMessage = false // Chỉ tin nhắn cuối cùng mới hiển thị icon đã đọc
+  isLastOwnMessage = false, // Chỉ tin nhắn cuối cùng mới hiển thị icon đã đọc
+  senderName = null // Tên người gửi (override message.senderName nếu backend trả về sai)
 }) => {
+  // Chỉ dùng senderName từ props (không fallback về message.senderName vì backend có thể sai)
+  const displayName = senderName;
   const [showMenu, setShowMenu] = useState(false);
 
   const handleDelete = () => {
@@ -37,7 +40,7 @@ const MessageBubble = ({
         
         <div className={`max-w-md ${isOwn ? 'items-end' : 'items-start'}`}>
           {!isOwn && (
-            <p className="text-xs text-gray-600 mb-1">{message.senderName}</p>
+            <p className="text-xs text-gray-600 mb-1">{displayName}</p>
           )}
           
           <div className={`rounded-lg p-3 ${isOwn ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}>
@@ -86,7 +89,7 @@ const MessageBubble = ({
         
         <div className={`max-w-md ${isOwn ? 'items-end' : 'items-start'}`}>
           {!isOwn && (
-            <p className="text-xs text-gray-600 mb-1">{message.senderName}</p>
+            <p className="text-xs text-gray-600 mb-1">{displayName}</p>
           )}
           
           <div className={`rounded-lg overflow-hidden ${isOwn ? 'bg-blue-500' : 'bg-gray-100'}`}>
@@ -164,7 +167,7 @@ const MessageBubble = ({
       
       <div className={`max-w-md ${isOwn ? 'items-end' : 'items-start'}`}>
         {!isOwn && (
-          <p className="text-xs text-gray-600 mb-1">{message.senderName}</p>
+          <p className="text-xs text-gray-600 mb-1">{displayName}</p>
         )}
         
         <div className="relative group">
@@ -201,29 +204,17 @@ const MessageBubble = ({
               {/* Read status icon - Chỉ hiển thị ở tin nhắn cuối cùng */}
               {isOwn && message.status === 'READ' && isLastOwnMessage && (
                 <div className="absolute -bottom-5 right-0">
-                  {recipientAvatar ? (
-                    <img
-                      src={recipientAvatar}
-                      alt="Đã đọc"
-                      className="w-4 h-4 rounded-full border-2 border-white object-cover bg-white shadow-md"
-                      title="Đã đọc"
-                      onError={(e) => { 
-                        e.target.style.display = 'none';
-                      }}
-                    />
-                  ) : (
-                    <div className="w-4 h-4 bg-white rounded-full shadow-md flex items-center justify-center">
-                      <svg 
-                        className="w-3 h-3 text-blue-500" 
-                        fill="currentColor" 
-                        viewBox="0 0 20 20"
-                        title="Đã đọc"
-                      >
-                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                        <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  )}
+                  <img
+                    src={recipientAvatar || '/default-avatar.png'}
+                    alt="Đã đọc"
+                    className="w-4 h-4 rounded-full border-2 border-white object-cover bg-white shadow-md"
+                    title="Đã đọc"
+                    onError={(e) => { 
+                      if (e.target.src !== '/default-avatar.png') {
+                        e.target.src = '/default-avatar.png';
+                      }
+                    }}
+                  />
                 </div>
               )}
           </div>
@@ -254,9 +245,9 @@ const MessageBubble = ({
           )}
         </div>
         
-        {/* Time - Chỉ hiển thị khi CHƯA đọc */}
-        {(!isOwn || message.status !== 'READ') && (
-          <p className="text-xs text-gray-500 mt-1">
+        {/* Time - Chỉ hiển thị cho tin nhắn của MÌNH (bên phải) và là tin cuối cùng */}
+        {isOwn && isLastOwnMessage && message.status !== 'READ' && (
+          <p className="text-xs text-gray-500 mt-1 text-right">
             {formatMessageTime(message.sentAt)}
           </p>
         )}

@@ -10,7 +10,8 @@ const ConversationList = ({
   currentConversation, 
   onSelectConversation,
   currentUserId,
-  loading 
+  loading,
+  isStorePage = false 
 }) => {
   if (loading) {
     return (
@@ -36,9 +37,15 @@ const ConversationList = ({
     <div className="overflow-y-auto h-full">
       {conversations.map((conversation) => {
         const isActive = currentConversation?.id === conversation.id;
-        const displayName = getConversationDisplayName(conversation, currentUserId);
-        const displayAvatar = getConversationDisplayAvatar(conversation, currentUserId);
+        const displayName = getConversationDisplayName(conversation, currentUserId, isStorePage);
+        const displayAvatar = getConversationDisplayAvatar(conversation, currentUserId, isStorePage);
         const hasUnread = conversation.unreadCount > 0;
+        
+        // ⭐ Check xem tin nhắn cuối cùng có phải của mình không
+        const isOwnLastMessage = conversation.lastMessageSenderId === currentUserId;
+        const lastMessageDisplay = conversation.lastMessage 
+          ? (isOwnLastMessage ? `Bạn: ${conversation.lastMessage}` : conversation.lastMessage)
+          : 'Chưa có tin nhắn';
 
         return (
           <div
@@ -80,7 +87,7 @@ const ConversationList = ({
               {/* Last Message & Badge */}
               <div className="flex items-center justify-between">
                 <p className={`text-sm truncate ${hasUnread ? 'font-medium text-gray-900' : 'text-gray-600'}`}>
-                  {conversation.lastMessage || 'Chưa có tin nhắn'}
+                  {lastMessageDisplay}
                 </p>
                 {hasUnread && (
                   <span className="flex-shrink-0 ml-2 px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full">

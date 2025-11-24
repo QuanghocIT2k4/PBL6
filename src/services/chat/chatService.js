@@ -325,21 +325,29 @@ export const formatMessageTime = (timestamp) => {
  * Get conversation display name
  * @param {ConversationDTO} conversation
  * @param {string} currentUserId
+ * @param {boolean} isStorePage - True nếu đang ở trang store chat
  * @returns {string}
  */
-export const getConversationDisplayName = (conversation, currentUserId) => {
-  // ✅ Nếu có storeName → Luôn ưu tiên hiển thị (vì đây là chat với store)
-  // Logic: Conversation có storeId/storeName = BUYER_SELLER chat
-  if (conversation.storeName) {
+export const getConversationDisplayName = (conversation, currentUserId, isStorePage = false) => {
+  // ✅ Nếu là STORE PAGE → Tìm buyer trong participants
+  if (isStorePage) {
+    const buyer = conversation.participants?.find(
+      p => (p.userId !== currentUserId) && (p.onlineId !== currentUserId)
+    );
+    if (buyer?.userName) {
+      return buyer.userName;
+    }
+  }
+  
+  // ✅ Nếu là BUYER PAGE → Ưu tiên hiển thị storeName
+  if (conversation.storeId && conversation.storeName) {
     return conversation.storeName;
   }
   
-  // ✅ Tìm người còn lại (không phải mình)
+  // ✅ Fallback: Tìm người còn lại
   const otherParticipant = conversation.participants?.find(
-    p => p.userId !== currentUserId
+    p => (p.userId !== currentUserId) && (p.onlineId !== currentUserId)
   );
-  
-  // ✅ Nếu có tên người còn lại → Hiển thị tên đó
   if (otherParticipant?.userName) {
     return otherParticipant.userName;
   }
@@ -351,27 +359,44 @@ export const getConversationDisplayName = (conversation, currentUserId) => {
  * Get conversation display avatar
  * @param {ConversationDTO} conversation
  * @param {string} currentUserId
+ * @param {boolean} isStorePage - True nếu đang ở trang store chat
  * @returns {string}
  */
-export const getConversationDisplayAvatar = (conversation, currentUserId) => {
-  // ✅ Nếu có storeAvatar → Luôn ưu tiên hiển thị (vì đây là chat với store)
-  // Logic: Conversation có storeId/storeAvatar = BUYER_SELLER chat
-  if (conversation.storeAvatar) {
+export const getConversationDisplayAvatar = (conversation, currentUserId, isStorePage = false) => {
+  // ✅ Nếu là STORE PAGE → Hiển thị avatar buyer
+  if (isStorePage) {
+    const buyer = conversation.participants?.find(
+      p => (p.userId !== currentUserId) && (p.onlineId !== currentUserId)
+    );
+    if (buyer) {
+      const avatar = buyer.userAvatar || buyer.avatar || buyer.avatarUrl;
+      if (avatar) {
+        return avatar;
+      }
+    }
+  }
+  
+  // ✅ Nếu là BUYER PAGE → Ưu tiên hiển thị storeAvatar
+  if (conversation.storeId && conversation.storeAvatar) {
     return conversation.storeAvatar;
   }
   
-  // ✅ Tìm người còn lại (không phải mình)
+  // ✅ Fallback: Tìm người còn lại
   const otherParticipant = conversation.participants?.find(
-    p => p.userId !== currentUserId
+    p => (p.userId !== currentUserId) && (p.onlineId !== currentUserId)
   );
-  
-  // ✅ Nếu có avatar người còn lại → Hiển thị avatar đó
-  // Backend có thể trả về userAvatar hoặc avatar
   if (otherParticipant) {
-    const avatar = otherParticipant.userAvatar || otherParticipant.avatar;
+    const avatar = otherParticipant.userAvatar 
+      || otherParticipant.avatar 
+      || otherParticipant.avatarUrl;
     if (avatar) {
       return avatar;
     }
+  }
+  
+  // ✅ Fallback: storeAvatar
+  if (conversation.storeAvatar) {
+    return conversation.storeAvatar;
   }
   
   return '/default-avatar.png';

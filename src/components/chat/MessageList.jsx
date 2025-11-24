@@ -87,32 +87,76 @@ const MessageList = ({
       {messages.map((message, index) => {
         const isOwn = message.senderId === currentUserId;
         const prevMessage = index > 0 ? messages[index - 1] : null;
-        const showAvatar = !prevMessage || prevMessage.senderId !== message.senderId;
+        
+        // ✅ Kiểm tra xem sender có avatar không
+        let showAvatar = false;
+        let senderAvatar = null;
+        if (!isOwn) {
+          const sender = currentConversation.participants?.find(
+            p => (p.userId === message.senderId) || (p.onlineId === message.senderId)
+          );
+          const hasAvatar = sender?.userAvatar || sender?.avatar || sender?.avatarUrl || message.senderAvatar;
+          if (hasAvatar) {
+            // Có avatar → Hiển thị avatar người đó
+            showAvatar = true;
+            senderAvatar = hasAvatar;
+          } else if (currentConversation.storeAvatar) {
+            // Không có avatar → Đây là store owner → Dùng storeAvatar
+            showAvatar = true;
+            senderAvatar = currentConversation.storeAvatar;
+          }
+        } else {
+          showAvatar = !prevMessage || prevMessage.senderId !== message.senderId;
+        }
         
         // ✅ Lấy avatar của người nhận từ conversation participants
         let recipientAvatar = null;
         if (isOwn && currentConversation?.participants) {
           const otherParticipant = currentConversation.participants.find(
-            p => p.userId !== currentUserId
+            p => (p.userId !== currentUserId) && (p.onlineId !== currentUserId)
           );
-          recipientAvatar = otherParticipant?.userAvatar || otherParticipant?.avatar;
+          
+          recipientAvatar = otherParticipant?.userAvatar 
+            || otherParticipant?.avatar 
+            || otherParticipant?.avatarUrl
+            || currentConversation.storeAvatar
+            || currentConversation.buyerAvatar;
         }
         
-        // ✅ Check xem có phải tin nhắn cuối cùng của mình không
-        const isLastOwnMessage = isOwn && (
-          index === messages.length - 1 || 
-          messages[index + 1]?.senderId !== currentUserId
-        );
+        // ✅ Check xem có phải tin nhắn CUỐI CÙNG TRONG TOÀN BỘ không
+        const isLastOwnMessage = isOwn && index === messages.length - 1;
+        
+        let senderName = null;
+        if (!isOwn && currentConversation?.participants) {
+          const sender = currentConversation.participants.find(
+            p => (p.userId === message.senderId) || (p.onlineId === message.senderId)
+          );
+          // Kiểm tra có avatar không
+          const hasAvatar = sender?.userAvatar || sender?.avatar || sender?.avatarUrl;
+          if (hasAvatar) {
+            // Có avatar → Hiển thị tên người đó (buyer)
+            senderName = sender?.userName || sender?.name;
+          } else if (currentConversation.storeId && currentConversation.storeName) {
+            // Không có avatar → Đây là store owner → Hiển thị storeName
+            senderName = currentConversation.storeName;
+          }
+        }
 
+        // Override message.senderAvatar nếu có senderAvatar mới
+        const messageWithAvatar = senderAvatar 
+          ? { ...message, senderAvatar } 
+          : message;
+        
         return (
           <MessageBubble
             key={message.id}
-            message={message}
+            message={messageWithAvatar}
             isOwn={isOwn}
             showAvatar={showAvatar}
             onDelete={onDelete}
             recipientAvatar={recipientAvatar}
             isLastOwnMessage={isLastOwnMessage}
+            senderName={senderName}
           />
         );
       })}

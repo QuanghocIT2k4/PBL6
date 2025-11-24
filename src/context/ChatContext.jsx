@@ -28,6 +28,7 @@ export const ChatProvider = ({ children }) => {
   const messageHandlerRef = useRef(null);
   const typingHandlerRef = useRef(null);
   const connectionHandlerRef = useRef(null);
+  const pollingIntervalRef = useRef(null);
 
   // ==================== WEBSOCKET CONNECTION ====================
 
@@ -35,19 +36,30 @@ export const ChatProvider = ({ children }) => {
    * Kết nối WebSocket khi user đăng nhập
    */
   useEffect(() => {
+    console.log('🔧 [ChatContext] useEffect - Checking WebSocket connection:', {
+      hasUser: !!user,
+      userId: user?.id,
+      userName: user?.username
+    });
+    
     if (user && user.id) {
       const token = localStorage.getItem('token');
+      console.log('🔑 [ChatContext] Token found:', !!token);
+      
       if (token) {
+        console.log('🚀 [ChatContext] Connecting WebSocket...');
         chatWebSocketService.connect(token);
-        
-        // Send online presence
         chatWebSocketService.sendPresence(user.id, true, 'online');
+      } else {
+        console.error('❌ [ChatContext] No token found!');
       }
+    } else {
+      console.log('⚠️ [ChatContext] No user, skipping WebSocket connection');
     }
 
     return () => {
       if (user && user.id) {
-        // Send offline presence before disconnect
+        console.log('🔌 [ChatContext] Cleanup - Disconnecting WebSocket');
         chatWebSocketService.sendPresence(user.id, false, 'offline');
         chatWebSocketService.disconnect();
       }
@@ -60,46 +72,89 @@ export const ChatProvider = ({ children }) => {
   useEffect(() => {
     // Message handler - Nhận tin nhắn mới
     messageHandlerRef.current = (message) => {
-      // Add message to current conversation
-      if (currentConversation && message.conversationId === currentConversation.id) {
+      const isCurrentConversation = currentConversation?.id === message.conversationId;
+      const isOwnMessage = message.senderId === user?.id;
+      
+      console.log('🔔 [ChatContext] Received NEW message via WebSocket:', {
+        messageId: message.id,
+        conversationId: message.conversationId,
+        currentConversationId: currentConversation?.id,
+        isCurrentConversation,
+        isOwnMessage,
+        'message.senderId': message.senderId,
+        'user.id': user?.id,
+        'senderId === user.id': message.senderId === user?.id,
+        content: message.content
+      });
+      
+      // 1. Nếu là conversation đang mở → Add vào messages
+      if (isCurrentConversation) {
         setMessages(prev => {
-          // Check duplicate
+          // Check duplicate by ID
           if (prev.some(m => m.id === message.id)) {
+            console.log('⚠️ [ChatContext] Duplicate message (same ID), skipping');
             return prev;
           }
+          
+          // ⭐ Replace optimistic message nếu có (cùng content + senderId)
+          const optimisticIndex = prev.findIndex(m => 
+            m.id.startsWith('temp-') && 
+            m.content === message.content && 
+            m.senderId === message.senderId
+          );
+          
+          if (optimisticIndex !== -1) {
+            console.log('✅ [ChatContext] Replacing optimistic message with real message');
+            const newMessages = [...prev];
+            newMessages[optimisticIndex] = message;
+            return newMessages;
+          }
+          
+          console.log('✅ [ChatContext] Adding new message to current conversation');
           return [...prev, message];
         });
         
-        // Auto mark as read
-        chatWebSocketService.markAsRead(null, message.conversationId);
+        // Auto mark as read (chỉ mark nếu KHÔNG phải tin của mình)
+        if (!isOwnMessage) {
+          chatWebSocketService.markAsRead(null, message.conversationId);
+        }
       }
       
-      // Update conversation list (move to top + update last message)
+      // 2. Update conversation list (sidebar) - LUÔN LUÔN update
       setConversations(prev => {
         const updated = prev.map(conv => {
           if (conv.id === message.conversationId) {
+            // Tăng unread count nếu:
+            // - Không phải conversation đang mở
+            // - Không phải tin của chính mình
+            const shouldIncreaseUnread = !isCurrentConversation && !isOwnMessage;
+            
             return {
               ...conv,
               lastMessage: message.content,
               lastMessageTime: message.sentAt,
-              unreadCount: currentConversation?.id === message.conversationId 
-                ? 0 
-                : (conv.unreadCount || 0) + 1
+              lastMessageSenderId: message.senderId, // ⭐ Lưu senderId để hiển thị "Bạn: "
+              unreadCount: shouldIncreaseUnread 
+                ? (conv.unreadCount || 0) + 1 
+                : conv.unreadCount || 0
             };
           }
           return conv;
         });
         
-        // Sort by last message time
-        return updated.sort((a, b) => 
-          new Date(b.lastMessageTime) - new Date(a.lastMessageTime)
+        // Sort by last message time (conversation mới nhất lên trên)
+        const sorted = updated.sort((a, b) => 
+          new Date(b.lastMessageTime || 0) - new Date(a.lastMessageTime || 0)
         );
+        
+        // 3. Update global unread count (badge icon chat)
+        // ⭐ ĐẾM SỐ CONVERSATIONS có tin chưa đọc, không phải tổng số tin
+        const unreadConversationsCount = sorted.filter(conv => conv.unreadCount > 0).length;
+        console.log('📬 [ChatContext] Updating global unread count:', unreadConversationsCount);
+        setUnreadCount(unreadConversationsCount);
+        
+        return sorted;
       });
-      
-      // Update unread count
-      if (currentConversation?.id !== message.conversationId) {
-        setUnreadCount(prev => prev + 1);
-      }
     };
     
     // ✅ READ Receipt handler - Cập nhật status khi người khác đọc
@@ -143,8 +198,8 @@ export const ChatProvider = ({ children }) => {
     chatWebSocketService.onTyping(typingHandlerRef.current);
     chatWebSocketService.onConnectionChange(connectionHandlerRef.current);
     
-    // ✅ TODO: Register READ receipt handler khi backend implement
-    // chatWebSocketService.onReadReceipt(readReceiptHandler);
+    // ✅ Register READ receipt handler
+    chatWebSocketService.onReadReceipt(readReceiptHandler);
 
     return () => {
       // Cleanup handlers
@@ -157,6 +212,8 @@ export const ChatProvider = ({ children }) => {
       if (connectionHandlerRef.current) {
         chatWebSocketService.offConnectionChange(connectionHandlerRef.current);
       }
+      // Cleanup READ receipt handler
+      chatWebSocketService.offReadReceipt(readReceiptHandler);
     };
   }, [user, currentConversation]);
 
@@ -170,7 +227,13 @@ export const ChatProvider = ({ children }) => {
     try {
       const result = await chatService.getConversations(page, size);
       if (result.success) {
-        setConversations(result.data.content || []);
+        const convs = result.data.content || [];
+        setConversations(convs);
+        
+        // ⭐ Tính số conversations có tin chưa đọc
+        const unreadConversationsCount = convs.filter(conv => conv.unreadCount > 0).length;
+        setUnreadCount(unreadConversationsCount);
+        console.log('📬 [ChatContext] Loaded conversations, unread count:', unreadConversationsCount);
       } else {
         console.error('❌ Failed to load conversations:', result.error);
       }
@@ -224,13 +287,36 @@ export const ChatProvider = ({ children }) => {
   const selectConversation = useCallback(async (conversation) => {
     setCurrentConversation(conversation);
     setMessages([]);
+    
+    // ⭐ Nếu conversation = null → Chỉ clear, không load gì cả
+    if (!conversation) {
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
 
     try {
       // Load messages
       const result = await chatService.getMessages(conversation.id, 0, 50);
       if (result.success) {
-        setMessages(result.data.content?.reverse() || []);
+        const loadedMessages = result.data.content?.reverse() || [];
+        setMessages(loadedMessages);
+        
+        // ⭐ Update sidebar với tin nhắn mới nhất
+        if (loadedMessages.length > 0) {
+          const lastMsg = loadedMessages[loadedMessages.length - 1];
+          setConversations(prev => prev.map(conv => 
+            conv.id === conversation.id 
+              ? {
+                  ...conv,
+                  lastMessage: lastMsg.content,
+                  lastMessageTime: lastMsg.sentAt,
+                  lastMessageSenderId: lastMsg.senderId
+                }
+              : conv
+          ));
+        }
       }
 
       // Mark as read
@@ -239,14 +325,23 @@ export const ChatProvider = ({ children }) => {
       // Subscribe to typing indicator
       chatWebSocketService.subscribeToTyping(conversation.id);
       
-      // Update unread count
-      setConversations(prev => 
-        prev.map(conv => 
+      // Subscribe to conversation topic (broadcast) ⭐ MỚI
+      chatWebSocketService.subscribeToConversation(conversation.id);
+      
+      // Update unread count trong conversation và global badge
+      setConversations(prev => {
+        const updated = prev.map(conv => 
           conv.id === conversation.id 
             ? { ...conv, unreadCount: 0 }
             : conv
-        )
-      );
+        );
+        
+        // ⭐ Cập nhật global badge = số conversations còn chưa đọc
+        const unreadConversationsCount = updated.filter(conv => conv.unreadCount > 0).length;
+        setUnreadCount(unreadConversationsCount);
+        
+        return updated;
+      });
       
       loadUnreadCount();
     } catch (error) {

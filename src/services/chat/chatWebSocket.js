@@ -19,6 +19,7 @@ class ChatWebSocketService {
     this.typingHandlers = [];
     this.presenceHandlers = [];
     this.connectionHandlers = [];
+    this.readReceiptHandlers = []; // ✅ Handler cho READ receipt
   }
 
   /**
@@ -30,53 +31,52 @@ class ChatWebSocketService {
       return;
     }
 
-    // Sử dụng URL production
     const wsUrl = 'https://e-commerce-raq1.onrender.com/ws/chat';
     
-    // ✅ FIX: Dùng factory function để hỗ trợ auto-reconnect
-    this.socket = new SockJS(wsUrl);
-    this.stompClient = Stomp.over(() => this.socket);
+    try {
+      this.socket = new SockJS(wsUrl);
+      this.stompClient = Stomp.over(() => this.socket);
 
-    // Disable debug logs in production
-    this.stompClient.debug = (str) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔵 STOMP:', str);
-      }
-    };
+      // Disable debug logs
+      this.stompClient.debug = () => {};
 
-    // Connect với JWT token trong header
-    this.stompClient.connect(
-      { Authorization: `Bearer ${jwtToken}` },
-      () => this.onConnected(),
-      (error) => this.onError(error)
-    );
+      // Connect với JWT token trong header
+      this.stompClient.connect(
+        { Authorization: `Bearer ${jwtToken}` },
+        () => this.onConnected(),
+        (error) => this.onError(error)
+      );
 
-    // Handle socket close
-    this.socket.onclose = () => {
-      console.log('🔴 WebSocket disconnected');
-      this.connected = false;
-      this.notifyConnectionHandlers(false);
-      this.attemptReconnect(jwtToken);
-    };
+      // Handle socket close
+      this.socket.onclose = () => {
+        console.log('🔴 [WebSocket] Connection closed');
+        this.connected = false;
+        this.notifyConnectionHandlers(false);
+        this.attemptReconnect(jwtToken);
+      };
+    } catch (error) {
+      console.error('❌ [WebSocket] Error during connect:', error);
+    }
   }
 
   /**
    * Callback khi kết nối thành công
    */
   onConnected() {
+    console.log('✅ [WebSocket] Connected!');
     this.connected = true;
     this.reconnectAttempts = 0;
     this.notifyConnectionHandlers(true);
 
-    // Subscribe to private message queue
     this.subscribeToMessages();
+    this.subscribeToReadReceipts();
   }
 
   /**
    * Callback khi có lỗi kết nối
    */
   onError(error) {
-    console.error('❌ WebSocket connection error:', error);
+    console.error('❌ [WebSocket] Error:', error.message || error);
     this.connected = false;
     this.notifyConnectionHandlers(false);
   }
@@ -109,6 +109,7 @@ class ChatWebSocketService {
     const subscription = this.stompClient.subscribe('/user/queue/messages', (message) => {
       try {
         const chatMessage = JSON.parse(message.body);
+        console.log('📨 [WebSocket] Received message:', chatMessage);
         this.notifyMessageHandlers(chatMessage);
       } catch (error) {
         console.error('❌ Error parsing message:', error);
@@ -116,6 +117,61 @@ class ChatWebSocketService {
     });
 
     this.subscriptions.set('messages', subscription);
+  }
+  
+  /**
+   * Subscribe to conversation topic (broadcast)
+   */
+  subscribeToConversation(conversationId) {
+    if (!this.stompClient || !this.connected) {
+      console.error('❌ Cannot subscribe to conversation: WebSocket not connected');
+      return;
+    }
+
+    // Unsubscribe nếu đã subscribe conversation cũ
+    const oldSub = this.subscriptions.get('conversation-topic');
+    if (oldSub) {
+      oldSub.unsubscribe();
+    }
+
+    // Subscribe conversation topic mới
+    const subscription = this.stompClient.subscribe(
+      `/topic/conversation/${conversationId}`,
+      (message) => {
+        try {
+          const chatMessage = JSON.parse(message.body);
+          console.log('📢 [WebSocket] Received from topic:', chatMessage);
+          this.notifyMessageHandlers(chatMessage);
+        } catch (error) {
+          console.error('❌ Error parsing message from topic:', error);
+        }
+      }
+    );
+
+    this.subscriptions.set('conversation-topic', subscription);
+    console.log(`✅ Subscribed to /topic/conversation/${conversationId}`);
+  }
+
+  /**
+   * Subscribe to READ receipts
+   */
+  subscribeToReadReceipts() {
+    if (!this.stompClient || !this.connected) {
+      console.error('❌ Cannot subscribe: WebSocket not connected');
+      return;
+    }
+
+    const subscription = this.stompClient.subscribe('/user/queue/read-receipts', (message) => {
+      try {
+        const readReceipt = JSON.parse(message.body);
+        console.log('✅ [WebSocket] Received READ receipt:', readReceipt);
+        this.notifyReadReceiptHandlers(readReceipt);
+      } catch (error) {
+        console.error('❌ Error parsing READ receipt:', error);
+      }
+    });
+
+    this.subscriptions.set('read-receipts', subscription);
   }
 
   /**
@@ -383,6 +439,36 @@ class ChatWebSocketService {
         handler(connected);
       } catch (error) {
         console.error('❌ Error in connection handler:', error);
+      }
+    });
+  }
+  
+  /**
+   * Đăng ký handler cho READ receipt
+   * @param {Function} handler - (readReceipt) => void
+   */
+  onReadReceipt(handler) {
+    this.readReceiptHandlers.push(handler);
+  }
+
+  /**
+   * Hủy đăng ký READ receipt handler
+   * @param {Function} handler
+   */
+  offReadReceipt(handler) {
+    this.readReceiptHandlers = this.readReceiptHandlers.filter(h => h !== handler);
+  }
+
+  /**
+   * Notify all READ receipt handlers
+   * @param {Object} readReceipt
+   */
+  notifyReadReceiptHandlers(readReceipt) {
+    this.readReceiptHandlers.forEach(handler => {
+      try {
+        handler(readReceipt);
+      } catch (error) {
+        console.error('❌ Error in READ receipt handler:', error);
       }
     });
   }

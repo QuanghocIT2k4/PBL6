@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useChat } from '../../context/ChatContext';
 import { useAuth } from '../../context/AuthContext';
 import MainLayout from '../../layouts/MainLayout';
@@ -30,6 +30,13 @@ const ChatPage = () => {
   } = useChat();
 
   const [showSidebar, setShowSidebar] = useState(true);
+
+  // ⭐ Clear currentConversation khi unmount (navigate ra khỏi chat page)
+  useEffect(() => {
+    return () => {
+      selectConversation(null);
+    };
+  }, []);
 
   const handleSelectConversation = (conversation) => {
     selectConversation(conversation);

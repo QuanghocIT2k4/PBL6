@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import StoreLayout from '../../layouts/StoreLayout';
 import StoreStatusGuard from '../../components/store/StoreStatusGuard';
 import { useStoreContext } from '../../context/StoreContext';
@@ -33,6 +33,13 @@ const StoreChats = () => {
   } = useChat();
 
   const [showSidebar, setShowSidebar] = useState(true);
+
+  // ⭐ Clear currentConversation khi unmount (navigate ra khỏi chat page)
+  useEffect(() => {
+    return () => {
+      selectConversation(null);
+    };
+  }, []);
 
   // ✅ Filter conversations: Chỉ lấy conversations của store này
   const storeConversations = conversations.filter(
@@ -111,6 +118,7 @@ const StoreChats = () => {
                     conversations={storeConversations}
                     currentConversation={currentConversation}
                     onSelectConversation={handleSelectConversation}
+                    isStorePage={true}
                     currentUserId={user?.id}
                     loading={loading && !currentConversation}
                   />
@@ -137,7 +145,7 @@ const StoreChats = () => {
                         </button>
 
                         <img
-                          src={getConversationDisplayAvatar(currentConversation, user?.id)}
+                          src={getConversationDisplayAvatar(currentConversation, user?.id, true)}
                           alt="Avatar"
                           className="w-10 h-10 rounded-full"
                           onError={(e) => { e.target.src = '/default-avatar.png'; }}
@@ -145,7 +153,7 @@ const StoreChats = () => {
                         
                         <div>
                           <h3 className="font-semibold text-gray-900">
-                            {getConversationDisplayName(currentConversation, user?.id)}
+                            {getConversationDisplayName(currentConversation, user?.id, true)}
                           </h3>
                           {isTyping && typingUsers.size > 0 && (
                             <p className="text-sm text-blue-500">Đang nhập...</p>

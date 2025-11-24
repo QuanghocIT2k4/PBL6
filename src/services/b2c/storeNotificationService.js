@@ -19,8 +19,6 @@ export const getStoreNotifications = async (storeId, params = {}) => {
       isRead = null, // true/false/null (all)
     } = params;
 
-    console.log('📥 Fetching store notifications:', { storeId, page, size, isRead });
-
     const response = await api.get(`/api/v1/b2c/stores/${storeId}/notifications`, {
       params: {
         page,
@@ -28,8 +26,6 @@ export const getStoreNotifications = async (storeId, params = {}) => {
         ...(isRead !== null && { isRead }),
       },
     });
-
-    console.log('✅ Store notifications:', response.data);
 
     return {
       success: true,
