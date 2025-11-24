@@ -59,8 +59,6 @@ const ProductInfo = ({ product }) => {
       
       if (!product || isAdding || addingRef.current) return; // Tránh double-click
       
-      console.log('handleAddToCart called - should only be called once');
-      
       addingRef.current = true;
       setIsAdding(true);
       try {

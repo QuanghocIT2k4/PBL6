@@ -25,12 +25,12 @@ const SearchResults = () => {
   };
 
   const handleProductClick = (product) => {
-    // ✅ ProductVariant có productId hoặc product.id
-    const productId = product.productId || product.product?.id;
-    if (productId) {
-      navigate(`/product/${productId}`);
+    // Backend đã sửa: search trả về productVariantId (variant ID để navigate)
+    const variantId = product.id || product.productVariantId || product.productId || product.product?.id;
+    if (variantId) {
+      navigate(`/product/${variantId}`);
     } else {
-      console.error('Cannot navigate: product ID not found', product);
+      console.error('Cannot navigate: variant ID not found', product);
     }
   };
 

@@ -11,8 +11,10 @@ const CartItem = ({ item }) => {
   const [isRemoving, setIsRemoving] = useState(false);
 
   const handleGoDetail = () => {
-    if (item?.product?.id != null) {
-      navigate(`/product/${item.product.id}`);
+    // Backend đã sửa: cart trả về productVariantId
+    const variantId = item?.productVariantId || item?.product?.id;
+    if (variantId != null) {
+      navigate(`/product/${variantId}`);
     }
   };
 

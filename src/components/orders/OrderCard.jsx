@@ -1,6 +1,7 @@
 import { memo, useState, useEffect } from 'react';
 import useSWR from 'swr';
 import ReviewForm from '../reviews/ReviewForm';
+import ChatButton from '../chat/ChatButton';
 import { getOrderById, getOrderStatusBadge, getPaymentMethodLabel, canCancelOrder, canReviewOrder } from '../../services/buyer/orderService';
 import { useToast } from '../../context/ToastContext';
 
@@ -65,9 +66,6 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
 
   // Handle different store name formats from backend
   const getStoreName = () => {
-    // Debug: Log order structure to see what backend returns
-    console.log('🔍 Order data:', { storeName, store, shop, orderId: id });
-    
     if (storeName) return storeName;
     if (store?.storeName) return store.storeName;
     if (store?.name) return store.name;
@@ -151,12 +149,13 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
               </svg>
               <span className="font-semibold text-gray-900">{displayStoreName}</span>
             </div>
-            <button className="text-sm text-blue-600 hover:underline font-medium flex items-center gap-1">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-              </svg>
+            <ChatButton
+              storeId={store?.id || shop?.id}
+              storeName={displayStoreName}
+              className="text-sm text-blue-600 hover:underline font-medium flex items-center gap-1"
+            >
               Chat
-            </button>
+            </ChatButton>
           </div>
         </div>
 
@@ -195,11 +194,11 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
                   {/* Product Info - Compact */}
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium text-gray-900 text-sm mb-1 line-clamp-2">
-                      {item.productName || item.name}
+                      {item.variantName || item.productName || item.name || 'Sản phẩm'}
                     </h3>
-                    {item.variantName && (
+                    {item.variantName && item.productName && item.variantName !== item.productName && (
                       <p className="text-xs text-gray-500 mb-1">
-                        {item.variantName}
+                        {item.productName}
                       </p>
                     )}
                     <div className="flex items-center gap-3 text-xs text-gray-600">
@@ -381,20 +380,6 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
               
               const total = calculatedTotal;
 
-              // Debug log
-              console.log('💰 [OrderCard] Order ID:', order.id);
-              console.log('💰 [OrderCard] Subtotal:', subtotal);
-              console.log('💰 [OrderCard] Shipping:', shippingFee);
-              console.log('💰 [OrderCard] Service Fee:', serviceFee);
-              console.log('💰 [OrderCard] Discount:', discount);
-              console.log('💰 [OrderCard] Promotion:', promotionDiscount);
-              console.log('💰 [OrderCard] Voucher:', voucherDiscount);
-              console.log('💰 [OrderCard] Coupon:', couponDiscount);
-              console.log('💰 [OrderCard] Total from backend:', total);
-              console.log('💰 [OrderCard] Calculated:', subtotal + shippingFee + serviceFee - discount - promotionDiscount - voucherDiscount - couponDiscount);
-              console.log('💰 [OrderCard] Full order object:', order);
-              console.log('💰 [OrderCard] Full orderDetail object:', orderDetail);
-
               // Tổng tất cả giảm giá
               const totalDiscount = discount + promotionDiscount + voucherDiscount + couponDiscount;
 
@@ -464,7 +449,7 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
               <div className="text-white">
                 <h3 className="text-xl font-black">✍️ Đánh giá sản phẩm</h3>
                 <p className="text-sm text-blue-100 mt-1">
-                  {selectedItem.productName || selectedItem.name}
+                  {selectedItem.variantName || selectedItem.productName || selectedItem.name}
                 </p>
               </div>
               <button

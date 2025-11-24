@@ -13,22 +13,27 @@ const MultiProductReview = ({ items, orderId, onComplete, onCancel }) => {
   const currentItem = items[currentItemIndex];
   const isLastItem = currentItemIndex === items.length - 1;
   const totalItems = items.length;
+  
+  // Helper: Get variant ID from order item (backend đã đổi productId → productVariantId)
+  const getItemKey = (item) => item.productVariantId || item.productId || item.id;
 
   const handleRatingChange = (rating) => {
+    const itemKey = getItemKey(currentItem);
     setReviews(prev => ({
       ...prev,
-      [currentItem.productId]: {
-        ...prev[currentItem.productId],
+      [itemKey]: {
+        ...prev[itemKey],
         rating
       }
     }));
   };
 
   const handleCommentChange = (comment) => {
+    const itemKey = getItemKey(currentItem);
     setReviews(prev => ({
       ...prev,
-      [currentItem.productId]: {
-        ...prev[currentItem.productId],
+      [itemKey]: {
+        ...prev[itemKey],
         comment
       }
     }));
@@ -47,11 +52,12 @@ const MultiProductReview = ({ items, orderId, onComplete, onCancel }) => {
       });
 
       Promise.all(imagePromises).then(images => {
+        const itemKey = getItemKey(currentItem);
         setReviews(prev => ({
           ...prev,
-          [currentItem.productId]: {
-            ...prev[currentItem.productId],
-            images: [...(prev[currentItem.productId]?.images || []), ...images]
+          [itemKey]: {
+            ...prev[itemKey],
+            images: [...(prev[itemKey]?.images || []), ...images]
           }
         }));
       });
@@ -59,17 +65,19 @@ const MultiProductReview = ({ items, orderId, onComplete, onCancel }) => {
   };
 
   const removeImage = (index) => {
+    const itemKey = getItemKey(currentItem);
     setReviews(prev => ({
       ...prev,
-      [currentItem.productId]: {
-        ...prev[currentItem.productId],
-        images: prev[currentItem.productId]?.images?.filter((_, i) => i !== index) || []
+      [itemKey]: {
+        ...prev[itemKey],
+        images: prev[itemKey]?.images?.filter((_, i) => i !== index) || []
       }
     }));
   };
 
   const handleNext = () => {
-    const currentReview = reviews[currentItem.productId];
+    const itemKey = getItemKey(currentItem);
+    const currentReview = reviews[itemKey];
     if (!currentReview?.rating) {
       error('Vui lòng chọn số sao đánh giá');
       return;
@@ -119,7 +127,8 @@ const MultiProductReview = ({ items, orderId, onComplete, onCancel }) => {
   };
 
   const renderStars = () => {
-    const currentRating = reviews[currentItem.productId]?.rating || 0;
+    const itemKey = getItemKey(currentItem);
+    const currentRating = reviews[itemKey]?.rating || 0;
     
     return (
       <div className="flex items-center space-x-1">
@@ -213,7 +222,7 @@ const MultiProductReview = ({ items, orderId, onComplete, onCancel }) => {
                 Bình luận (tùy chọn)
               </label>
               <textarea
-                value={reviews[currentItem.productId]?.comment || ''}
+                value={reviews[getItemKey(currentItem)]?.comment || ''}
                 onChange={(e) => handleCommentChange(e.target.value)}
                 placeholder="Chia sẻ trải nghiệm của bạn về sản phẩm này... (không bắt buộc)"
                 rows={4}
@@ -234,14 +243,14 @@ const MultiProductReview = ({ items, orderId, onComplete, onCancel }) => {
               <div className="mb-3">
                 <input
                   type="file"
-                  id={`image-upload-${currentItem.productId}`}
+                  id={`image-upload-${getItemKey(currentItem)}`}
                   accept="image/*"
                   multiple
                   onChange={handleImageUpload}
                   className="hidden"
                 />
                 <label
-                  htmlFor={`image-upload-${currentItem.productId}`}
+                  htmlFor={`image-upload-${getItemKey(currentItem)}`}
                   className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 cursor-pointer transition-colors"
                 >
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -255,9 +264,9 @@ const MultiProductReview = ({ items, orderId, onComplete, onCancel }) => {
               </div>
 
               {/* Image Preview */}
-              {reviews[currentItem.productId]?.images && reviews[currentItem.productId].images.length > 0 && (
+              {reviews[getItemKey(currentItem)]?.images && reviews[getItemKey(currentItem)].images.length > 0 && (
                 <div className="grid grid-cols-3 gap-2">
-                  {reviews[currentItem.productId].images.map((image, index) => (
+                  {reviews[getItemKey(currentItem)].images.map((image, index) => (
                     <div key={index} className="relative group">
                       <img
                         src={image}

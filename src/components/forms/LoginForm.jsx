@@ -5,13 +5,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '../../context/AuthContext';
 import { login as loginService } from '../../services/common/authService';
+import { useToast } from '../../context/ToastContext';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 
 const LoginForm = ({ onSwitchToSignUp, onSwitchToForgotPassword }) => {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [generalError, setGeneralError] = useState('');
+  const { showToast } = useToast();
 
   const loginSchema = z.object({
     email: z.string({ required_error: 'Email là bắt buộc' })
@@ -34,12 +35,11 @@ const LoginForm = ({ onSwitchToSignUp, onSwitchToForgotPassword }) => {
   });
 
   const onSubmit = async (data) => {
-    setGeneralError('');
-
     try {
       const result = await loginService({ email: data.email, password: data.password });
 
       if (result.success) {
+        showToast('Đăng nhập thành công!', 'success');
         login(result.data.user);
         await new Promise(resolve => setTimeout(resolve, 100));
         const userRoles = result.data.user.roles || [];
@@ -50,12 +50,12 @@ const LoginForm = ({ onSwitchToSignUp, onSwitchToForgotPassword }) => {
           window.location.href = '/';
         }
       } else if (result.error) {
-        setGeneralError(result.error);
+        showToast(result.error, 'error');
       } else {
-        setGeneralError('Đăng nhập thất bại');
+        showToast('Đăng nhập thất bại', 'error');
       }
     } catch (error) {
-      setGeneralError(error.message || 'Có lỗi xảy ra khi đăng nhập');
+      showToast(error.message || 'Có lỗi xảy ra khi đăng nhập', 'error');
     }
   };
 
@@ -80,13 +80,6 @@ const LoginForm = ({ onSwitchToSignUp, onSwitchToForgotPassword }) => {
         </div>
 
         <div className="bg-white py-8 px-4 shadow rounded-lg sm:px-10">
-          {/* Error Message */}
-          {generalError && (
-            <div className="mb-4 bg-red-50 border border-red-300 text-red-800 px-4 py-3 rounded-md text-sm">
-              {generalError}
-            </div>
-          )}
-
           {/* Form */}
           <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
             <Input

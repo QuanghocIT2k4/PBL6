@@ -29,8 +29,6 @@ export const getMyOrders = async (params = {}) => {
     // ✅ Backend expects 0-based page index (giống Spring Data JPA mặc định)
     const pageParam = Number.isFinite(Number(page)) ? Number(page) : 0;
 
-    console.log('📦 Fetching orders with params:', { page: pageParam, size, sortBy, sortDir, status });
-
     const response = await api.get('/api/v1/buyer/orders', {
       params: {
         page: pageParam,
@@ -40,9 +38,6 @@ export const getMyOrders = async (params = {}) => {
         ...(status && { status }),
       },
     });
-
-    console.log('📦 getMyOrders response:', response.data);
-    console.log('📦 Total orders:', response.data?.data?.totalElements || response.data?.totalElements || 'unknown');
 
     return {
       success: true,

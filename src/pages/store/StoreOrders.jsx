@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 import StoreLayout from '../../layouts/StoreLayout';
 import { useStoreContext } from '../../context/StoreContext';
@@ -11,6 +11,7 @@ import { useToast } from '../../context/ToastContext';
 import { confirmAction } from '../../utils/sweetalert';
 
 const StoreOrders = () => {
+  const navigate = useNavigate();
   const { currentStore, loading: storeLoading } = useStoreContext();
   const { success, error: showError } = useToast();
   const [statusFilter, setStatusFilter] = useState(null);
@@ -350,7 +351,7 @@ const StoreOrders = () => {
               </div>
             </div>
           </div>
-              
+
           {/* Filters */}
           <div className="bg-gradient-to-r from-white to-gray-50 rounded-2xl shadow-lg border border-gray-200 p-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -471,34 +472,30 @@ const StoreOrders = () => {
                     </div>
 
                     {/* Footer Actions */}
-                    <div className="px-4 pb-4 flex gap-2 justify-end">
+                    <div className="px-4 pb-4 flex gap-2">
                       <button
-                        onClick={async () => {
-                          setLoadingDetail(true);
-                          const result = await getStoreOrderById(order.id, currentStore.id);
-                          if (result.success) {
-                            setSelectedOrder(result.data);
-                          } else {
-                            showError(result.error || 'Không thể tải chi tiết đơn hàng');
-                          }
-                          setLoadingDetail(false);
-                        }}
-                        disabled={loadingDetail}
-                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
+                        onClick={() => navigate(`/store-dashboard/orders/${order.id}`)}
+                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
                       >
-                        {loadingDetail ? (
-                          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                        ) : (
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                        )}
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
                         Chi tiết
                       </button>
+                      
+                      {/* Nút Xem vận đơn - chỉ hiển thị khi đã xác nhận */}
+                      {(order.status === 'CONFIRMED' || order.status === 'SHIPPING' || order.status === 'DELIVERED') && (
+                        <button
+                          onClick={() => navigate('/store-dashboard/shipments')}
+                          className="w-10 h-10 flex items-center justify-center bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 transition-colors"
+                          title="Xem vận đơn"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
+                          </svg>
+                        </button>
+                      )}
 
                       {order.status === 'PENDING' && (
                         <button

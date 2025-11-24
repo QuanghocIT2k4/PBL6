@@ -57,21 +57,12 @@ const StoreWallet = () => {
 
   // ✅ Check store status - redirect nếu không approved
   useEffect(() => {
-    console.log('🔍 [Wallet] Store status check:', {
-      storeLoading,
-      storeInfo,
-      status: storeInfo?.status,
-      storeId,
-    });
     
     // Chỉ check khi đã load xong VÀ có storeInfo
     if (!storeLoading && storeInfo) {
       if (storeInfo.status && storeInfo.status !== 'APPROVED') {
-        console.warn('⚠️ [Wallet] Store not approved:', storeInfo.status);
         showError('Cửa hàng chưa được duyệt. Không thể truy cập ví.');
         navigate(`/store-dashboard/${storeId}`);
-      } else {
-        console.log('✅ [Wallet] Store approved, access granted');
       }
     }
   }, [storeInfo, storeLoading, storeId, navigate, showError]);
@@ -134,8 +125,6 @@ const StoreWallet = () => {
         bankAccountName: withdrawalForm.bankAccountName,
         note: withdrawalForm.note,
       });
-      
-      console.log('💰 Withdrawal request result:', result);
       
       if (result.success) {
         success('Tạo yêu cầu rút tiền thành công! Chờ admin duyệt.');

@@ -1,6 +1,16 @@
-📊 TỔNG HỢP CÁC API NHÓM USER ĐÃ HOÀN THÀNH
-Dựa trên Swagger API Specification (147 APIs total)
-✅ ĐÃ IMPLEMENT: 47 APIs cho USER features (đã validate với Swagger spec)
+# 👤 TỔNG HỢP CÁC API NHÓM USER (BUYER)
+
+**Dựa trên Swagger API Specification**  
+**Cập nhật:** 22/11/2025  
+**Role:** BUYER (Người mua hàng)
+
+---
+
+## 📊 TỔNG QUAN
+
+- ✅ **Public APIs**: 27 APIs (không cần đăng nhập)
+- ✅ **Buyer APIs**: 30 APIs (cần đăng nhập với role BUYER)
+- **TOTAL**: 57 APIs (100% implemented)
 
 
 
@@ -142,7 +152,7 @@ Body: {
 
 ## 📊 TỔNG KẾT
 
-**TOTAL APIs FOR BUYERS/USERS: 50 APIs** (+3 APIs mới)
+**TOTAL APIs FOR BUYERS/USERS: 57 APIs**
 
 **PUBLIC APIs (không cần auth): 27 APIs**
 - Product Variant Browsing: 7 APIs ✅

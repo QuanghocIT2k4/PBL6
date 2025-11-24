@@ -36,19 +36,12 @@ import api from '../common/api';
  */
 export const createPaymentUrl = async (paymentData) => {
   try {
-    console.log('📤 Creating VNPay payment URL:', paymentData);
-    
     const response = await api.post('/api/v1/buyer/payments/create_payment_url', {
       amount: paymentData.amount,
       orderInfo: paymentData.orderInfo || `Order #${Date.now()}`, // Order information
       bankCode: paymentData.bankCode || '', // Optional
       language: paymentData.language || 'vn', // Default Vietnamese
     });
-    
-    console.log('✅ Full response:', response);
-    console.log('✅ Response data:', response.data);
-    console.log('✅ Response data type:', typeof response.data);
-    console.log('✅ Response data keys:', Object.keys(response.data || {}));
     
     // Parse response - backend có thể trả về nhiều format
     let paymentUrl = null;
@@ -64,8 +57,6 @@ export const createPaymentUrl = async (paymentData) => {
       paymentUrl = response.data.paymentUrl;
     }
     
-    console.log('✅ Extracted payment URL:', paymentUrl);
-    
     if (!paymentUrl) {
       console.error('❌ No payment URL found in response:', response.data);
       return {
@@ -78,15 +69,7 @@ export const createPaymentUrl = async (paymentData) => {
     try {
       const url = new URL(paymentUrl);
       const params = Object.fromEntries(url.searchParams);
-      console.log('🔍 VNPay URL params:', params);
-      console.log('🔍 vnp_Amount:', params.vnp_Amount);
-      console.log('🔍 vnp_TxnRef:', params.vnp_TxnRef);
-      console.log('🔍 vnp_OrderInfo:', params.vnp_OrderInfo);
-      console.log('🔍 vnp_ReturnUrl:', params.vnp_ReturnUrl);
-      console.log('🔍 vnp_CreateDate:', params.vnp_CreateDate);
-      console.log('🔍 vnp_ExpireDate:', params.vnp_ExpireDate);
     } catch (e) {
-      console.warn('⚠️ Cannot parse payment URL:', e);
     }
     
     return {
@@ -131,15 +114,11 @@ export const createPaymentUrl = async (paymentData) => {
  */
 export const queryPayment = async (queryData) => {
   try {
-    console.log('📤 Querying payment status:', queryData);
-    
     const response = await api.post('/api/v1/buyer/payments/query', {
       order_id: queryData.order_id,
       trans_date: queryData.trans_date,
       ip_address: queryData.ip_address || '',
     });
-    
-    console.log('✅ Payment query result:', response.data);
     
     return {
       success: true,
@@ -186,8 +165,6 @@ export const queryPayment = async (queryData) => {
  */
 export const refundPayment = async (refundData) => {
   try {
-    console.log('📤 Requesting payment refund:', refundData);
-    
     const response = await api.post('/api/v1/buyer/payments/refund', {
       transaction_type: refundData.transaction_type,
       order_id: refundData.order_id,
@@ -197,8 +174,6 @@ export const refundPayment = async (refundData) => {
       created_by: refundData.created_by,
       ip_address: refundData.ip_address || '',
     });
-    
-    console.log('✅ Refund request submitted:', response.data);
     
     return {
       success: true,

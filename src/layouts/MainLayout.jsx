@@ -1,13 +1,16 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import { useChat } from '../context/ChatContext';
 import Button from '../components/ui/Button';
-import SearchBar from '../components/search/SearchBar'; // ✅ PHẢI CÓ DÒNG NÀY
+import SearchBar from '../components/search/SearchBar';
+import NotificationContainer from '../components/notifications/NotificationContainer';
 
 const MainLayout = ({ children }) => {
   const navigate = useNavigate();
   const { user, logout, isAuthenticated } = useAuth();
   const { getTotalItems, cartItems } = useCart();
+  const { unreadCount } = useChat();
   const totalItems = getTotalItems();
   const distinctCount = cartItems.length;
 
@@ -171,14 +174,9 @@ const MainLayout = ({ children }) => {
               {/* Cart & Actions */}
               <div className="flex items-center space-x-4">
                 {/* Notifications */}
-                <button className="relative p-2 text-gray-600 hover:text-blue-600 transition-colors">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0H9m6 0a3 3 0 11-6 0"/>
-                  </svg>
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                    3
-                  </span>
-                </button>
+                {isAuthenticated && (
+                  <NotificationContainer userType="buyer" />
+                )}
 
                 {/* Orders - standalone orders page */}
                 <button className="relative p-2 text-gray-600 hover:text-blue-600 transition-colors" onClick={()=>navigate('/orders')}>
@@ -186,6 +184,28 @@ const MainLayout = ({ children }) => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                   </svg>
                 </button>
+
+                {/* Chat */}
+                {isAuthenticated && (
+                  <button 
+                    onClick={() => navigate('/chat')}
+                    className="relative p-2 text-gray-600 hover:text-blue-600 transition-colors group"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center animate-pulse">
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
+                    
+                    {/* Tooltip */}
+                    <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                      {unreadCount > 0 ? `${unreadCount} tin nhắn chưa đọc` : 'Chat'}
+                    </div>
+                  </button>
+                )}
 
                 {/* Cart */}
                 <button 

@@ -1,12 +1,20 @@
 import api from '../common/api';
 
 /**
- * ADMIN REVENUE SERVICE
- * APIs for managing platform service fees and revenue
+ * ADMIN REVENUE SERVICE - VER 1.0
+ * APIs for managing platform revenue
  * 
- * Service Fee: 5000đ per order
- * - PENDING: Order chưa giao (chưa thu phí)
- * - COLLECTED: Order đã giao (đã thu phí)
+ * Revenue Types:
+ * - SERVICE_FEE: Phí dịch vụ (5000đ/order) - Thu từ shop
+ * - PLATFORM_DISCOUNT_LOSS: Tiền lỗ giảm giá sàn - Sàn chịu
+ * 
+ * Net Revenue = SERVICE_FEE - PLATFORM_DISCOUNT_LOSS
+ * 
+ * Changes:
+ * - Removed: status field (PENDING/COLLECTED)
+ * - Renamed: serviceFees → amount
+ * - Added: revenueType filter
+ * - Added: order & shop info in response
  */
 
 /**
@@ -37,12 +45,12 @@ export const getRevenueStatistics = async () => {
 };
 
 /**
- * 2. GET PENDING SERVICE FEES 🟡
- * GET /api/v1/admin/revenues/pending
+ * 2. GET SERVICE FEES 💰
+ * GET /api/v1/admin/revenues/service-fees
  * 
- * Xem danh sách phí dịch vụ chưa thu (orders chưa giao)
+ * Xem danh sách phí dịch vụ (SERVICE_FEE)
  */
-export const getPendingRevenue = async (params = {}) => {
+export const getServiceFees = async (params = {}) => {
   try {
     const {
       page = 0,
@@ -51,34 +59,34 @@ export const getPendingRevenue = async (params = {}) => {
       sortDir = 'desc',
     } = params;
 
-    console.log('📥 Fetching pending revenues:', { page, size, sortBy, sortDir });
+    console.log('📥 Fetching service fees:', { page, size, sortBy, sortDir });
 
-    const response = await api.get('/api/v1/admin/revenues/pending', {
+    const response = await api.get('/api/v1/admin/revenues/service-fees', {
       params: { page, size, sortBy, sortDir },
     });
 
-    console.log('✅ Pending revenues:', response.data);
+    console.log('✅ Service fees:', response.data);
 
     return {
       success: true,
       data: response.data.data || response.data,
     };
   } catch (error) {
-    console.error('❌ Error fetching pending revenues:', error);
+    console.error('❌ Error fetching service fees:', error);
     return {
       success: false,
-      error: error.response?.data?.message || 'Không thể tải danh sách revenue chờ thu',
+      error: error.response?.data?.message || 'Không thể tải danh sách phí dịch vụ',
     };
   }
 };
 
 /**
- * 3. GET COLLECTED SERVICE FEES ✅
- * GET /api/v1/admin/revenues/collected
+ * 3. GET PLATFORM DISCOUNT LOSSES 📉
+ * GET /api/v1/admin/revenues/platform-discount-losses
  * 
- * Xem danh sách phí dịch vụ đã thu (orders đã giao)
+ * Xem danh sách tiền lỗ từ giảm giá sàn (PLATFORM_DISCOUNT_LOSS)
  */
-export const getCollectedRevenue = async (params = {}) => {
+export const getPlatformDiscountLosses = async (params = {}) => {
   try {
     const {
       page = 0,
@@ -87,23 +95,23 @@ export const getCollectedRevenue = async (params = {}) => {
       sortDir = 'desc',
     } = params;
 
-    console.log('📥 Fetching collected revenues:', { page, size, sortBy, sortDir });
+    console.log('📥 Fetching platform discount losses:', { page, size, sortBy, sortDir });
 
-    const response = await api.get('/api/v1/admin/revenues/collected', {
+    const response = await api.get('/api/v1/admin/revenues/platform-discount-losses', {
       params: { page, size, sortBy, sortDir },
     });
 
-    console.log('✅ Collected revenues:', response.data);
+    console.log('✅ Platform discount losses:', response.data);
 
     return {
       success: true,
       data: response.data.data || response.data,
     };
   } catch (error) {
-    console.error('❌ Error fetching collected revenues:', error);
+    console.error('❌ Error fetching platform discount losses:', error);
     return {
       success: false,
-      error: error.response?.data?.message || 'Không thể tải danh sách revenue đã thu',
+      error: error.response?.data?.message || 'Không thể tải danh sách tiền lỗ giảm giá',
     };
   }
 };
@@ -154,24 +162,28 @@ export const getRevenueByDateRange = async (params = {}) => {
  * 5. GET ALL REVENUES 🔍
  * GET /api/v1/admin/revenues
  * 
- * Xem tất cả phí dịch vụ, có thể lọc theo status
- * @param {string} status - Optional: 'PENDING' hoặc 'COLLECTED', null = tất cả
+ * Xem tất cả revenues, có thể lọc theo revenueType
+ * @param {string} revenueType - Optional: 'SERVICE_FEE' hoặc 'PLATFORM_DISCOUNT_LOSS', null = tất cả
  */
 export const getAllRevenues = async (params = {}) => {
   try {
     const {
       page = 0,
       size = 10,
-      status = null, // PENDING, COLLECTED, or null for all
+      revenueType = null, // SERVICE_FEE, PLATFORM_DISCOUNT_LOSS, or null for all
+      sortBy = 'createdAt',
+      sortDir = 'desc',
     } = params;
 
-    console.log('📥 Fetching all revenues:', { page, size, status });
+    console.log('📥 Fetching all revenues:', { page, size, revenueType });
 
     const response = await api.get('/api/v1/admin/revenues', {
       params: { 
         page, 
-        size, 
-        ...(status && { status }) 
+        size,
+        sortBy,
+        sortDir,
+        ...(revenueType && { revenueType }) 
       },
     });
 
@@ -193,6 +205,36 @@ export const getAllRevenues = async (params = {}) => {
 /**
  * HELPER FUNCTIONS
  */
+
+/**
+ * Get revenue type badge
+ */
+export const getRevenueTypeBadge = (revenueType) => {
+  const badges = {
+    SERVICE_FEE: {
+      text: 'Phí dịch vụ',
+      color: 'green',
+      bgColor: 'bg-green-100',
+      textColor: 'text-green-800',
+      icon: '💰',
+    },
+    PLATFORM_DISCOUNT_LOSS: {
+      text: 'Tiền lỗ giảm giá',
+      color: 'red',
+      bgColor: 'bg-red-100',
+      textColor: 'text-red-800',
+      icon: '📉',
+    },
+  };
+
+  return badges[revenueType] || {
+    text: revenueType,
+    color: 'gray',
+    bgColor: 'bg-gray-100',
+    textColor: 'text-gray-800',
+    icon: '📊',
+  };
+};
 
 /**
  * Format currency VND

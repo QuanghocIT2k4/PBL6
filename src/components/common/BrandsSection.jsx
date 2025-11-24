@@ -72,9 +72,7 @@ const BrandsSection = () => {
         // Giới hạn 18 brands (3 hàng x 6 cột)
         const limitedBrands = result.data.slice(0, 18);
         setBrands(limitedBrands);
-        console.log('✅ Loaded brands for HomePage:', limitedBrands);
       } else {
-        console.error('❌ Error loading brands:', result.error);
         // Fallback: dùng brands hardcoded
         setBrands([
           { name: 'Apple' }, { name: 'Samsung' }, { name: 'ASUS' },
@@ -98,8 +96,6 @@ const BrandsSection = () => {
   };
 
   const handleBrandClick = (brandName) => {
-    console.log('🏷️ Navigating to products with brand:', brandName);
-    
     // Map brand → category phù hợp nhất
     const brandToCategoryMap = {
       'Apple': 'smartphones',

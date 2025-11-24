@@ -49,8 +49,6 @@ const ProductComments = ({ productId }) => {
     if (!isAuthenticated) return;
     if (!window.confirm('Xóa bình luận này?')) return;
     
-    console.log('Deleting comment:', commentId, 'User ID:', user?.id);
-    
     const res = await commentService.deleteComment(productId, commentId, user?.id);
     if (res.success) {
       await load();

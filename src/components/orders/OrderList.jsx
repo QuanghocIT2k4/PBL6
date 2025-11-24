@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { getOrderCode } from '../../utils/displayCodeUtils';
 import useSWR from 'swr';
 import OrderCard from './OrderCard';
 import { getMyOrders, cancelOrder } from '../../services/buyer/orderService';
@@ -35,7 +38,7 @@ const OrderList = () => {
 
   // Handle cancel order
   const handleCancel = async (order) => {
-    const confirmed = await confirmCancelOrder(`#${order.orderNumber || order.id.slice(-8)}`);
+    const confirmed = await confirmCancelOrder(getOrderCode(order.id));
     if (!confirmed) return;
 
     const result = await cancelOrder(order.id);

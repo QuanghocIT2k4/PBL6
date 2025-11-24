@@ -16,6 +16,7 @@ import StoreChats from '../pages/store/StoreChats';
 import AddProductVariant from '../pages/store/AddProductVariant';
 import StoreManagement from '../pages/store/StoreManagement';
 import StoreWallet from '../pages/store/StoreWallet';
+import StoreShipments from '../pages/store/StoreShipments';
 
 const StoreRoutes = () => {
   return (
@@ -37,6 +38,7 @@ const StoreRoutes = () => {
         <Route path="/promotions" element={<StorePromotions />} />
         <Route path="/analytics" element={<StoreAnalytics />} />
         <Route path="/notifications" element={<StoreNotifications />} />
+        <Route path="/shipments" element={<StoreShipments />} />
         <Route path="/chats" element={<StoreChats />} />
         <Route path="/management" element={<StoreManagement />} />
         <Route path="/wallet/:storeId" element={<StoreWallet />} />

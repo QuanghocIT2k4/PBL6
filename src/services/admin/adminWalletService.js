@@ -48,7 +48,37 @@ export const getAllWithdrawalRequests = async (params = {}) => {
 };
 
 /**
- * 2. COMPLETE WITHDRAWAL REQUEST
+ * 2. APPROVE WITHDRAWAL REQUEST
+ * PUT /api/v1/admin/withdrawals/{withdrawalId}/approve
+ * Approve withdrawal request after verification
+ */
+export const approveWithdrawal = async (withdrawalId, note = '') => {
+  try {
+    console.log('✅ Approving withdrawal:', { withdrawalId, note });
+    
+    const response = await api.put(`/api/v1/admin/withdrawals/${withdrawalId}/approve`, {
+      note,
+    });
+    
+    console.log('✅ Withdrawal approved:', response.data);
+    
+    return {
+      success: true,
+      data: response.data.data || response.data,
+      message: 'Đã duyệt yêu cầu rút tiền',
+    };
+  } catch (error) {
+    console.error('❌ Error approving withdrawal:', error);
+    
+    return {
+      success: false,
+      error: error.response?.data?.message || 'Không thể duyệt yêu cầu rút tiền',
+    };
+  }
+};
+
+/**
+ * 3. COMPLETE WITHDRAWAL REQUEST
  * PUT /api/v1/admin/withdrawals/{withdrawalId}/complete
  * Mark withdrawal as completed after money transfer (auto-deducts from wallet)
  */
@@ -80,7 +110,7 @@ export const completeWithdrawal = async (withdrawalId, adminNote = '') => {
 };
 
 /**
- * 3. REJECT WITHDRAWAL REQUEST
+ * 4. REJECT WITHDRAWAL REQUEST
  * PUT /api/v1/admin/withdrawals/{withdrawalId}/reject
  */
 export const rejectWithdrawal = async (withdrawalId, reason) => {

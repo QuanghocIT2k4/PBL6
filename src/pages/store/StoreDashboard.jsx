@@ -4,6 +4,8 @@ import useSWR from 'swr';
 import StoreLayout from '../../layouts/StoreLayout';
 import StoreStatusGuard from '../../components/store/StoreStatusGuard';
 import { useStoreContext } from '../../context/StoreContext';
+import { useToast } from '../../context/ToastContext';
+import { getOrderCode } from '../../utils/displayCodeUtils';
 import { getDashboardAnalytics } from '../../services/b2c/b2cAnalyticsService';
 import { getStoreOrders } from '../../services/b2c/b2cOrderService';
 
@@ -239,8 +241,8 @@ const StoreDashboard = () => {
                   <div key={order.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-cyan-400 rounded-xl flex items-center justify-center shadow-sm">
-                        <span className="text-white font-bold text-sm">
-                          #{order.orderNumber?.slice(-4) || order.id.slice(-4)}
+                        <span className="text-white font-bold text-xs">
+                          {getOrderCode(order.id).slice(-6)}
                         </span>
                       </div>
                       <div>

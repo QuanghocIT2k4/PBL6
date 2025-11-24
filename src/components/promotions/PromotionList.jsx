@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import PropTypes from 'prop-types';
 import useSWR from 'swr';
 import { 
@@ -33,64 +33,24 @@ const PromotionList = ({
     { revalidateOnFocus: false }
   );
 
-  // ✅ Debug: Check why store promotions not fetching
-  console.log('🔍 [PromotionList] SWR Key check:', {
-    showList,
-    orderTotal,
-    storeId,
-    willFetch: !!(orderTotal && storeId),  // ✅ Bỏ check showList
-    key: orderTotal && storeId ? ['store-promotions', storeId, orderTotal] : null
-  });
 
   // ✅ Fetch store promotions - BỎ CHECK showList để fetch ngay khi có storeId
   const { data: storeData, isLoading: loadingStore, error: storeError } = useSWR(
     orderTotal && storeId ? ['store-promotions', storeId, orderTotal] : null,  // ✅ Bỏ showList
     async () => {
-      console.log('🛒 [PromotionList] Fetching store promotions:', { storeId, orderTotal });
-      try {
-        const result = await getStoreAvailablePromotions(storeId, {
-          orderValue: orderTotal,
-          page: 0,
-          size: 20,
-        });
-        console.log('🛒 [PromotionList] Service result:', result);
-        return result;
-      } catch (error) {
-        console.error('❌ [PromotionList] Service call error:', error);
-        throw error;
-      }
+      return await getStoreAvailablePromotions(storeId, {
+        orderValue: orderTotal,
+        page: 0,
+        size: 20,
+      });
     },
-    { 
-      revalidateOnFocus: false,
-      onError: (error) => {
-        console.error('❌ [PromotionList] SWR Error fetching store promotions:', error);
-      },
-      onSuccess: (data) => {
-        console.log('✅ [PromotionList] SWR Success:', data);
-      }
-    }
+    { revalidateOnFocus: false }
   );
-
-  // Debug log - ALWAYS log, not just when showList
-  useEffect(() => {
-    console.log('🛒 [PromotionList] Component state:', { 
-      showList,
-      storeId, 
-      orderTotal, 
-      hasStoreId: !!storeId,
-      activeTab,
-      storeDataExists: !!storeData,
-      storeDataSuccess: storeData?.success,
-      storeError,
-      loadingStore
-    });
-  }, [showList, storeId, orderTotal, activeTab, storeData, storeError, loadingStore]);
 
   // Get promotions based on active tab
   const getPromotions = () => {
     if (activeTab === 'platform') {
       if (!platformData?.success) {
-        console.log('⚠️ [PromotionList] Platform data not successful:', platformData);
         return [];
       }
       const data = platformData.data;
@@ -104,32 +64,11 @@ const PromotionList = ({
       }
       return [];
     } else {
-      if (!storeData) {
-        console.log('⚠️ [PromotionList] Store data is null/undefined');
-        return [];
-      }
-      
-      if (!storeData.success) {
-        console.log('⚠️ [PromotionList] Store data not successful:', {
-          success: storeData.success,
-          error: storeData.error,
-          data: storeData.data
-        });
+      if (!storeData || !storeData.success) {
         return [];
       }
       
       const data = storeData.data;
-      console.log('📊 [PromotionList] Processing store data:', {
-        dataType: typeof data,
-        isArray: Array.isArray(data),
-        hasContent: !!data?.content,
-        contentLength: data?.content?.length,
-        dataKeys: data ? Object.keys(data) : [],
-        fullData: data,
-        content: data?.content,
-        totalElements: data?.totalElements,
-        totalPages: data?.totalPages
-      });
       
       // Handle different response structures
       let promotions = [];
@@ -141,11 +80,6 @@ const PromotionList = ({
         promotions = data.content || data.promotions || data.items || [];
       }
       
-      console.log('✅ [PromotionList] Extracted promotions:', {
-        count: promotions.length,
-        promotions: promotions.map(p => ({ id: p.id, code: p.code, title: p.title || p.name }))
-      });
-      
       return promotions;
     }
   };
@@ -153,41 +87,9 @@ const PromotionList = ({
   const promotions = getPromotions();
   const isLoading = activeTab === 'platform' ? loadingPlatform : loadingStore;
 
-  // Debug log
-  useEffect(() => {
-    if (showList && activeTab === 'store') {
-      console.log('🏬 [PromotionList] Debug info:', {
-        activeTab,
-        storeId,
-        orderTotal,
-        storeData: storeData ? {
-          success: storeData.success,
-          hasData: !!storeData.data,
-          dataType: typeof storeData.data,
-          dataKeys: storeData.data ? Object.keys(storeData.data) : [],
-          contentLength: storeData.data?.content?.length,
-          content: storeData.data?.content,
-          fullStoreData: storeData
-        } : null,
-        storeError,
-        promotions,
-        promotionsCount: promotions.length,
-        isLoading: loadingStore,
-        hasStoreId: !!storeId,
-        hasOrderTotal: !!orderTotal
-      });
-    }
-  }, [showList, activeTab, storeId, orderTotal, storeData, storeError, promotions, loadingStore]);
-
   const handleSelectPromotion = (promotion) => {
     if (isPromotionValid(promotion)) {
-      // ✅ Truyền thông tin promotion là của store hay platform
       const isStorePromotion = activeTab === 'store';
-      console.log('🎁 [PromotionList] Selecting promotion:', {
-        code: promotion.code,
-        activeTab,
-        isStorePromotion
-      });
       onSelectPromotion(promotion, isStorePromotion);
       setShowList(false);
     }

@@ -34,37 +34,8 @@ const StoreProducts = () => {
         const data = productsResult.data;
         if (Array.isArray(data)) {
           setProducts(data);
-          try {
-            console.log('[DEBUG][StoreProducts] Sample products (raw brand fields):',
-              data.slice(0, 5).map(p => ({
-                id: p.id || p._id,
-                name: p.name,
-                brand: p.brand,
-                brandId: p.brandId,
-                brandName: p.brandName,
-                category: p.category,
-                categoryId: p.categoryId,
-                categoryName: p.categoryName
-              }))
-            );
-          } catch (e) {}
         } else if (data?.content) {
           setProducts(Array.isArray(data.content) ? data.content : []);
-          try {
-            const arr = Array.isArray(data.content) ? data.content : [];
-            console.log('[DEBUG][StoreProducts] Sample products (raw brand fields):',
-              arr.slice(0, 5).map(p => ({
-                id: p.id || p._id,
-                name: p.name,
-                brand: p.brand,
-                brandId: p.brandId,
-                brandName: p.brandName,
-                category: p.category,
-                categoryId: p.categoryId,
-                categoryName: p.categoryName
-              }))
-            );
-          } catch (e) {}
         } else {
           setProducts([]);
         }
@@ -78,31 +49,9 @@ const StoreProducts = () => {
         const data = variantsResult.data;
         if (Array.isArray(data)) {
           setVariants(data);
-          try {
-            console.log('[DEBUG][StoreProducts] Sample variants (product linkage):',
-              data.slice(0, 5).map(v => ({
-                id: v.id,
-                name: v.name,
-                productId: v.productId,
-                product: v.product,
-                normalizedProductId: getVariantProductId(v)
-              }))
-            );
-          } catch (e) {}
         } else if (data?.content) {
           const arr = Array.isArray(data.content) ? data.content : [];
           setVariants(arr);
-          try {
-            console.log('[DEBUG][StoreProducts] Sample variants (product linkage):',
-              arr.slice(0, 5).map(v => ({
-                id: v.id,
-                name: v.name,
-                productId: v.productId,
-                product: v.product,
-                normalizedProductId: getVariantProductId(v)
-              }))
-            );
-          } catch (e) {}
         } else {
           setVariants([]);
         }
@@ -118,9 +67,6 @@ const StoreProducts = () => {
           if (b?.id) map[b.id] = b.name || b.displayName || b.slug || b.id;
         }
         setBrandMap(map);
-        try {
-          console.log('[DEBUG][StoreProducts] Loaded brand map keys:', Object.keys(map).slice(0, 10));
-        } catch (e) {}
       } else {
         setBrandMap({});
       }
@@ -219,15 +165,6 @@ const StoreProducts = () => {
         // brand là id dạng string
         brandName = brandMap[p.brand];
       }
-      try {
-        console.log('[DEBUG][StoreProducts] Mapped product brand:', {
-          id: p.id || p._id,
-          name: p.name,
-          rawBrand: p.brand,
-          brandId: p.brandId || brandIdFromRef,
-          brandResolved: brandName
-        });
-      } catch (e) {}
 
       // Parse category (ưu tiên categoryName → object.name → DBRef.$id → string)
       let categoryName = 'Chưa phân loại';
@@ -283,7 +220,6 @@ const StoreProducts = () => {
       pending: allItems.filter(i => i.approvalStatus === 'PENDING').length,
       rejected: allItems.filter(i => i.approvalStatus === 'REJECTED').length,
     };
-    console.log('[DEBUG][StoreProducts] Status counts:', counts, 'filter=', statusFilter);
   }, [allItems, statusFilter]);
 
   const formatPrice = (price) => {

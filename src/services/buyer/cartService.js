@@ -30,9 +30,7 @@ const cartApi = api;
  */
 export const getCart = async () => {
   try {
-    console.log('🛒 Fetching cart');
     const response = await cartApi.get('/api/v1/buyer/cart');
-    console.log('✅ Cart response:', response.data);
 
     if (response.data.success) {
       return {
@@ -49,7 +47,6 @@ export const getCart = async () => {
   } catch (error) {
     // ✅ Nếu lỗi 400 (cart chưa tồn tại) → coi như cart rỗng, không log error
     if (error.response?.status === 400) {
-      console.log('ℹ️ Cart chưa tồn tại (user chưa thêm sản phẩm nào)');
       return {
         success: true, // ✅ Trả về success = true với data rỗng
         data: [],

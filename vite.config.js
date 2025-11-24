@@ -4,6 +4,9 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  define: {
+    global: 'globalThis', // Fix for SockJS
+  },
   server: {
     port: 5173,
     host: true, // Cho phép external connections

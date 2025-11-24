@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import AdminLayout from '../../layouts/AdminLayout';
 import AdminPageHeader from '../../components/admin/AdminPageHeader';
+import { getOrderCode } from '../../utils/displayCodeUtils';
 import {
   getRevenueStatistics,
-  getPendingRevenue,
-  getCollectedRevenue,
+  getServiceFees,
+  getPlatformDiscountLosses,
   getRevenueByDateRange,
   getAllRevenues,
   formatCurrency,
   formatDateForAPI,
   getDateRange,
+  getRevenueTypeBadge,
 } from '../../services/admin/adminRevenueService';
 
 const AdminRevenue = () => {
@@ -19,7 +22,7 @@ const AdminRevenue = () => {
   const [error, setError] = useState(null);
   
   // Filter states
-  const [activeTab, setActiveTab] = useState('all'); // 'all', 'pending', 'collected', 'dateRange'
+  const [activeTab, setActiveTab] = useState('all'); // 'all', 'serviceFee', 'platformLoss', 'dateRange'
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
@@ -62,11 +65,11 @@ const AdminRevenue = () => {
 
     try {
       switch (activeTab) {
-        case 'pending':
-          result = await getPendingRevenue(params);
+        case 'serviceFee':
+          result = await getServiceFees(params);
           break;
-        case 'collected':
-          result = await getCollectedRevenue(params);
+        case 'platformLoss':
+          result = await getPlatformDiscountLosses(params);
           break;
         case 'dateRange':
           if (startDate && endDate) {
@@ -88,7 +91,9 @@ const AdminRevenue = () => {
 
       if (result.success) {
         const data = result.data;
-        setRevenues(data.revenues || data.content || []);
+        const revenueList = data.revenues || data.content || [];
+        
+        setRevenues(revenueList);
         setTotalPages(data.totalPages || Math.ceil((data.total || 0) / pageSize));
         setTotalElements(data.total || data.totalElements || 0);
       } else {
@@ -124,20 +129,7 @@ const AdminRevenue = () => {
     return new Date(dateString).toLocaleString('vi-VN');
   };
 
-  const getStatusBadge = (status) => {
-    if (status === 'COLLECTED') {
-      return (
-        <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-bold">
-          Đã Thu
-        </span>
-      );
-    }
-    return (
-      <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-bold">
-        Chờ Thu
-      </span>
-    );
-  };
+  // Removed getStatusBadge - now using getRevenueTypeBadge from service
 
   return (
     <div className="space-y-6">
@@ -147,60 +139,54 @@ const AdminRevenue = () => {
         subtitle="Theo dõi phí dịch vụ và doanh thu"
       />
       <div className="space-y-6">
-        {/* Statistics Cards */}
+        {/* Statistics Cards - VER 1.0 */}
         {statistics && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            {/* Total Revenue */}
-            <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 text-white shadow-xl">
+            {/* Service Fees */}
+            <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white shadow-xl">
               <div className="flex items-center justify-between mb-4">
                 <div className="bg-white/20 p-3 rounded-xl">
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+                  <span className="text-2xl">💰</span>
                 </div>
-                <span className="text-sm font-medium opacity-90">Tổng Doanh Thu</span>
+                <span className="text-sm font-medium opacity-90">Phí Dịch Vụ</span>
               </div>
               <div className="text-3xl font-bold mb-2">
                 {formatCurrency(statistics.totalServiceFee || 0)}
               </div>
               <div className="text-sm opacity-90">
-                {statistics.totalCount || 0} đơn hàng
+                Thu từ shop
               </div>
             </div>
 
-            {/* Collected Revenue */}
-            <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white shadow-xl">
+            {/* Platform Discount Loss */}
+            <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-2xl p-6 text-white shadow-xl">
               <div className="flex items-center justify-between mb-4">
                 <div className="bg-white/20 p-3 rounded-xl">
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+                  <span className="text-2xl">📉</span>
                 </div>
-                <span className="text-sm font-medium opacity-90">Đã Thu</span>
+                <span className="text-sm font-medium opacity-90">Tiền Lỗ Giảm Giá</span>
               </div>
               <div className="text-3xl font-bold mb-2">
-                {formatCurrency(statistics.collectedFee || 0)}
+                {formatCurrency(statistics.totalPlatformDiscountLoss || 0)}
               </div>
               <div className="text-sm opacity-90">
-                {statistics.collectedCount || 0} đơn đã giao
+                Sàn chịu
               </div>
             </div>
 
-            {/* Pending Revenue */}
-            <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-2xl p-6 text-white shadow-xl">
+            {/* Net Revenue */}
+            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-xl">
               <div className="flex items-center justify-between mb-4">
                 <div className="bg-white/20 p-3 rounded-xl">
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+                  <span className="text-2xl">📊</span>
                 </div>
-                <span className="text-sm font-medium opacity-90">Chờ Thu</span>
+                <span className="text-sm font-medium opacity-90">Doanh Thu Ròng</span>
               </div>
               <div className="text-3xl font-bold mb-2">
-                {formatCurrency(statistics.pendingFee || 0)}
+                {formatCurrency((statistics.totalServiceFee || 0) - (statistics.totalPlatformDiscountLoss || 0))}
               </div>
               <div className="text-sm opacity-90">
-                {statistics.pendingCount || 0} đơn chưa giao
+                = Phí DV - Lỗ GG
               </div>
             </div>
           </div>
@@ -208,7 +194,7 @@ const AdminRevenue = () => {
 
         {/* Filters */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          {/* Tab Filters */}
+          {/* Tab Filters - VER 1.0 */}
           <div className="flex flex-wrap gap-3 mb-6">
             <button
               onClick={() => { setActiveTab('all'); setCurrentPage(0); }}
@@ -221,24 +207,24 @@ const AdminRevenue = () => {
               📊 Tất Cả
             </button>
             <button
-              onClick={() => { setActiveTab('pending'); setCurrentPage(0); }}
+              onClick={() => { setActiveTab('serviceFee'); setCurrentPage(0); }}
               className={`px-6 py-3 rounded-xl font-semibold transition-all ${
-                activeTab === 'pending'
-                  ? 'bg-yellow-500 text-white shadow-lg'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              🟡 Chờ Thu
-            </button>
-            <button
-              onClick={() => { setActiveTab('collected'); setCurrentPage(0); }}
-              className={`px-6 py-3 rounded-xl font-semibold transition-all ${
-                activeTab === 'collected'
+                activeTab === 'serviceFee'
                   ? 'bg-green-500 text-white shadow-lg'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              ✅ Đã Thu
+              💰 Phí Dịch Vụ
+            </button>
+            <button
+              onClick={() => { setActiveTab('platformLoss'); setCurrentPage(0); }}
+              className={`px-6 py-3 rounded-xl font-semibold transition-all ${
+                activeTab === 'platformLoss'
+                  ? 'bg-red-500 text-white shadow-lg'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              📉 Tiền Lỗ Giảm Giá
             </button>
             <button
               onClick={() => setActiveTab('dateRange')}
@@ -359,13 +345,13 @@ const AdminRevenue = () => {
                         Cửa Hàng
                       </th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        Loại
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        Số Tiền
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                         Tổng Đơn
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                        Phí Dịch Vụ
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                        Trạng Thái
                       </th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                         Ngày Tạo
@@ -374,35 +360,36 @@ const AdminRevenue = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {revenues.map((revenue) => {
-                      // Calculate order total and fee percentage
-                      const orderTotal = revenue.orderTotal || revenue.totalAmount || 0;
-                      const serviceFee = revenue.serviceFee || 0;
-                      const feePercentage = orderTotal > 0 && serviceFee > 0 ? ((serviceFee / orderTotal) * 100).toFixed(1) : 0;
+                      const typeBadge = getRevenueTypeBadge(revenue.revenueType);
+                      const orderTotal = revenue.order?.totalPrice || 0;
+                      const shopName = revenue.shop?.name || '-';
                       
                       return (
                         <tr key={revenue.id} className="hover:bg-gray-50 transition-colors">
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-mono text-purple-600">
-                              #{revenue.orderId?.substring(0, 8)}...
+                            <div className="text-sm font-mono text-purple-600 font-medium">
+                              {getOrderCode(revenue.order?.id)}
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-medium text-gray-900">
-                              {revenue.storeName || revenue.store?.name || '-'}
+                              {shopName}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${typeBadge.bgColor} ${typeBadge.textColor}`}>
+                              {typeBadge.icon} {typeBadge.text}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className={`text-sm font-bold ${revenue.revenueType === 'SERVICE_FEE' ? 'text-green-600' : 'text-red-600'}`}>
+                              {revenue.revenueType === 'SERVICE_FEE' ? '+' : '-'}{formatCurrency(revenue.amount || 0)}
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-semibold text-gray-900">
                               {orderTotal > 0 ? formatCurrency(orderTotal) : '-'}
                             </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-bold text-green-600">
-                              {serviceFee > 0 ? formatCurrency(serviceFee) : '-'}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            {getStatusBadge(revenue.status)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-600">

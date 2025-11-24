@@ -29,7 +29,6 @@ const NAME_TO_KEY = {
 
 const categoriesFetcher = async () => {
   const result = await getCategories();
-  console.log('📂 useCategories - Result:', result);
   
   if (!result.success) {
     console.error('❌ Failed to fetch categories:', result.message);
@@ -38,8 +37,6 @@ const categoriesFetcher = async () => {
   
   // ✅ Transform backend data sang frontend format VÀ lấy hình ảnh từ sản phẩm đầu tiên
   const transformedCategories = await Promise.all((result.data || []).map(async (cat) => {
-    console.log('📦 Transform category:', cat);
-    
     // ✅ Fetch 1 product variant đầu tiên từ category này để lấy hình ảnh
     let categoryImage = 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=220&q=80'; // Fallback
     
@@ -57,7 +54,6 @@ const categoriesFetcher = async () => {
           const firstVariant = variants[0];
           // Lấy primaryImage hoặc ảnh đầu tiên
           categoryImage = firstVariant.primaryImage || firstVariant.images?.[0] || categoryImage;
-          console.log(`🖼️ Category ${cat.name} image:`, categoryImage);
         }
       }
     } catch (error) {
@@ -85,8 +81,6 @@ const categoriesFetcher = async () => {
     },
     ...transformedCategories
   ];
-  
-  console.log('✅ All categories (with product images):', allCategories);
   
   return allCategories;
 };

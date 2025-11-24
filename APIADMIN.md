@@ -12,33 +12,120 @@
 
 ## 1️⃣ QUẢN LÝ NGƯỜI DÙNG (Admin User Management) - 4 APIs
 
-### ✅ Đã implement: 4/4 (100%)
+### ⚠️ Cần chỉnh sửa: 4/4 (Cần cập nhật theo Swagger mới)
 
-| API Endpoint | Method | Mô tả | Service Function |
-|--------------|--------|-------|------------------|
-| `GET /api/v1/admin/users` | GET | Lấy danh sách users (pagination, filter) | `getUsers()` ✅ |
-| `GET /api/v1/admin/users/check-ban/{userId}` | GET | Kiểm tra user có bị ban không | `checkBanStatus()` ✅ |
-| `POST /api/v1/admin/users/ban` | POST | Ban user (tạm thời hoặc vĩnh viễn) | `banUser()` ✅ |
-| `POST /api/v1/admin/users/unban/{userId}` | POST | Unban user | `unbanUser()` ✅ |
+| API Endpoint | Method | Mô tả | Service Function | Status |
+|--------------|--------|-------|------------------|--------|
+| `GET /api/v1/admin/users` | GET | Lấy danh sách users (pagination, filter) | `getUsers()` | ⚠️ Cần update params |
+| `GET /api/v1/admin/users/check-ban/{userId}` | GET | Kiểm tra user có bị ban không | `checkBanStatus()` | ⚠️ Cần implement |
+| `POST /api/v1/admin/users/ban` | POST | Ban user (tạm thời hoặc vĩnh viễn) | `banUser()` | ⚠️ Cần implement |
+| `POST /api/v1/admin/users/unban/{userId}` | POST | Unban user | `unbanUser()` | ⚠️ Cần implement |
 
 **📦 Files:**
 - Service: `adminUserService.js` / `userService.js`
 - Pages: `AdminUsers.jsx`
 
-**🎯 User Management:**
+**🎯 User Management APIs (CHI TIẾT):**
+
+#### **1.1. GET /api/v1/admin/users**
 ```javascript
-// Ban user
+// Lấy danh sách users với filter
+GET /api/v1/admin/users?userName=John&userEmail=john@example.com&page=0&size=20
+
+Query Parameters:
+- userName (optional): Filter theo tên
+- userEmail (optional): Filter theo email
+- userPhone (optional): Filter theo số điện thoại
+- page (optional): Trang (default: 0)
+- size (optional): Số lượng/trang (default: 20)
+- sortBy (optional): Sắp xếp theo field (default: "createdAt")
+- sortDir (optional): Hướng sắp xếp "asc" hoặc "desc" (default: "desc")
+
+Response: {
+  success: true,
+  data: {
+    content: [
+      {
+        id: "user_id",
+        fullName: "Nguyen Van A",
+        email: "user@example.com",
+        phone: "0123456789",
+        avatar: "https://...",
+        roles: ["BUYER"],
+        createdAt: "2025-11-22T10:00:00",
+        isBanned: false
+      }
+    ],
+    totalPages: 10,
+    totalElements: 200,
+    size: 20,
+    number: 0
+  }
+}
+```
+
+#### **1.2. GET /api/v1/admin/users/check-ban/{userId}**
+```javascript
+// Kiểm tra user có bị ban không
+GET /api/v1/admin/users/check-ban/{userId}
+
+Response: {
+  success: true,
+  data: {
+    userId: "xxx",
+    isBanned: true,
+    banType: "TEMPORARY",
+    reason: "Vi phạm điều khoản",
+    bannedAt: "2025-11-20T10:00:00",
+    bannedUntil: "2025-12-20T10:00:00", // null nếu PERMANENT
+    durationDays: 30
+  }
+}
+```
+
+#### **1.3. POST /api/v1/admin/users/ban**
+```javascript
+// Ban user (tạm thời hoặc vĩnh viễn)
 POST /api/v1/admin/users/ban
 Body: {
-  userId: "xxx",
-  reason: "Vi phạm điều khoản",
-  duration: 30, // days (null = permanent)
-  banType: "TEMPORARY" | "PERMANENT"
+  userId: "xxx",              // Required
+  reason: "Vi phạm điều khoản", // Required
+  banType: "TEMPORARY",       // Required: "TEMPORARY" | "PERMANENT"
+  durationDays: 30            // Required nếu TEMPORARY, optional nếu PERMANENT
 }
 
+Response: {
+  success: true,
+  message: "User has been banned successfully",
+  data: {
+    userId: "xxx",
+    isBanned: true,
+    banType: "TEMPORARY",
+    bannedUntil: "2025-12-20T10:00:00"
+  }
+}
+```
+
+#### **1.4. POST /api/v1/admin/users/unban/{userId}**
+```javascript
 // Unban user
 POST /api/v1/admin/users/unban/{userId}
+
+Response: {
+  success: true,
+  message: "User has been unbanned successfully",
+  data: {
+    userId: "xxx",
+    isBanned: false
+  }
+}
 ```
+
+**⚠️ LƯU Ý:**
+- **TEMPORARY ban**: User bị ban trong X ngày, sau đó tự động unban
+- **PERMANENT ban**: User bị ban vĩnh viễn, chỉ admin mới unban được
+- Khi user bị ban, họ không thể login vào hệ thống
+- Admin cần ghi rõ lý do ban để user biết
 
 ---
 
@@ -249,13 +336,13 @@ PUT /api/v1/admin/withdrawals/{requestId}/complete
 
 | Nhóm | Total APIs | Implemented | % |
 |------|------------|-------------|---|
-| **User Management** | 4 | 4 | 100% ✅ |
+| **User Management** | 4 | 0 | 0% ⚠️ CHƯA IMPLEMENT |
 | **Store Management** | 6 | 6 | 100% ✅ |
 | **Product Management** | 3 | 3 | 100% ✅ |
 | **ProductVariant Management** | 2 | 2 | 100% ✅ |
 | **Promotion Management** | 12 | 12 | 100% ✅ |
 | **Withdrawal Management** | 4 | 0 | 0% ⭐ MỚI |
-| **TOTAL** | **31** | **27** | **87%** |
+| **TOTAL** | **31** | **23** | **74%** |
 
 ---
 
@@ -402,14 +489,25 @@ if (!isAdmin) {
 
 **Admin APIs: CẬP NHẬT VỚI SWAGGER MỚI**
 
-- ✅ 27/31 APIs đã implement (87%)
+- ✅ 23/31 APIs đã implement (74%)
+- ⚠️ **4 APIs User Management CHƯA IMPLEMENT**
 - ⭐ Thêm 4 APIs Withdrawal Management mới
 - 🚀 Cần implement trang quản lý rút tiền
 
-**📋 TODO:**
-1. Tạo `adminWithdrawalService.js`
-2. Tạo `AdminWithdrawals.jsx`
-3. Thêm menu "Quản lý rút tiền" vào Admin Sidebar
-4. Test withdrawal approval flow
+**📋 TODO PRIORITY:**
+
+**Priority 1 (CRITICAL):**
+1. ⚠️ Implement `adminUserService.js` với 4 APIs:
+   - `getUsers()` - Lấy danh sách users
+   - `checkBanStatus()` - Kiểm tra ban status
+   - `banUser()` - Ban user
+   - `unbanUser()` - Unban user
+2. ⚠️ Cập nhật `AdminUsers.jsx` với UI ban/unban
+
+**Priority 2 (HIGH):**
+3. ⭐ Tạo `adminWithdrawalService.js`
+4. ⭐ Tạo `AdminWithdrawals.jsx`
+5. Thêm menu "Quản lý rút tiền" vào Admin Sidebar
+6. Test withdrawal approval flow
 
 **Generated:** November 18, 2025

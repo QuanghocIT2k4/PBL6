@@ -25,7 +25,6 @@ export const CartProvider = ({ children }) => {
       // 🚫 BỎ QUA HOÀN TOÀN CHO ADMIN: Không load cart trên trang admin
       const isAdmin = Array.isArray(user?.roles) && user.roles.includes('ROLE_ADMIN');
       if (isAdmin) {
-        console.log('🛑 Admin role detected → skip loading cart');
         setCartItems([]);
         return;
       }
@@ -37,34 +36,51 @@ export const CartProvider = ({ children }) => {
           const result = await cartService.getCart();
           
           if (result.success && result.data) {
-            console.log('✅ Cart loaded from backend:', result.data);
-            // ✅ LOAD TỪ BACKEND RESPONSE - cartItems nằm trong result.data.cartItems
-            const backendCart = result.data.cartItems || [];
-            console.log('✅ Cart items:', backendCart);
-            console.log('✅ First cart item structure:', backendCart[0]);
+            
+            // ✅ LOAD TỪ BACKEND RESPONSE
+            // Backend có thể trả về: result.data.cartItems HOẶC result.data (array)
+            let backendCart = [];
+            if (Array.isArray(result.data)) {
+              backendCart = result.data;
+            } else if (result.data.cartItems && Array.isArray(result.data.cartItems)) {
+              backendCart = result.data.cartItems;
+            } else {
+              console.error('❌ Backend response không có cartItems!', result.data);
+            }
             
             const normalized = backendCart.map(item => {
-              // ✅ Backend trả về structure mới: { id, productId, productName, imageUrl, quantity }
-              // Cần transform thành format frontend expect
+              // ✅ Backend đã sửa: trả về productVariantId + productVariantName
+              // Structure: { id, productVariantId, productVariantName, imageUrl, quantity, price, storeId }
               
-              if (!item.productId || !item.productName) {
-                console.warn('⚠️ Cart item missing productId or productName:', item);
+              const variantId = item.productVariantId || item.productId;
+              const productName = item.productVariantName || item.productName || item.name;
+              
+              if (!variantId || !productName) {
+                console.warn('⚠️ Cart item missing productVariantId or productName:', {
+                  item,
+                  hasProductVariantId: !!item.productVariantId,
+                  hasProductId: !!item.productId,
+                  hasProductVariantName: !!item.productVariantName,
+                  hasProductName: !!item.productName,
+                  allKeys: Object.keys(item)
+                });
                 return null;
               }
               
               // ✅ Tạo product object từ backend data
               const product = {
-                id: item.productId,
-                name: item.productName,
+                id: variantId,
+                name: productName,
                 image: item.imageUrl,
                 price: item.price || 0,
-                storeId: item.storeId, // ← QUAN TRỌNG: Copy storeId từ backend!
+                storeId: item.storeId || item.store?.id, // ← Backend có thể trả về store.id thay vì storeId
                 // Copy tất cả fields khác từ backend item
                 ...item
               };
               
               return {
                 id: item.id,
+                productVariantId: variantId, // ← Thêm field này!
                 product: product,
                 quantity: item.quantity || 1,
                 selected: true,
@@ -73,12 +89,10 @@ export const CartProvider = ({ children }) => {
               };
             }).filter(item => item !== null); // Lọc bỏ items không hợp lệ
             
-            console.log('✅ Normalized cart items:', normalized);
             setCartItems(normalized);
             // ✅ Sync to localStorage
             localStorage.setItem('cart', JSON.stringify(normalized));
           } else {
-            console.log('❌ Failed to load cart from backend, clearing cart');
             setCartItems([]);
             localStorage.removeItem('cart');
           }
@@ -247,7 +261,9 @@ export const CartProvider = ({ children }) => {
     const token = localStorage.getItem('token');
     if (token) {
       try {
-        const result = await cartService.updateCartItem(item.product.id, {
+        // Backend đã sửa: cart trả về productVariantId
+        const variantId = item.productVariantId || item.product?.id;
+        const result = await cartService.updateCartItem(variantId, {
           quantity: newQuantity,
           colorId: item.options?.color || null
         });
@@ -278,7 +294,6 @@ export const CartProvider = ({ children }) => {
         const result = await cartService.removeCartItemById(itemId);
         
         if (result.success) {
-          console.log('✅ Cart item removed successfully, fetching updated cart...');
           // ✅ FETCH LẠI CART TỪ BACKEND ĐỂ ĐỒNG BỘ
           await fetchCart();
         } else {

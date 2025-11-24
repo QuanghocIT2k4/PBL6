@@ -165,7 +165,8 @@ const ProductDetail = () => {
               <ShopInfo 
                 shop={store} 
                 storeName={productStoreName} 
-                storeId={productStoreId} 
+                storeId={productStoreId}
+                product={product}
               />
             )}
           </div>

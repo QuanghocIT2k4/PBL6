@@ -83,19 +83,12 @@ export const login = async ({ email, password }) => {
       const loginData = response.data.data;
       const token = loginData.token;
       
-      // 🔍 DEBUG: Log response từ backend
-      console.log('🔍 API /login response:', loginData);
-      console.log('🔍 Roles from backend:', loginData.roles);
-      
-      // Tạo object user từ data BE trả về
       const user = {
         id: loginData.id,
         name: loginData.username,
         email: email, // BE không trả email, dùng email đã nhập
         roles: loginData.roles || []
       };
-      
-      console.log('🔍 User object to save:', user);
       
       // Lưu vào localStorage
       localStorage.setItem('token', token);
@@ -134,10 +127,7 @@ export const getCurrentUser = async () => {
     // Lấy user từ localStorage (đã có roles từ lúc login)
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
-      const user = JSON.parse(storedUser);
-      console.log('🔍 User from localStorage:', user);
-      console.log('🔍 Roles from localStorage:', user.roles);
-      return user;
+      return JSON.parse(storedUser);
     }
     
     // Nếu không có trong localStorage, gọi API
@@ -146,10 +136,6 @@ export const getCurrentUser = async () => {
     // BE trả về: { success: true, data: { user info }, error: null }
     if (response.data.success && response.data.data) {
       const userData = response.data.data;
-      
-      // 🔍 DEBUG: Log response từ backend
-      console.log('🔍 API /current response:', userData);
-      console.log('🔍 Roles from backend:', userData.roles);
       
       // API /current không trả roles, cần lấy từ localStorage hoặc default
       const storedUserData = localStorage.getItem('user');
@@ -327,11 +313,6 @@ export const updateAvatar = async (file) => {
       };
     }
     
-    console.log('📤 Uploading avatar:', {
-      name: file.name,
-      type: file.type,
-      size: `${(file.size / 1024).toFixed(2)} KB`
-    });
     
     const formData = new FormData();
     formData.append('avatarFile', file);
@@ -341,8 +322,6 @@ export const updateAvatar = async (file) => {
         'Content-Type': 'multipart/form-data',
       },
     });
-    
-    console.log('📥 Avatar upload response:', response.data);
     
     // BE trả về: { success: true, data: { avatarUrl hoặc user object }, error: null }
     if (response.data.success) {

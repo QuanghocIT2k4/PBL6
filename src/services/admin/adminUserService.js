@@ -17,18 +17,36 @@ export const getAllUsers = async (params = {}) => {
       size = 20,
       sortBy = 'createdAt',
       sortDir = 'desc',
-      role = null,
-      status = null,
+      userName = null,
+      userEmail = null,
+      userPhone = null,
     } = params;
 
     const response = await api.get('/api/v1/admin/users', {
-      params: { page, size, sortBy, sortDir, role, status },
+      params: { page, size, sortBy, sortDir, userName, userEmail, userPhone },
     });
 
-    // Debug: Log raw response
-    console.log('Raw API response:', response.data);
-    console.log('Response data structure:', response.data.data);
-    console.log('Response content:', response.data.data?.content);
+    // 🔍 DEBUG: Log FULL raw response
+    console.log('🔍 ========== RAW API RESPONSE ==========');
+    console.log('🔍 Full response:', response);
+    console.log('🔍 response.data:', response.data);
+    console.log('🔍 response.data.data:', response.data.data);
+    console.log('🔍 response.data.data.content:', response.data.data?.content);
+    
+    if (response.data.data?.content && response.data.data.content.length > 0) {
+      console.log('🔍 First user:', response.data.data.content[0]);
+      console.log('🔍 First user fields:', Object.keys(response.data.data.content[0]));
+      
+      // Tìm user bị ban
+      const bannedUser = response.data.data.content.find(u => 
+        u.email === 'Ndnquang3072004@gmail.com' || u.banReason
+      );
+      if (bannedUser) {
+        console.log('🔍 ========== BANNED USER FOUND ==========');
+        console.log('🔍 Banned user:', JSON.stringify(bannedUser, null, 2));
+      }
+    }
+    console.log('🔍 ========================================');
 
     return {
       success: true,
@@ -65,11 +83,11 @@ export const banUser = async (banData) => {
 
 /**
  * 3. UNBAN USER
- * DELETE /api/v1/admin/users/unban/{userId}
+ * POST /api/v1/admin/users/unban/{userId}
  */
 export const unbanUser = async (userId) => {
   try {
-    const response = await api.delete(`/api/v1/admin/users/unban/${userId}`);
+    const response = await api.post(`/api/v1/admin/users/unban/${userId}`);
 
     return {
       success: true,
@@ -86,11 +104,11 @@ export const unbanUser = async (userId) => {
 
 /**
  * 4. KIỂM TRA TRẠNG THÁI BAN
- * GET /api/v1/admin/users/{userId}/ban-status
+ * GET /api/v1/admin/users/check-ban/{userId}
  */
 export const checkBanStatus = async (userId) => {
   try {
-    const response = await api.get(`/api/v1/admin/users/${userId}/ban-status`);
+    const response = await api.get(`/api/v1/admin/users/check-ban/${userId}`);
 
     return {
       success: true,

@@ -6,7 +6,9 @@ import StoreStatusGuard from '../../components/store/StoreStatusGuard';
 import StorePageHeader from '../../components/store/StorePageHeader';
 import { useStoreContext } from '../../context/StoreContext';
 import { useToast } from '../../context/ToastContext';
+import { getOrderCode } from '../../utils/displayCodeUtils';
 import ConfirmModal from '../../components/common/ConfirmModal';
+import ShipmentCard from '../../components/shipment/ShipmentCard';
 import { 
   getStoreOrderById, 
   confirmOrder, 
@@ -232,7 +234,7 @@ const StoreOrderDetail = () => {
                   </div>
                   <div>
                     <h1 className="text-4xl font-bold mb-2">
-                      <span className="text-cyan-600">Đơn hàng</span> <span className="text-blue-600">#{order.orderNumber || order.id.slice(-8)}</span>
+                      <span className="text-cyan-600">Đơn hàng</span> <span className="text-blue-600">{getOrderCode(order.id)}</span>
                     </h1>
                     <p className="text-gray-600 text-lg">Đặt lúc: {formatDate(order.createdAt)}</p>
                   </div>
@@ -479,6 +481,11 @@ const StoreOrderDetail = () => {
                   )}
                 </div>
               </div>
+
+              {/* Shipment Info - Hiển thị nếu đơn đã xác nhận */}
+              {(order.status === 'CONFIRMED' || order.status === 'SHIPPING' || order.status === 'DELIVERED') && (
+                <ShipmentCard orderId={order.id} />
+              )}
 
               {/* Actions */}
               <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">

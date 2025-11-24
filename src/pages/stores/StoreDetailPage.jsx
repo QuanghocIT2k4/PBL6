@@ -65,8 +65,9 @@ const StoreDetailPage = () => {
   }
 
   const handleProductClick = (product) => {
-    const productId = product.productId || product.product?.id || product.id;
-    navigate(`/product/${productId}`);
+    // Backend trả về variant, dùng product.id (variant ID) để navigate
+    const variantId = product.id || product.productVariantId || product.productId || product.product?.id;
+    navigate(`/product/${variantId}`);
     success(`🔍 Đang xem chi tiết sản phẩm`);
   };
 

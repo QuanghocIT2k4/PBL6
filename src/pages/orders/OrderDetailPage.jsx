@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import useSWR from 'swr';
+import { getOrderCode } from '../../utils/displayCodeUtils';
 import MainLayout from '../../layouts/MainLayout';
 import ReviewForm from '../../components/reviews/ReviewForm';
 import { getOrderById, cancelOrder, canCancelOrder, canReviewOrder, getOrderStatusBadge, getPaymentMethodLabel } from '../../services/buyer/orderService';
@@ -54,7 +55,7 @@ const OrderDetailPage = () => {
 
   // Handle cancel
   const handleCancel = async () => {
-    const confirmed = await confirmCancelOrder(`#${order.orderNumber || order.id.slice(-8)}`);
+    const confirmed = await confirmCancelOrder(getOrderCode(order.id));
     if (!confirmed) return;
 
     const result = await cancelOrder(order.id);

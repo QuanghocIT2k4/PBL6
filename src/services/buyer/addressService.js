@@ -47,21 +47,16 @@ export const getUserAddresses = async () => {
       try {
         const user = JSON.parse(userStr);
         if (user && user.address && Array.isArray(user.address)) {
-          console.log('✅ Loaded addresses from user object:', user.address.length);
           return {
             success: true,
             data: user.address,
           };
         }
-      } catch (parseError) {
-        console.warn('⚠️ Failed to parse user from localStorage:', parseError);
-      }
+      } catch (e) {}
     }
     
     // 2. FALLBACK: Gọi API nếu không có trong localStorage
-    console.log('📥 Fetching addresses from API...');
     const response = await addressApi.get('/api/v1/buyer/address');
-    console.log('✅ GET /api/v1/buyer/address response:', response.data);
     
     // Parse response
     let addresses = [];
@@ -76,8 +71,6 @@ export const getUserAddresses = async () => {
       }
     }
     
-    console.log('✅ Parsed addresses from API:', addresses.length);
-    
     return {
       success: true,
       data: addresses,
@@ -89,7 +82,6 @@ export const getUserAddresses = async () => {
     
     // Nếu 404 hoặc 400 (user chưa có address) → return empty array
     if (error.response?.status === 404 || error.response?.status === 400) {
-      console.log('ℹ️ API returned 400/404, returning empty array');
       return {
         success: true,
         data: [],
@@ -129,10 +121,7 @@ export const createAddress = async (addressData) => {
       isDefault: addressData.isDefault || false  // Dùng isDefault theo DTO
     };
 
-    console.log('Sending address data to API:', payload);
     const response = await addressApi.post('/api/v1/buyer/address', payload);
-    console.log('API response:', response);
-    console.log('API response data:', response.data);
     return response.data;
   } catch (error) {
     console.error('Error creating address:', error);

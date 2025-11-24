@@ -59,10 +59,7 @@ const PromoCodeInput = ({
       } else if (data?.content && Array.isArray(data.content)) {
         platformPromos = data.content;
       }
-      console.log('🏪 [PromoCodeInput] Platform promotions:', platformPromos.length, platformPromos.map(p => p.code));
       promotions.push(...platformPromos);
-    } else {
-      console.log('⚠️ [PromoCodeInput] Platform data not available:', platformData);
     }
     
     // Add store promotions
@@ -74,17 +71,8 @@ const PromoCodeInput = ({
       } else if (data?.content && Array.isArray(data.content)) {
         storePromos = data.content;
       }
-      console.log('🏬 [PromoCodeInput] Store promotions:', storePromos.length, storePromos.map(p => p.code));
       promotions.push(...storePromos);
-    } else {
-      console.log('⚠️ [PromoCodeInput] Store data not available:', {
-        storeData,
-        storeId,
-        hasStoreId: !!storeId
-      });
     }
-    
-    console.log('📋 [PromoCodeInput] All promotions:', promotions.length, promotions.map(p => ({ code: p.code, type: p.type || 'unknown' })));
     
     return promotions;
   };
@@ -103,9 +91,6 @@ const PromoCodeInput = ({
       
       // ✅ Tìm promotion trong danh sách available promotions
       const allPromotions = getAllPromotions();
-      console.log('🔍 [PromoCodeInput] Searching for code:', upperCode);
-      console.log('🔍 [PromoCodeInput] Total available promotions:', allPromotions.length);
-      console.log('🔍 [PromoCodeInput] Available codes:', allPromotions.map(p => p.code));
       
       // Tìm trong platform promotions trước
       let foundPromotion = null;
@@ -118,7 +103,6 @@ const PromoCodeInput = ({
         foundPromotion = platformPromos.find(p => p.code?.toUpperCase() === upperCode);
         if (foundPromotion) {
           foundIn = 'platform';
-          console.log('✅ [PromoCodeInput] Found in platform promotions');
         }
       }
       
@@ -129,7 +113,6 @@ const PromoCodeInput = ({
         foundPromotion = storePromos.find(p => p.code?.toUpperCase() === upperCode);
         if (foundPromotion) {
           foundIn = 'store';
-          console.log('✅ [PromoCodeInput] Found in store promotions');
         }
       }
       
@@ -145,12 +128,6 @@ const PromoCodeInput = ({
         setLoading(false);
         return;
       }
-      
-      console.log('✅ [PromoCodeInput] Found promotion:', {
-        code: foundPromotion.code,
-        foundIn,
-        promotion: foundPromotion
-      });
       
       // ✅ Validate promotion
       if (!isPromotionValid(foundPromotion)) {
@@ -169,12 +146,6 @@ const PromoCodeInput = ({
       
       // ✅ Calculate discount
       const discount = calculateDiscount(foundPromotion, orderTotal);
-      console.log('✅ [PromoCodeInput] Found and validated promotion:', {
-        code: foundPromotion.code,
-        discount,
-        foundIn,
-        promotion: foundPromotion
-      });
       
       onApplySuccess({
         promotion: foundPromotion,

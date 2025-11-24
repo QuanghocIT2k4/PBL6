@@ -14,8 +14,6 @@ export const AuthProvider = ({ children }) => {
   const checkAuth = async () => {
     try {
       const currentUser = await getCurrentUser();
-      console.log('🔍 AuthContext - checkAuth result:', currentUser);
-      console.log('🔍 AuthContext - user roles:', currentUser?.roles);
       setUser(currentUser);
     } catch (error) {
       console.error('Auth check failed:', error);

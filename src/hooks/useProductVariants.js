@@ -26,7 +26,6 @@ const variantsFetcher = async ([type, category, options]) => {
     // ✅ Ưu tiên dùng hardcoded mapping (nhanh nhất)
     if (KEY_TO_API_NAME[category]) {
       categoryName = KEY_TO_API_NAME[category];
-      console.log('🔍 Category mapping:', { key: category, apiName: categoryName });
     } else {
       // ✅ Fallback: Gọi API để tìm (nếu category mới không có trong mapping)
       const categoriesResult = await getCategories({ page: 0, size: 100 });
@@ -38,7 +37,6 @@ const variantsFetcher = async ([type, category, options]) => {
         );
         if (apiCategory) {
           categoryName = apiCategory.name;
-          console.log('🔍 Category from API:', { key: category, name: categoryName });
         } else {
           categoryName = category; // Nếu không tìm thấy, dùng chính nó
           console.warn('⚠️ Category not found, using as-is:', category);
@@ -161,7 +159,6 @@ export const useProductVariants = (category, options = {}) => {
       if (arrayKeys.length > 0) {
         // Lấy array đầu tiên tìm thấy
         variants = data[arrayKeys[0]];
-        console.log(`⚠️ Using array from key "${arrayKeys[0]}" (no content wrapper)`);
         // ✅ Thử lấy pagination từ page object nếu có
         if (data.page && typeof data.page === 'object') {
           totalElementsFromAPI = data.page.totalElements !== undefined ? data.page.totalElements : undefined;
@@ -174,29 +171,8 @@ export const useProductVariants = (category, options = {}) => {
       }
     }
   } else {
-    console.warn('⚠️ Unexpected data format (not array or paginated):', data);
     variants = [];
   }
-  
-  // ✅ Debug: Log API response để kiểm tra totalElements
-  console.log('🔍 useProductVariants - API Response:', {
-    hasData: !!data,
-    dataType: typeof data,
-    dataKeys: data ? Object.keys(data) : [],
-    totalElements: totalElementsFromAPI,
-    totalPages: totalPagesFromAPI,
-    number: currentPageFromAPI,
-    size: data?.size || data?.page?.size,
-    contentLength: variants.length,
-    // ✅ Log chi tiết để debug
-    hasContent: Array.isArray(data?.content),
-    hasPage: !!data?.page,
-    pageKeys: data?.page ? Object.keys(data.page) : [],
-    hasTotalElements: 'totalElements' in (data || {}) || 'totalElements' in (data?.page || {}),
-    hasTotalPages: 'totalPages' in (data || {}) || 'totalPages' in (data?.page || {}),
-    pageObject: data?.page,
-    fullData: data
-  });
   
   const pagination = {
     currentPage: currentPageFromAPI !== undefined ? currentPageFromAPI : 0,

@@ -266,8 +266,6 @@ const StorePromotions = () => {
       requestData.categoryId = formData.categoryId;
     }
 
-    console.log('📝 Update promotion data:', requestData);
-
     try {
       const result = await updatePromotion(editingPromo.id, requestData);
       setUpdating(false);
@@ -342,8 +340,6 @@ const StorePromotions = () => {
     if (formData.discountType === 'CATEGORY' && formData.categoryId) {
       requestData.categoryId = formData.categoryId;
     }
-
-    console.log('📝 Create promotion data:', requestData);
 
     try {
       const result = await createPromotion(currentStore.id, requestData);

@@ -4,6 +4,7 @@ import { useToast } from '../../context/ToastContext';
 import Swal from 'sweetalert2';
 import {
   getAllWithdrawalRequests,
+  approveWithdrawal,
   completeWithdrawal,
   rejectWithdrawal,
   formatCurrency,
@@ -21,9 +22,11 @@ const AdminWallets = () => {
   const [withdrawalFilter, setWithdrawalFilter] = useState('PENDING'); // ALL, PENDING, APPROVED, REJECTED
   const [selectedWithdrawal, setSelectedWithdrawal] = useState(null);
   const [showApproveModal, setShowApproveModal] = useState(false);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [approveNote, setApproveNote] = useState('');
+  const [completeNote, setCompleteNote] = useState('');
   const [processing, setProcessing] = useState(false);
   
   // Refund form
@@ -62,18 +65,43 @@ const AdminWallets = () => {
     }
   };
 
+  const handleApprove = async () => {
+    if (!selectedWithdrawal) return;
+    
+    setProcessing(true);
+    
+    try {
+      const result = await approveWithdrawal(selectedWithdrawal.id, approveNote);
+      
+      if (result.success) {
+        success('Đã duyệt yêu cầu rút tiền!');
+        setShowApproveModal(false);
+        setApproveNote('');
+        setSelectedWithdrawal(null);
+        loadData();
+      } else {
+        showError(result.error);
+      }
+    } catch (err) {
+      console.error('Error approving withdrawal:', err);
+      showError('Không thể duyệt yêu cầu');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   const handleComplete = async () => {
     if (!selectedWithdrawal) return;
     
     setProcessing(true);
     
     try {
-      const result = await completeWithdrawal(selectedWithdrawal.id, approveNote);
+      const result = await completeWithdrawal(selectedWithdrawal.id, completeNote);
       
       if (result.success) {
         success('Đã hoàn tất chuyển tiền!');
-        setShowApproveModal(false);
-        setApproveNote('');
+        setShowCompleteModal(false);
+        setCompleteNote('');
         setSelectedWithdrawal(null);
         loadData();
       } else {
@@ -191,7 +219,7 @@ const AdminWallets = () => {
         <div>
           {/* Filter */}
           <div className="mb-6 flex gap-3">
-            {['ALL', 'PENDING', 'REJECTED', 'COMPLETED'].map((status) => (
+            {['ALL', 'PENDING', 'APPROVED', 'REJECTED', 'COMPLETED'].map((status) => (
               <button
                 key={status}
                 onClick={() => setWithdrawalFilter(status)}
@@ -263,7 +291,7 @@ const AdminWallets = () => {
                                   }}
                                   className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                                 >
-                                  💰 Hoàn tất
+                                  ✅ Duyệt
                                 </button>
                                 <button
                                   onClick={() => {
@@ -275,6 +303,17 @@ const AdminWallets = () => {
                                   ❌ Từ chối
                                 </button>
                               </>
+                            )}
+                            {wd.status === 'APPROVED' && (
+                              <button
+                                onClick={() => {
+                                  setSelectedWithdrawal(wd);
+                                  setShowCompleteModal(true);
+                                }}
+                                className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                              >
+                                💰 Hoàn tất
+                              </button>
                             )}
                             <button
                               onClick={() => {
@@ -316,7 +355,7 @@ const AdminWallets = () => {
       {showApproveModal && selectedWithdrawal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-8">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">💰 Hoàn tất chuyển tiền</h2>
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">✅ Duyệt yêu cầu rút tiền</h2>
             
             <div className="mb-6 p-4 bg-gray-50 rounded-lg">
               <p className="text-sm text-gray-600 mb-2">Cửa hàng: <span className="font-semibold">{selectedWithdrawal.storeName}</span></p>
@@ -334,7 +373,7 @@ const AdminWallets = () => {
                 value={approveNote}
                 onChange={(e) => setApproveNote(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="VD: Đã chuyển tiền vào tài khoản ngày 19/11/2025..."
+                placeholder="VD: Đã kiểm tra thông tin tài khoản, OK..."
                 rows="3"
               />
             </div>
@@ -352,11 +391,11 @@ const AdminWallets = () => {
                 Hủy
               </button>
               <button
-                onClick={handleComplete}
+                onClick={handleApprove}
                 disabled={processing}
                 className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
               >
-                {processing ? 'Đang xử lý...' : 'Xác nhận hoàn tất'}
+                {processing ? 'Đang xử lý...' : 'Xác nhận duyệt'}
               </button>
             </div>
           </div>
@@ -406,6 +445,57 @@ const AdminWallets = () => {
                 className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
               >
                 {processing ? 'Đang xử lý...' : 'Xác nhận từ chối'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Complete Modal */}
+      {showCompleteModal && selectedWithdrawal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">💰 Hoàn tất chuyển tiền</h2>
+            
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+              <p className="text-sm text-gray-600 mb-2">Cửa hàng: <span className="font-semibold">{selectedWithdrawal.storeName}</span></p>
+              <p className="text-sm text-gray-600 mb-2">Số tiền: <span className="font-semibold text-blue-600">{formatCurrency(selectedWithdrawal.amount)}</span></p>
+              <p className="text-sm text-gray-600 mb-2">Ngân hàng: <span className="font-semibold">{selectedWithdrawal.bankName}</span></p>
+              <p className="text-sm text-gray-600">Số TK: <span className="font-semibold">{selectedWithdrawal.bankAccountNumber}</span></p>
+              <p className="text-sm text-gray-600">Chủ TK: <span className="font-semibold">{selectedWithdrawal.bankAccountName}</span></p>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Ghi chú admin (tùy chọn)
+              </label>
+              <textarea
+                value={completeNote}
+                onChange={(e) => setCompleteNote(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="VD: Đã chuyển tiền vào tài khoản ngày 22/11/2025..."
+                rows="3"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowCompleteModal(false);
+                  setCompleteNote('');
+                  setSelectedWithdrawal(null);
+                }}
+                disabled={processing}
+                className="flex-1 px-6 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleComplete}
+                disabled={processing}
+                className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                {processing ? 'Đang xử lý...' : 'Xác nhận hoàn tất'}
               </button>
             </div>
           </div>

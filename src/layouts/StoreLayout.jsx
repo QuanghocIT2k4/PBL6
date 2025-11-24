@@ -1,20 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import StoreSidebar from '../components/store/StoreSidebar';
 import { useStoreContext } from '../context/StoreContext';
+import { useChat } from '../context/ChatContext';
+import NotificationContainer from '../components/notifications/NotificationContainer';
 
 const StoreLayout = ({ children }) => {
-  const [unreadNotifications, setUnreadNotifications] = useState(0);
-  const [showNotifications, setShowNotifications] = useState(false);
   const [showStoreSwitcher, setShowStoreSwitcher] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const { currentStore, userStores, selectStore, loading } = useStoreContext();
-
-  useEffect(() => {
-    // Mock unread notifications count
-    setUnreadNotifications(3);
-  }, []);
+  const { unreadCount } = useChat();
 
   // Close menus when clicking outside
   useEffect(() => {
@@ -26,18 +23,15 @@ const StoreLayout = ({ children }) => {
       if (showStoreSwitcher && !event.target.closest('.store-switcher-container')) {
         setShowStoreSwitcher(false);
       }
-      if (showNotifications && !event.target.closest('.notifications-container')) {
-        setShowNotifications(false);
-      }
     };
 
-    if (showUserMenu || showStoreSwitcher || showNotifications) {
+    if (showUserMenu || showStoreSwitcher) {
       document.addEventListener('click', handleClickOutside);
       return () => {
         document.removeEventListener('click', handleClickOutside);
       };
     }
-  }, [showUserMenu, showStoreSwitcher, showNotifications]);
+  }, [showUserMenu, showStoreSwitcher]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -51,7 +45,7 @@ const StoreLayout = ({ children }) => {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-xl font-semibold text-white">
-                {currentStore ? `${currentStore.storeName || currentStore.name} - ${currentStore.name}` : 'Store Management'}
+                {currentStore ? `${currentStore.storeName || currentStore.name}` : 'Store Management'}
               </h1>
               <p className="text-sm text-blue-100">
                 {currentStore ? 'Quản lý chi nhánh của bạn' : 'Chọn chi nhánh để tiếp tục'}
@@ -128,51 +122,32 @@ const StoreLayout = ({ children }) => {
               </div>
 
               {/* Notifications */}
-                  <div className="relative notifications-container">
-                    <button 
-                      onClick={() => setShowNotifications(!showNotifications)}
-                      className="p-2 text-white hover:text-white hover:bg-white hover:bg-opacity-20 transition-colors"
-                    >
+              {currentStore && (
+                <NotificationContainer 
+                  userType="store" 
+                  storeId={currentStore.id} 
+                />
+              )}
+
+              {/* Chat Icon with Badge */}
+              {currentStore && (
+                <button
+                  onClick={() => navigate('/store-dashboard/chats')}
+                  className="relative p-2 text-white hover:bg-white hover:bg-opacity-20 rounded-lg transition-colors"
+                  title="Chat với khách hàng"
+                >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                   </svg>
-                  {unreadNotifications > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium">
-                      {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                  
+                  {/* Unread Badge */}
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                      {unreadCount > 9 ? '9+' : unreadCount}
                     </span>
                   )}
                 </button>
-                
-                {showNotifications && (
-                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-                    <div className="p-3 border-b border-gray-200">
-                      <h3 className="text-sm font-medium text-gray-900">Thông báo</h3>
-                    </div>
-                    <div className="max-h-60 overflow-y-auto">
-                      <div className="p-3 hover:bg-gray-50 border-b border-gray-100">
-                        <p className="text-sm text-gray-900">Đơn hàng mới #ORD-001</p>
-                        <p className="text-xs text-gray-500">2 phút trước</p>
-                      </div>
-                      <div className="p-3 hover:bg-gray-50 border-b border-gray-100">
-                        <p className="text-sm text-gray-900">Sản phẩm sắp hết hàng</p>
-                        <p className="text-xs text-gray-500">1 giờ trước</p>
-                      </div>
-                      <div className="p-3 hover:bg-gray-50">
-                        <p className="text-sm text-gray-900">Khuyến mãi mới đã được tạo</p>
-                        <p className="text-xs text-gray-500">3 giờ trước</p>
-                      </div>
-                    </div>
-                    <div className="p-3 border-t border-gray-200">
-                      <Link 
-                        to="/store-dashboard/notifications"
-                        className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-                      >
-                        Xem tất cả thông báo
-                      </Link>
-                    </div>
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* User Info */}
               <div className="relative user-menu-container">

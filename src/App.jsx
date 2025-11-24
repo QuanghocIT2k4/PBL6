@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { StoreProvider } from './context/StoreContext';
 import { ToastProvider } from './context/ToastContext';
+import { ChatProvider } from './context/ChatContext';
 import AuthPage from './pages/auth/AuthPage';
 import VerifyEmailPage from './pages/auth/VerifyEmailPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
@@ -17,12 +18,14 @@ import OrdersPage from './pages/orders/OrdersPage';
 import OrderDetailPage from './pages/orders/OrderDetailPage';
 import SearchResults from './pages/search/SearchResults';
 import ProfilePage from './pages/profile/ProfilePage';
+import BuyerNotifications from './pages/buyer/BuyerNotifications';
 import StoresPage from './pages/stores/StoresPage';
 import StoreDetailPage from './pages/stores/StoreDetailPage';
 import StoreRoutes from './routes/StoreRoutes';
 import AdminRoutes from './routes/AdminRoutes';
 import BecomeStoreOwner from './pages/store/BecomeStoreOwner';
 import PaymentCallback from './pages/payment/PaymentCallback';
+import ChatPage from './pages/chat/ChatPage';
 
 const AppContent = () => {
   const { isAuthenticated, loading } = useAuth();
@@ -53,8 +56,10 @@ const AppContent = () => {
       <Route path="/checkout" element={<CheckoutPage />} />
       <Route path="/orders" element={<OrdersPage />} />
       <Route path="/orders/:id" element={<OrderDetailPage />} />
+      <Route path="/notifications" element={<BuyerNotifications />} />
       <Route path="/payment/callback" element={<PaymentCallback />} />
       <Route path="/profile" element={<ProfilePage />} />
+      <Route path="/chat" element={<ChatPage />} />
       <Route path="/become-store-owner" element={<BecomeStoreOwner />} />
       
       {/* Store Management Routes (B2C) */}
@@ -83,11 +88,13 @@ export default function App() {
       <AuthProvider>
         <CartProvider>
           <StoreProvider>
-            <ToastProvider>
-              <BrowserRouter>
-                <AppContent />
-              </BrowserRouter>
-            </ToastProvider>
+            <ChatProvider>
+              <ToastProvider>
+                <BrowserRouter>
+                  <AppContent />
+                </BrowserRouter>
+              </ToastProvider>
+            </ChatProvider>
           </StoreProvider>
         </CartProvider>
       </AuthProvider>

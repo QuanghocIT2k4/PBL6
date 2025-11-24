@@ -90,8 +90,6 @@ const StoreProductDetail = () => {
   };
 
   const getBrandName = (brand) => {
-    console.log('🔍 Brand data:', brand, 'Type:', typeof brand);
-    
     if (brand === null || brand === undefined) return 'Chưa có thương hiệu';
     
     if (typeof brand === 'string') {
@@ -128,7 +126,6 @@ const StoreProductDetail = () => {
   };
 
   const getCategoryName = (category) => {
-    console.log('🔍 Category data:', category, 'Type:', typeof category);
     
     if (category === null || category === undefined) return 'Chưa phân loại';
     

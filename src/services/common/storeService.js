@@ -25,8 +25,6 @@ export const getAllStores = async (params = {}) => {
       sortDir = 'desc',
     } = params;
 
-    console.log('🏪 Fetching all stores:', { page, size, sortBy, sortDir });
-
     const response = await api.get('/api/v1/stores', {
       params: {
         page,
@@ -35,8 +33,6 @@ export const getAllStores = async (params = {}) => {
         sortDir,
       },
     });
-
-    console.log('✅ Stores response:', response.data);
 
     if (response.data.success) {
       return {
@@ -63,11 +59,7 @@ export const getAllStores = async (params = {}) => {
  */
 export const getStoreById = async (storeId) => {
   try {
-    console.log('🏪 Fetching store detail:', storeId);
-
     const response = await api.get(`/api/v1/stores/${storeId}`);
-
-    console.log('✅ Store detail response:', response.data);
 
     if (response.data.success) {
       return {
@@ -101,8 +93,6 @@ export const getStoresByOwnerId = async (ownerId, params = {}) => {
       sortDir = 'desc',
     } = params;
 
-    console.log('🏪 Fetching stores by owner:', { ownerId, page, size });
-
     const response = await api.get(`/api/v1/stores/owner/${ownerId}`, {
       params: {
         page,
@@ -111,8 +101,6 @@ export const getStoresByOwnerId = async (ownerId, params = {}) => {
         sortDir,
       },
     });
-
-    console.log('✅ Owner stores response:', response.data);
 
     if (response.data.success) {
       return {

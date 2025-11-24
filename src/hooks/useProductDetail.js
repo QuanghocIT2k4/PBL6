@@ -37,10 +37,9 @@ const relatedProductsFetcher = async ({ categoryName, productId }) => {
   if (result.success) {
     const data = result.data;
     const variants = data.content || data || [];
-    // Filter out current product's variants
+    // Filter out current variant (productId here is actually variant ID)
     return variants.filter(v => {
-      const variantProductId = v.productId || v.product?.id;
-      return variantProductId !== productId && variantProductId !== String(productId);
+      return v.id !== productId && v.id !== String(productId);
     }).slice(0, 4);
   }
   

@@ -30,8 +30,6 @@ const registerSchema = z.object({
 
 const RegisterForm = ({ onSwitchToLogin }) => {
   const { showToast } = useToast();
-  const [successMessage, setSuccessMessage] = useState('');
-  const [generalError, setGeneralError] = useState('');
 
   const {
     register,
@@ -51,8 +49,6 @@ const RegisterForm = ({ onSwitchToLogin }) => {
   });
 
   const onSubmit = async (data) => {
-    setGeneralError('');
-    setSuccessMessage('');
     
     console.log('📝 Form data:', data);
     console.log('🔑 Password:', data.password);
@@ -69,17 +65,16 @@ const RegisterForm = ({ onSwitchToLogin }) => {
       
       if (result.success) {
         const message = result.message || 'Đăng ký thành công! Vui lòng kiểm tra email để xác minh.';
-        setSuccessMessage(message);
         showToast(message, 'success');
         reset();
+        // Chuyển về trang login sau 2s
+        setTimeout(() => onSwitchToLogin(), 2000);
       } else {
         const errorMessage = result.error || 'Đăng ký thất bại';
-        setGeneralError(errorMessage);
         showToast(errorMessage, 'error');
       }
     } catch (error) {
       const errorMessage = error.message || 'Đăng ký thất bại';
-      setGeneralError(errorMessage);
       showToast(errorMessage, 'error');
     }
   };
@@ -104,20 +99,6 @@ const RegisterForm = ({ onSwitchToLogin }) => {
         </div>
 
         <div className="bg-white py-8 px-4 shadow rounded-lg sm:px-10">
-          {/* Success Message */}
-          {successMessage && (
-            <div className="mb-4 bg-green-50 border border-green-300 text-green-800 px-4 py-3 rounded-md text-sm">
-              {successMessage}
-            </div>
-          )}
-
-          {/* Error Message */}
-          {generalError && (
-            <div className="mb-4 bg-red-50 border border-red-300 text-red-800 px-4 py-3 rounded-md text-sm">
-              {generalError}
-            </div>
-          )}
-
           <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
             <Input
               {...register('fullName')}

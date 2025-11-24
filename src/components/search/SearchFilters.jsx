@@ -35,7 +35,6 @@ const SearchFilters = ({ onFiltersChange, initialFilters = {}, currentProducts =
           if (age < CACHE_DURATION) {
             const brandNames = JSON.parse(cached);
             setAllBrands(brandNames);
-            console.log(`✅ Loaded ${brandNames.length} brands from CACHE`);
             setBrandsLoading(false);
             return;
           }
@@ -50,14 +49,10 @@ const SearchFilters = ({ onFiltersChange, initialFilters = {}, currentProducts =
           // ✅ Lưu vào cache
           localStorage.setItem('brands_cache', JSON.stringify(brandNames));
           localStorage.setItem('brands_cache_time', Date.now().toString());
-          
-          console.log(`✅ Loaded ${brandNames.length} brands from API (cached for 30min)`);
         } else {
-          console.warn('⚠️ Failed to load brands from API');
           setAllBrands([]);
         }
       } catch (error) {
-        console.error('❌ Error loading brands:', error);
         setAllBrands([]);
       } finally {
         setBrandsLoading(false);
@@ -72,11 +67,9 @@ const SearchFilters = ({ onFiltersChange, initialFilters = {}, currentProducts =
   const availableBrands = useMemo(() => {
     // Nếu có categoryBrands và không rỗng → chỉ hiển thị brands trong category
     if (categoryBrands && categoryBrands.length > 0) {
-      console.log(`✅ Available brands: ${categoryBrands.length} brands (filtered by category)`);
       return categoryBrands;
     }
     // Nếu không có categoryBrands → hiển thị tất cả brands
-    console.log(`✅ Available brands: ${allBrands.length} brands (all categories)`);
     return allBrands;
   }, [allBrands, categoryBrands]);
 
@@ -85,7 +78,6 @@ const SearchFilters = ({ onFiltersChange, initialFilters = {}, currentProducts =
     if (filters.brands.length > 0) {
       const validBrands = filters.brands.filter(b => availableBrands.includes(b));
       if (validBrands.length !== filters.brands.length) {
-        console.log(`🧹 Clearing invalid brands: ${filters.brands.length} → ${validBrands.length}`);
         setFilters(prev => ({ ...prev, brands: validBrands }));
       }
     }

@@ -84,7 +84,7 @@ const ProductSection = memo(({
           >
             {products.map((product, index) => (
               <motion.div 
-                key={product.id || index} 
+                key={`${product.id}-${index}`} 
                 variants={itemVariants}
                 whileHover={{ 
                   scale: 1.05, 

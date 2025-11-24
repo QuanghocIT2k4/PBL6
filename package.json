@@ -10,19 +10,21 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@hookform/resolvers": "^3.9.1",
+    "@stomp/stompjs": "^7.2.1",
     "@tailwindcss/postcss": "^4.1.13",
     "axios": "^1.13.1",
     "framer-motion": "^11.18.2",
-    "react-hook-form": "^7.53.0",
-    "@hookform/resolvers": "^3.9.1",
-    "zod": "^3.23.8",
     "lucide-react": "^0.544.0",
     "prop-types": "^15.8.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-hook-form": "^7.53.0",
     "react-router-dom": "^7.9.3",
+    "sockjs-client": "^1.6.1",
     "sweetalert2": "^11.26.3",
-    "swr": "^2.3.6"
+    "swr": "^2.3.6",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",

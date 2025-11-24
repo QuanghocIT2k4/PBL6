@@ -58,34 +58,17 @@ export const getStoreAvailablePromotions = async (storeId, params = {}) => {
       };
     }
 
-    console.log('🎁 Fetching store available promotions:', { storeId, orderValue, page, size });
-
-    // ✅ FIXED: Đúng endpoint theo Swagger - BUYER API
     const response = await api.get(`/api/v1/buyer/promotions/store/${storeId}/available`, {
       params: {
-        orderValue,  // ✅ THÊM orderValue - REQUIRED!
+        orderValue,
         page,
         size,
         sortBy,
         sortDir,
       },
     });
-
-    console.log('✅ Store available promotions response:', response);
-    console.log('✅ Response data:', response.data);
-    console.log('📊 Response structure:', {
-      status: response.status,
-      hasSuccess: !!response.data?.success,
-      hasData: !!response.data?.data,
-      dataType: typeof response.data?.data,
-      isArray: Array.isArray(response.data?.data),
-      isResponseArray: Array.isArray(response.data),
-      dataKeys: response.data?.data ? Object.keys(response.data.data) : [],
-      responseKeys: response.data ? Object.keys(response.data) : [],
-      content: response.data?.data?.content,
-      contentLength: response.data?.data?.content?.length,
-      fullData: response.data
-    });
+    
+    // Backend trả về empty - không log nữa
 
     // Handle different response structures
     let promotions = [];
@@ -97,11 +80,6 @@ export const getStoreAvailablePromotions = async (storeId, params = {}) => {
         responseData = response.data.data;
       } else {
         // Backend returned success: false
-        console.error('❌ Backend returned success: false', {
-          error: response.data.error,
-          message: response.data.message,
-          fullResponse: response.data
-        });
         // ⚠️ Trả về empty array thay vì error để UI vẫn hiển thị được
         return {
           success: true,
@@ -116,61 +94,29 @@ export const getStoreAvailablePromotions = async (storeId, params = {}) => {
     } 
     // Case 2: Response data is directly the promotions array
     else if (Array.isArray(response.data)) {
-      console.log('📋 Response is direct array');
       responseData = response.data;
       promotions = response.data;
     }
     // Case 3: Response data is an object with nested data
     else if (response.data?.data !== undefined) {
-      console.log('📋 Response has nested data');
       responseData = response.data.data;
     }
     // Case 4: Response data is directly the data object (no wrapper)
     else if (response.data && typeof response.data === 'object') {
-      console.log('📋 Response is direct object');
       responseData = response.data;
     }
 
     // Extract promotions from responseData
     if (responseData) {
       if (Array.isArray(responseData)) {
-        console.log('📋 responseData is array, length:', responseData.length);
         promotions = responseData;
       } else if (responseData?.content && Array.isArray(responseData.content)) {
-        console.log('📋 responseData has content array, length:', responseData.content.length);
         promotions = responseData.content;
       } else if (responseData && typeof responseData === 'object') {
-        console.log('📋 responseData is object, trying to extract promotions');
         promotions = responseData.content || responseData.promotions || responseData.items || [];
-        console.log('📋 Extracted promotions count:', promotions.length);
       }
-    } else {
-      console.warn('⚠️ No responseData found');
     }
     
-    console.log('📦 Final processed promotions:', {
-      count: promotions.length,
-      promotions: promotions.map(p => ({
-        id: p.id,
-        code: p.code,
-        title: p.title || p.name,
-        status: p.status,
-        startDate: p.startDate,
-        endDate: p.endDate
-      })),
-      responseData: responseData,
-      responseDataKeys: responseData ? Object.keys(responseData) : [],
-      responseDataContent: responseData?.content,
-      responseDataContentLength: responseData?.content?.length,
-      totalElements: responseData?.totalElements,
-      totalPages: responseData?.totalPages
-    });
-    
-    // Log full responseData để debug
-    if (responseData && promotions.length === 0) {
-      console.warn('⚠️ Backend returned empty promotions array. Full responseData:', JSON.stringify(responseData, null, 2));
-      console.warn('⚠️ Request params:', { storeId, orderValue, page, size });
-    }
     
     // Return success with promotions (even if empty array)
     return {
@@ -247,8 +193,6 @@ export const getPlatformAvailablePromotions = async (params = {}) => {
       };
     }
 
-    console.log('🎁 Fetching platform available promotions:', { orderValue, page, size });
-
     const response = await api.get('/api/v1/buyer/promotions/platform/available', {
       params: {
         orderValue,
@@ -257,17 +201,6 @@ export const getPlatformAvailablePromotions = async (params = {}) => {
         sortBy,
         sortDir,
       },
-    });
-
-    console.log('✅ Platform available promotions response:', response.data);
-    console.log('📊 Platform response structure:', {
-      hasSuccess: !!response.data?.success,
-      hasData: !!response.data?.data,
-      dataType: typeof response.data?.data,
-      isArray: Array.isArray(response.data?.data),
-      dataKeys: response.data?.data ? Object.keys(response.data.data) : [],
-      content: response.data?.data?.content,
-      contentLength: response.data?.data?.content?.length,
     });
 
     if (response.data.success) {
@@ -286,11 +219,6 @@ export const getPlatformAvailablePromotions = async (params = {}) => {
         promotions = data.content || data.promotions || data.items || [];
       }
       
-      console.log('📦 Processed platform promotions:', {
-        count: promotions.length,
-        promotions: promotions
-      });
-      
       return {
         success: true,
         data: {
@@ -307,7 +235,6 @@ export const getPlatformAvailablePromotions = async (params = {}) => {
       };
     }
   } catch (error) {
-    console.error('❌ Error fetching platform available promotions:', error);
     return {
       success: false,
       error: error.message || 'Lỗi khi tải platform promotions',

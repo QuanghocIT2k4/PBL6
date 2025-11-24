@@ -98,41 +98,83 @@ const CheckoutPage = () => {
   // ✅ State để lưu storeId
   const [storeId, setStoreId] = useState(null);
 
-  // ✅ Lấy storeId từ items - TẠM THỜI HARDCODE vì API không trả về
+  // ✅ Lấy storeId từ items - GỌI API LẤY PRODUCT DETAIL
   useEffect(() => {
-    if (!items || items.length === 0) {
-      setStoreId(null);
-      return;
-    }
+    const fetchStoreId = async () => {
+      if (!items || items.length === 0) {
+        setStoreId(null);
+        return;
+      }
+      
+      const firstItem = items[0];
+      const product = firstItem?.product;
+      
+      console.log('🔍 [Checkout] Checking cart item structure:', {
+        firstItem,
+        product,
+        productStoreId: product?.storeId,
+        productStoreObjId: product?.store?.id,
+      });
+      
+      // Thử lấy storeId từ product (nếu backend đã trả về)
+      const directStoreId = 
+        product?.storeId || 
+        product?.store?.id || 
+        (product?.store && typeof product.store === 'string' ? product.store : null);
+      
+      if (directStoreId) {
+        console.log('✅ [Checkout] Found storeId directly from cart item:', directStoreId);
+        setStoreId(directStoreId);
+        return;
+      }
+      
+      // ⚠️ FALLBACK 1: Gọi API lấy product detail để lấy storeId
+      // Backend đã sửa: cart trả về productVariantId thay vì productId
+      const variantId = firstItem?.productVariantId || firstItem?.productId || product?.id;
+      if (variantId) {
+        console.log('🔍 [Checkout] Fetching product detail to get storeId:', variantId);
+        try {
+          const result = await getProductVariantById(variantId);
+          console.log('📦 [Checkout] Product detail result:', result);
+          
+          if (result.success && result.data) {
+            console.log('📦 [Checkout] Product data:', {
+              fullData: result.data,
+              storeId: result.data.storeId,
+              storeObjId: result.data.store?.id,
+              store: result.data.store,
+            });
+            
+            const fetchedStoreId = result.data.storeId || result.data.store?.id;
+            if (fetchedStoreId) {
+              console.log('✅ [Checkout] Got storeId from API:', fetchedStoreId);
+              setStoreId(fetchedStoreId);
+              return;
+            } else {
+              console.error('❌ [Checkout] Product data does not contain storeId:', result.data);
+            }
+          } else {
+            console.error('❌ [Checkout] API call failed:', result);
+          }
+        } catch (error) {
+          console.error('❌ [Checkout] Error fetching product detail:', error);
+        }
+      }
+      
+      // ⚠️ FALLBACK 2: Lấy từ localStorage (last visited store)
+      const lastStoreId = localStorage.getItem('lastViewedStoreId');
+      if (lastStoreId) {
+        console.log('⚠️ [Checkout] Using last viewed storeId from localStorage:', lastStoreId);
+        setStoreId(lastStoreId);
+        return;
+      }
+      
+      // ❌ Không tìm thấy storeId - chỉ log, KHÔNG hiển thị toast
+      console.error('❌ [Checkout] Cannot determine storeId - Backend needs to return storeId in cart items!');
+      setStoreId(null); // Set null để không loop
+    };
     
-    const firstItem = items[0];
-    const product = firstItem?.product;
-    
-    // Thử lấy storeId từ product
-    const directStoreId = 
-      product?.storeId || 
-      product?.store?.id || 
-      (product?.store && typeof product.store === 'string' ? product.store : null);
-    
-    if (directStoreId) {
-      console.log('✅ [Checkout] Found storeId directly:', directStoreId);
-      setStoreId(directStoreId);
-      return;
-    }
-    
-    // ⚠️ FALLBACK: Nếu không có storeId, thử lấy từ localStorage (last visited store)
-    const lastStoreId = localStorage.getItem('lastViewedStoreId');
-    if (lastStoreId) {
-      console.log('⚠️ [Checkout] Using last viewed storeId from localStorage:', lastStoreId);
-      setStoreId(lastStoreId);
-      return;
-    }
-    
-    // ⚠️ FALLBACK 2: Hardcode storeId của Quang Store (TẠM THỜI)
-    // TODO: Backend cần trả về storeId trong cart items!
-    const fallbackStoreId = '690e7f8c2a17c4ceb1c3079'; // Quang Store
-    console.log('⚠️ [Checkout] Using fallback storeId:', fallbackStoreId);
-    setStoreId(fallbackStoreId);
+    fetchStoreId();
   }, [items]);
   
   // Debug log storeId
@@ -179,10 +221,10 @@ const CheckoutPage = () => {
       }
 
       // ✅ Build selectedItems array
-      // ⚠️ Swagger OrderDTO chỉ yêu cầu productVariantId, nhưng backend CẦN quantity để lưu OrderItem
+      // ⚠️ Backend đã sửa: cart trả về productVariantId thay vì productId
       const selectedItems = items.map(it => ({
-        productVariantId: it.product.id,
-        quantity: it.quantity || 1, // ✅ THÊM QUANTITY
+        productVariantId: it.productVariantId || it.product?.id,
+        quantity: it.quantity || 1,
       }));
       
       // ✅ Build address object
@@ -208,6 +250,18 @@ const CheckoutPage = () => {
         // PromoCodeInput đã set isStorePromotion khi tìm thấy
         const isStorePromotion = appliedPromotion.isStorePromotion === true;
         
+        // ✅ Check promotion type: SHIPPING vs ORDER
+        const promotionType = appliedPromotion.promotion?.type || appliedPromotion.promotion?.discountType;
+        const isShippingPromotion = promotionType === 'SHIPPING' || promotionType === 'FREE_SHIPPING';
+        
+        console.log('🎫 [Checkout] Promotion details:', {
+          code: appliedPromotion.code,
+          type: promotionType,
+          isShippingPromotion,
+          isStorePromotion,
+          fullPromotion: appliedPromotion.promotion
+        });
+        
         if (isStorePromotion && storeId) {
           // Store promotion - format: { [storeId]: promotionCode }
           storePromotions = {
@@ -215,10 +269,10 @@ const CheckoutPage = () => {
           };
           console.log('🏬 [Checkout] Using store promotion:', storePromotions);
         } else {
-          // Platform promotion
+          // Platform promotion - phân biệt shipping vs order
           platformPromotions = {
-            orderPromotionCode: appliedPromotion.code,
-            shippingPromotionCode: null,
+            orderPromotionCode: isShippingPromotion ? null : appliedPromotion.code,
+            shippingPromotionCode: isShippingPromotion ? appliedPromotion.code : null,
           };
           console.log('🏪 [Checkout] Using platform promotion:', platformPromotions);
         }
@@ -437,7 +491,7 @@ const CheckoutPage = () => {
               <PromoCodeInput
                 orderTotal={productTotal}
                 storeId={storeId}
-                productIds={items.map(it => it.product.id)}
+                productIds={items.map(it => it.productVariantId || it.product?.id)}
                 onApplySuccess={(promoData) => {
                   setAppliedPromotion(promoData);
                   success(`✨ Áp dụng mã ${promoData.code} thành công!`);
@@ -452,7 +506,7 @@ const CheckoutPage = () => {
                 <PromotionList
                   orderTotal={productTotal}
                   storeId={storeId}
-                  productIds={items.map(it => it.product.id)}
+                  productIds={items.map(it => it.productVariantId || it.product?.id)}
                   selectedCode={appliedPromotion?.code}
                   onSelectPromotion={(promotion, isStorePromotion = false) => {
                     console.log('🎁 [Checkout] Selected promotion:', promotion);

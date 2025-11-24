@@ -194,6 +194,16 @@ export const confirmAction = async (actionName) => {
   });
 };
 
+/**
+ * Toast helper object - Shorthand for common toasts
+ */
+export const toast = {
+  success: (message) => showToast({ icon: 'success', title: message }),
+  error: (message) => showToast({ icon: 'error', title: message }),
+  warning: (message) => showToast({ icon: 'warning', title: message }),
+  info: (message) => showToast({ icon: 'info', title: message }),
+};
+
 export default {
   confirmDialog,
   successAlert,
@@ -205,4 +215,5 @@ export default {
   confirmDelete,
   confirmCancelOrder,
   confirmAction,
+  toast,
 };

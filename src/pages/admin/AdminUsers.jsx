@@ -7,28 +7,30 @@ import { useToast } from '../../context/ToastContext';
 const AdminUsers = () => {
   const { showToast } = useToast();
   const [currentPage, setCurrentPage] = useState(0);
-  const [roleFilter, setRoleFilter] = useState(null);
-  const [statusFilter, setStatusFilter] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
   const [banReason, setBanReason] = useState('');
-  const [banDuration, setBanDuration] = useState('PERMANENT');
+  const [banType, setBanType] = useState('PERMANENT');
+  const [banDays, setBanDays] = useState(30);
   const [showBanModal, setShowBanModal] = useState(false);
   const pageSize = 50; // Tăng lên 50 users mỗi trang
 
   // Fetch users
   const { data: usersData, error, isLoading, mutate } = useSWR(
-    ['admin-users', currentPage, roleFilter, statusFilter],
+    ['admin-users', currentPage, searchTerm],
     () => getAllUsers({
       page: currentPage,
       size: pageSize,
-      role: roleFilter,
-      status: statusFilter,
+      userName: searchTerm || null,
+      userEmail: searchTerm || null,
+      userPhone: searchTerm || null,
     }),
     { revalidateOnFocus: false }
   );
 
-  const users = usersData?.success ? (usersData.data?.content || usersData.data || []) : [];
+  // ✅ Dùng isActive từ backend (không cần localStorage nữa)
+  let users = usersData?.success ? (usersData.data?.content || usersData.data || []) : [];
+  
   const totalPages = usersData?.data?.totalPages || 0;
   const totalElements = usersData?.data?.totalElements || 0;
 
@@ -36,38 +38,25 @@ const AdminUsers = () => {
   React.useEffect(() => {
     if (users.length > 0) {
       console.log('📊 Total users loaded:', users.length);
-      console.log('Sample user object:', users[0]);
-      console.log('User roles field:', users[0].roles);
+      console.log('🔍 Sample user object:', users[0]);
+      console.log('🔍 User fields:', Object.keys(users[0]));
+      console.log('🔍 Has active?', 'active' in users[0], users[0].active);
+      console.log('🔍 Has isActive?', 'isActive' in users[0], users[0].isActive);
       
-      // 🔍 Tìm user quang3072004@gmail.com
-      const quangUser = users.find(u => u.email === 'quang3072004@gmail.com');
-      if (quangUser) {
-        console.log('🔍 FOUND quang3072004@gmail.com:');
-        console.log('  - Roles:', quangUser.roles);
-        console.log('  - Full data:', JSON.stringify(quangUser, null, 2));
+      // 🔍 Tìm user bị ban
+      const bannedUser = users.find(u => u.email === 'Ndnquang3072004@gmail.com');
+      if (bannedUser) {
+        console.log('🔍 FOUND BANNED USER:');
+        console.log('  - Email:', bannedUser.email);
+        console.log('  - active:', bannedUser.active);
+        console.log('  - isActive:', bannedUser.isActive);
+        console.log('  - Full data:', JSON.stringify(bannedUser, null, 2));
       }
     }
   }, [users]);
 
-  // Filter by search and role (client-side backup)
-  const filteredUsers = users.filter(user => {
-    // Filter by role (client-side backup nếu backend không filter)
-    if (roleFilter) {
-      const userRoles = user.roles || (user.role ? [user.role] : []);
-      if (!userRoles.includes(roleFilter)) {
-        return false;
-      }
-    }
-    
-    // Filter by search
-    if (!searchTerm) return true;
-    const search = searchTerm.toLowerCase();
-    return (
-      user.username?.toLowerCase().includes(search) ||
-      user.email?.toLowerCase().includes(search) ||
-      user.fullName?.toLowerCase().includes(search)
-    );
-  });
+  // Không cần filter client-side nữa vì backend đã filter
+  const filteredUsers = users;
 
   // Handle ban user
   const handleBanUser = async () => {
@@ -76,31 +65,97 @@ const AdminUsers = () => {
       return;
     }
 
-    const result = await banUser({
+    // Validate TEMPORARY phải có durationDays
+    if (banType === 'TEMPORARY' && (!banDays || banDays < 1)) {
+      showToast('Vui lòng nhập số ngày ban (tối thiểu 1 ngày)', 'error');
+      return;
+    }
+
+    const banData = {
       userId: selectedUser.id,
       reason: banReason,
-      duration: banDuration,
-    });
+      banType: banType,
+    };
+
+    // Chỉ thêm durationDays nếu là TEMPORARY
+    if (banType === 'TEMPORARY') {
+      banData.durationDays = parseInt(banDays);
+    }
+
+    console.log('🔵 [BAN] Sending ban request:', banData);
+    const result = await banUser(banData);
+    console.log('🔵 [BAN] Result:', result);
 
     if (result.success) {
       showToast('Ban người dùng thành công', 'success');
+      console.log('✅ [BAN] Success! Updating local state...');
+      
       setShowBanModal(false);
       setSelectedUser(null);
       setBanReason('');
-      mutate();
+      setBanType('PERMANENT');
+      setBanDays(30);
+      
+      // ✅ UPDATE LOCAL STATE với active = false
+      mutate(
+        (currentData) => {
+          if (!currentData?.data?.content) return currentData;
+          
+          return {
+            ...currentData,
+            data: {
+              ...currentData.data,
+              content: currentData.data.content.map(user => 
+                user.id === selectedUser.id 
+                  ? { ...user, active: false } // ← Backend set active = false
+                  : user
+              )
+            }
+          };
+        },
+        false
+      );
+      
+      console.log('✅ [BAN] Local state updated!');
     } else {
+      console.error('❌ [BAN] Failed:', result.error);
       showToast(result.error, 'error');
     }
   };
 
   // Handle unban user
   const handleUnbanUser = async (userId) => {
+    console.log('🟢 [UNBAN] Sending unban request for user:', userId);
     const result = await unbanUser(userId);
+    console.log('🟢 [UNBAN] Result:', result);
 
     if (result.success) {
       showToast('Gỡ ban người dùng thành công', 'success');
-      mutate();
+      console.log('✅ [UNBAN] Success! Updating local state...');
+      
+      // ✅ UPDATE LOCAL STATE với active = true
+      mutate(
+        (currentData) => {
+          if (!currentData?.data?.content) return currentData;
+          
+          return {
+            ...currentData,
+            data: {
+              ...currentData.data,
+              content: currentData.data.content.map(user => 
+                user.id === userId 
+                  ? { ...user, active: true } // ← Backend set active = true
+                  : user
+              )
+            }
+          };
+        },
+        false
+      );
+      
+      console.log('✅ [UNBAN] Local state updated!');
     } else {
+      console.error('❌ [UNBAN] Failed:', result.error);
       showToast(result.error, 'error');
     }
   };
@@ -126,46 +181,22 @@ const AdminUsers = () => {
 
       <div className="bg-white rounded-2xl p-6 shadow-sm">
 
-        {/* Filters */}
+        {/* Search */}
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-          <div className="flex flex-wrap gap-4 mb-4">
-            {/* Role Filter */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => { setRoleFilter(null); setCurrentPage(0); }}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  roleFilter === null ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Tất cả
-              </button>
-              <button
-                onClick={() => { setRoleFilter('USER'); setCurrentPage(0); }}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  roleFilter === 'USER' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                👤 User
-              </button>
-              <button
-                onClick={() => { setRoleFilter('ADMIN'); setCurrentPage(0); }}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  roleFilter === 'ADMIN' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                👑 Admin
-              </button>
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="🔍 Tìm kiếm theo tên, email, số điện thoại..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+            </div>
+            <div className="text-sm text-gray-600">
+              Tổng: <span className="font-bold text-purple-600">{totalElements}</span> users
             </div>
           </div>
-
-          {/* Search */}
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Tìm kiếm theo username, email, tên..."
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-          />
         </div>
 
         {/* Users Table */}
@@ -198,7 +229,19 @@ const AdminUsers = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredUsers.map((user) => (
+                    {filteredUsers.map((user) => {
+                      // 🔍 DEBUG LOG CHI TIẾT
+                      console.log('='.repeat(80));
+                      console.log(`🔍 USER DEBUG:`);
+                      console.log(`  - Email: ${user.email}`);
+                      console.log(`  - active: ${user.active}`);
+                      console.log(`  - Type: ${typeof user.active}`);
+                      console.log(`  - !user.active: ${!user.active}`);
+                      console.log(`  - user.active === false: ${user.active === false}`);
+                      console.log(`  - user.active === true: ${user.active === true}`);
+                      console.log('='.repeat(80));
+                      
+                      return (
                       <tr key={user.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-3">
@@ -253,13 +296,17 @@ const AdminUsers = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          {user.isBanned ? (
+                          {user.active === false ? (
                             <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-bold">
                               ❌ Đã ban
                             </span>
-                          ) : (
+                          ) : user.active === true ? (
                             <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-bold">
                               ✅ Hoạt động
+                            </span>
+                          ) : (
+                            <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-bold">
+                              ⚠️ Không rõ (active = {String(user.active)})
                             </span>
                           )}
                         </td>
@@ -268,14 +315,14 @@ const AdminUsers = () => {
                         </td> */}
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           {!user.roles?.includes('ADMIN') && (
-                            user.isBanned ? (
+                            user.active === false ? (
                               <button
                                 onClick={() => handleUnbanUser(user.id)}
                                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
                               >
                                 Gỡ ban
                               </button>
-                            ) : (
+                            ) : user.active === true ? (
                               <button
                                 onClick={() => {
                                   setSelectedUser(user);
@@ -285,11 +332,16 @@ const AdminUsers = () => {
                               >
                                 Ban
                               </button>
+                            ) : (
+                              <span className="text-xs text-gray-500">
+                                ⚠️ active = {String(user.active)}
+                              </span>
                             )
                           )}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -347,16 +399,38 @@ const AdminUsers = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Thời hạn</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Loại ban <span className="text-red-500">*</span>
+                </label>
                 <select
-                  value={banDuration}
-                  onChange={(e) => setBanDuration(e.target.value)}
+                  value={banType}
+                  onChange={(e) => setBanType(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
                 >
-                  <option value="TEMPORARY">Tạm thời (7 ngày)</option>
+                  <option value="TEMPORARY">Tạm thời</option>
                   <option value="PERMANENT">Vĩnh viễn</option>
                 </select>
               </div>
+
+              {banType === 'TEMPORARY' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Số ngày ban <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={banDays}
+                    onChange={(e) => setBanDays(e.target.value)}
+                    min="1"
+                    max="365"
+                    placeholder="Nhập số ngày (1-365)"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    User sẽ tự động được unban sau {banDays} ngày
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 mt-6">
@@ -365,6 +439,8 @@ const AdminUsers = () => {
                   setShowBanModal(false);
                   setSelectedUser(null);
                   setBanReason('');
+                  setBanType('PERMANENT');
+                  setBanDays(30);
                 }}
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
               >
@@ -372,7 +448,7 @@ const AdminUsers = () => {
               </button>
               <button
                 onClick={handleBanUser}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
               >
                 Xác nhận ban
               </button>

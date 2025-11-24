@@ -41,8 +41,6 @@ export const getProducts = async (params = {}) => {
       categoryName,
     } = params;
 
-    console.log('📦 Fetching products with params:', { page, size, sortBy, sortDir, categoryId, categoryName });
-
     let response;
     
     // ✅ Strategy: Nếu có categoryName → dùng endpoint category
@@ -67,8 +65,6 @@ export const getProducts = async (params = {}) => {
         },
       });
     }
-
-    console.log('✅ Products response:', response.data);
 
     // BE trả về: ApiResponse<Page<ProductResponse>>
     if (response.data.success) {
@@ -99,11 +95,7 @@ export const getProducts = async (params = {}) => {
  */
 export const getProductById = async (productId) => {
   try {
-    console.log('🔍 Fetching product detail:', productId);
-
     const response = await api.get(`/api/v1/products/${productId}`);
-
-    console.log('✅ Product detail response:', response.data);
 
     if (response.data.success) {
       return {
@@ -142,8 +134,6 @@ export const getProductVariants = async (params = {}) => {
       productId, // Lọc theo productId nếu cần
     } = params;
 
-    console.log('🎨 Fetching product variants:', { page, size, productId });
-
     let response;
     
     // ✅ Nếu có productId, dùng endpoint /product/{productId}
@@ -167,8 +157,6 @@ export const getProductVariants = async (params = {}) => {
         },
       });
     }
-
-    console.log('✅ Product variants response:', response.data);
 
     if (response.data.success) {
       return {
@@ -207,17 +195,12 @@ export const getProductVariantsByCategory = async (params = {}) => {
       categoryName,
     } = params;
 
-    console.log('🎨 Fetching variants by category:', { categoryName, page, size });
-
     if (!categoryName) {
       return { success: false, error: 'Category name is required' };
     }
 
     // ✅ GỌI TRỰC TIẾP API PRODUCT VARIANTS THEO CATEGORY
-    const apiUrl = `/api/v1/product-variants/category/${categoryName}`;
-    console.log('📡 API URL:', apiUrl);
-    
-    const response = await api.get(apiUrl, {
+    const response = await api.get(`/api/v1/product-variants/category/${categoryName}`, {
       params: {
         page,
         size,
@@ -225,9 +208,6 @@ export const getProductVariantsByCategory = async (params = {}) => {
         sortDir,
       },
     });
-
-    console.log('✅ Product variants by category response:', response.data);
-    console.log('📊 Total variants found:', response.data?.data?.totalElements || 0);
 
     if (response.data.success) {
       return {
@@ -267,8 +247,6 @@ export const getLatestProductVariants = async (params = {}) => {
       sortDir = 'desc',
     } = params;
 
-    console.log('🎨 Fetching latest product variants:', { page, size });
-
     const response = await api.get('/api/v1/product-variants/latest', {
       params: {
         page,
@@ -276,18 +254,6 @@ export const getLatestProductVariants = async (params = {}) => {
         sortBy,
         sortDir,
       },
-    });
-
-    console.log('✅ Latest product variants response:', response.data);
-    console.log('📊 Response data structure:', {
-      hasSuccess: !!response.data.success,
-      hasData: !!response.data.data,
-      dataType: typeof response.data.data,
-      dataKeys: response.data.data ? Object.keys(response.data.data) : [],
-      totalElements: response.data.data?.totalElements,
-      totalPages: response.data.data?.totalPages,
-      contentLength: response.data.data?.content?.length,
-      fullData: response.data.data
     });
 
     if (response.data.success) {
@@ -327,8 +293,6 @@ export const searchProductVariants = async (params = {}) => {
       sortDir = 'desc',
     } = params;
 
-    console.log('🔍 Searching product variants:', { name, page, size });
-
     const response = await api.get('/api/v1/product-variants/search', {
       params: {
         name,
@@ -338,8 +302,6 @@ export const searchProductVariants = async (params = {}) => {
         sortDir,
       },
     });
-
-    console.log('✅ Search product variants response:', response.data);
 
     if (response.data.success) {
       return {
@@ -376,8 +338,6 @@ export const getProductVariantsByStore = async (storeId, params = {}) => {
       sortDir = 'desc',
     } = params;
 
-    console.log('🔍 Fetching product variants by store:', { storeId, page, size });
-
     const response = await api.get(`/api/v1/product-variants/store/${storeId}`, {
       params: {
         page,
@@ -386,8 +346,6 @@ export const getProductVariantsByStore = async (storeId, params = {}) => {
         sortDir,
       },
     });
-
-    console.log('✅ Store product variants response:', response.data);
 
     if (response.data.success) {
       return {
@@ -466,20 +424,7 @@ export const getProductVariantsByCategoryAndBrand = async (category, brand, para
       };
     }
 
-    console.log('🎨🏷️ Fetching variants by category & brand:', { 
-      category, 
-      brand, 
-      page, 
-      size, 
-      sortBy, 
-      sortDir 
-    });
-
-    // Call API endpoint
-    const apiUrl = `/api/v1/product-variants/category/${encodeURIComponent(category)}/brand/${encodeURIComponent(brand)}`;
-    console.log('📡 API URL:', apiUrl);
-
-    const response = await api.get(apiUrl, {
+    const response = await api.get(`/api/v1/product-variants/category/${encodeURIComponent(category)}/brand/${encodeURIComponent(brand)}`, {
       params: {
         page,
         size,
@@ -487,9 +432,6 @@ export const getProductVariantsByCategoryAndBrand = async (category, brand, para
         sortDir,
       },
     });
-
-    console.log('✅ Product variants by category & brand response:', response.data);
-    console.log('📊 Total variants found:', response.data?.data?.totalElements || 0);
 
     // Handle response
     if (response.data.success) {
@@ -520,11 +462,7 @@ export const getProductVariantsByCategoryAndBrand = async (category, brand, para
  */
 export const getProductVariantById = async (variantId) => {
   try {
-    console.log('🔍 Fetching variant detail:', variantId);
-
     const response = await api.get(`/api/v1/product-variants/${variantId}`);
-
-    console.log('✅ Variant detail response:', response.data);
 
     if (response.data.success) {
       return {
@@ -564,20 +502,13 @@ export const getCategories = async (params = {}) => {
     // ✅ Kiểm tra cache
     const now = Date.now();
     if (categoriesCache && categoriesCacheTime && (now - categoriesCacheTime < CACHE_DURATION)) {
-      console.log('✅ Using cached categories');
       return {
         success: true,
         data: categoriesCache,
       };
     }
 
-    console.log('📂 Fetching categories from API');
-
-    // ✅ Dùng endpoint /all để lấy tất cả categories không pagination
     const response = await api.get('/api/v1/categories/all');
-
-    console.log('✅ Categories response:', response.data);
-    console.log('✅ Response type:', typeof response.data, Array.isArray(response.data));
 
     // ✅ Backend trả về List<CategoryDTO> trực tiếp (ResponseEntity.ok(categoryDTOs))
     // KHÔNG có ApiResponse wrapper
@@ -602,8 +533,6 @@ export const getCategories = async (params = {}) => {
     categoriesCache = categories;
     categoriesCacheTime = now;
     
-    console.log('✅ Processed categories:', categories);
-    
     return {
       success: true,
       data: categories,
@@ -625,11 +554,7 @@ export const getCategories = async (params = {}) => {
  */
 export const getCategoryById = async (categoryId) => {
   try {
-    console.log('🔍 Fetching category:', categoryId);
-
     const response = await api.get(`/api/v1/categories/${categoryId}`);
-
-    console.log('✅ Category detail response:', response.data);
 
     if (response.data.success) {
       return {
@@ -666,8 +591,6 @@ export const getBrands = async (params = {}) => {
       sortDirection = 'asc',
     } = params;
 
-    console.log('🏷️ Fetching brands');
-
     const response = await api.get('/api/v1/brands', {
       params: {
         page,
@@ -676,8 +599,6 @@ export const getBrands = async (params = {}) => {
         sortDirection,
       },
     });
-
-    console.log('✅ Brands response:', response.data);
 
     // BE có thể trả về array hoặc page object
     if (response.data.success) {
@@ -721,12 +642,7 @@ export const getBrands = async (params = {}) => {
  */
 export const getAllBrands = async () => {
   try {
-    console.log('🏷️ Fetching all brands without pagination');
-
-    // ✅ Theo Swagger: GET /api/v1/brands/all → Response: Array<BrandDTO> (trực tiếp, không có wrapper)
     const response = await api.get('/api/v1/brands/all');
-
-    console.log('✅ Brands response:', response.data);
 
     // ✅ Response format: Array<BrandDTO> trực tiếp (không có ApiResponse wrapper)
     if (Array.isArray(response.data)) {
@@ -758,11 +674,7 @@ export const getAllBrands = async () => {
  */
 export const getBrandById = async (brandId) => {
   try {
-    console.log('🔍 Fetching brand:', brandId);
-
     const response = await api.get(`/api/v1/brands/${brandId}`);
-
-    console.log('✅ Brand detail response:', response.data);
 
     if (response.data.success) {
       return {
@@ -841,20 +753,7 @@ export const getProductsByCategoryAndBrand = async (category, brand, params = {}
       };
     }
 
-    console.log('📦🏷️ Fetching products by category & brand:', { 
-      category, 
-      brand, 
-      page, 
-      size, 
-      sortBy, 
-      sortDir 
-    });
-
-    // Call API endpoint
-    const apiUrl = `/api/v1/products/category/${encodeURIComponent(category)}/brand/${encodeURIComponent(brand)}`;
-    console.log('📡 API URL:', apiUrl);
-
-    const response = await api.get(apiUrl, {
+    const response = await api.get(`/api/v1/products/category/${encodeURIComponent(category)}/brand/${encodeURIComponent(brand)}`, {
       params: {
         page,
         size,
@@ -862,9 +761,6 @@ export const getProductsByCategoryAndBrand = async (category, brand, params = {}
         sortDir,
       },
     });
-
-    console.log('✅ Products by category & brand response:', response.data);
-    console.log('📊 Total products found:', response.data?.data?.totalElements || 0);
 
     // Handle response
     if (response.data.success) {
@@ -910,8 +806,6 @@ export const searchProducts = async (params = {}) => {
       maxPrice,
     } = params;
 
-    console.log('🔍 Searching products:', { keyword, page, size });
-
     const response = await api.get('/api/v1/products', {
       params: {
         name: keyword,
@@ -921,8 +815,6 @@ export const searchProducts = async (params = {}) => {
         sortDir,
       },
     });
-
-    console.log('✅ Search results:', response.data);
 
     if (response.data.success) {
       return {

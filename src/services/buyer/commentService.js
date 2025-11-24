@@ -51,10 +51,6 @@ export const commentService = {
     const target = list.find(c => c.id === commentId);
     if (!target) return { success: false, error: 'Không tìm thấy bình luận' };
     
-    console.log('Comment to delete:', target);
-    console.log('Current user ID:', currentUserId);
-    console.log('Comment user ID:', target.user?.id);
-    
     // Check if user can delete (more flexible check)
     const canDelete = target.user && (
       target.user.id === currentUserId || 
@@ -62,8 +58,6 @@ export const commentService = {
       target.user.id === null || // Allow deletion if no user ID set
       currentUserId === null
     );
-    
-    console.log('Can delete:', canDelete);
     
     if (!canDelete) {
       return { success: false, error: 'Bạn không có quyền xóa bình luận này' };
