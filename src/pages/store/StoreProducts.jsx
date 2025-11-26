@@ -365,103 +365,85 @@ const StoreProducts = () => {
             </div>
           </div>
 
-          {/* Products Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Products Table */}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             {filteredItems.length === 0 ? (
-              <div className="col-span-full text-center py-12 bg-white rounded-xl">
+              <div className="text-center py-12">
                 <div className="text-gray-300 text-5xl mb-3">📦</div>
                 <p className="text-gray-500 font-medium">Không tìm thấy sản phẩm nào</p>
                 <p className="text-gray-400 text-sm mt-1">Thử tạo sản phẩm mới hoặc thay đổi bộ lọc</p>
               </div>
             ) : (
-              filteredItems.map((item) => {
-                const approvalBadge = getApprovalBadge(item.approvalStatus);
-                
-                return (
-                  <div key={`${item.type}-${item.id}`} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-200">
-                    {/* Image */}
-                    <div className="relative h-40 bg-gradient-to-br from-gray-100 to-gray-200">
-                      {item.images && item.images[0] ? (
-                        <img
-                          src={item.images[0]}
-                          alt={item.displayName}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-400">
-                          <svg className="w-16 h-16" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                      )}
-                      
-                      {/* Type Badge removed theo yêu cầu */}
-                      
-                      {/* Approval Status Badge */}
-                      <div className="absolute top-2 right-2">
-                        <span className={`px-2 py-1 rounded-md text-xs font-semibold ${approvalBadge.className}`}>
-                          {approvalBadge.icon} {approvalBadge.label}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Info */}
-                    <div className="p-3">
-                      <h3 className="font-bold text-gray-900 text-sm line-clamp-2 mb-2 min-h-[2.5rem]">
-                        {item.displayName}
-                      </h3>
-
-                      {/* Brand & Category */}
-                      <div className="space-y-1 mb-3 text-xs">
-                        <div className="flex justify-between items-center">
-                          <span className="text-gray-500">Thương hiệu:</span>
-                          <span className="font-semibold text-gray-700">{item.brand || 'N/A'}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-gray-500">Danh mục:</span>
-                          <span className="font-semibold text-gray-700">{item.category || 'N/A'}</span>
-                        </div>
-                      </div>
-
-                      {/* Action Icons */}
-                      <div className="flex gap-1 justify-end">
-                        <button
-                          onClick={() => navigate(`/store-dashboard/products/${item.id}`)}
-                          className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
-                          title="Xem chi tiết"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                          </svg>
-                        </button>
-                        
-                        <button
-                          onClick={() => {
-                            // ✅ Kiểm tra trạng thái sản phẩm
-                            if (item.approvalStatus !== 'APPROVED') {
-                              toast?.error?.('Sản phẩm phải được duyệt thành công trước khi thêm biến thể. Vui lòng đợi sản phẩm được duyệt.');
-                              return;
-                            }
-                            navigate(`/store-dashboard/products/create-variant?productId=${item.id}`);
-                          }}
-                          className={`p-2 rounded-lg transition-colors ${
-                            item.approvalStatus === 'APPROVED'
-                              ? 'bg-green-50 text-green-600 hover:bg-green-100'
-                              : 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-50'
-                          }`}
-                          title={item.approvalStatus === 'APPROVED' ? 'Thêm biến thể' : 'Sản phẩm phải được duyệt trước khi thêm biến thể'}
-                          disabled={item.approvalStatus !== 'APPROVED'}
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/>
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tên sản phẩm</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Thương hiệu</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Danh mục</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trạng thái</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredItems.map((item) => {
+                    const approvalBadge = getApprovalBadge(item.approvalStatus);
+                    
+                    return (
+                      <tr key={`${item.type}-${item.id}`} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="font-medium text-gray-900">{item.displayName}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-700">{item.brand || 'N/A'}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-700">{item.category || 'N/A'}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 py-1 rounded-md text-xs font-semibold ${approvalBadge.className}`}>
+                            {approvalBadge.icon} {approvalBadge.label}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={() => navigate(`/store-dashboard/products/${item.id}`)}
+                              className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                              title="Xem chi tiết"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                              </svg>
+                            </button>
+                            
+                            <button
+                              onClick={() => {
+                                if (item.approvalStatus !== 'APPROVED') {
+                                  toast?.error?.('Sản phẩm phải được duyệt thành công trước khi thêm biến thể. Vui lòng đợi sản phẩm được duyệt.');
+                                  return;
+                                }
+                                navigate(`/store-dashboard/products/create-variant?productId=${item.id}`);
+                              }}
+                              className={`p-2 rounded-lg transition-colors ${
+                                item.approvalStatus === 'APPROVED'
+                                  ? 'bg-green-50 text-green-600 hover:bg-green-100'
+                                  : 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-50'
+                              }`}
+                              title={item.approvalStatus === 'APPROVED' ? 'Thêm biến thể' : 'Sản phẩm phải được duyệt trước khi thêm biến thể'}
+                              disabled={item.approvalStatus !== 'APPROVED'}
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/>
+                              </svg>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             )}
           </div>
         </div>

@@ -5,19 +5,27 @@ import { useToast } from '../../context/ToastContext';
 // Import services based on user type
 import {
   getBuyerNotifications,
-  markNotificationAsRead,
-  markAllNotificationsAsRead,
-  deleteNotification,
-  getUnreadCount,
-} from '../../services/buyer/notificationService';
+  getBuyerUnreadCount,
+  markBuyerNotificationAsRead,
+  markAllBuyerNotificationsAsRead,
+  deleteBuyerNotification,
+} from '../../services/notification/buyerNotificationService';
 
 import {
   getStoreNotifications,
+  getStoreUnreadCount,
   markStoreNotificationAsRead,
   markAllStoreNotificationsAsRead,
   deleteStoreNotification,
-  getUnreadCount as getStoreUnreadCount,
-} from '../../services/b2c/storeNotificationService';
+} from '../../services/notification/storeNotificationService';
+
+import {
+  getAdminNotifications,
+  getAdminUnreadCount,
+  markAdminNotificationAsRead,
+  markAllAdminNotificationsAsRead,
+  deleteAdminNotification,
+} from '../../services/notification/adminNotificationService';
 
 /**
  * NotificationContainer Component
@@ -52,12 +60,15 @@ const NotificationContainer = ({ userType = 'buyer', storeId = null }) => {
       
       if (userType === 'buyer') {
         result = await getBuyerNotifications({ page: 0, size: 10 });
+      } else if (userType === 'admin') {
+        result = await getAdminNotifications({ page: 0, size: 10 });
       } else if (userType === 'store' && storeId) {
         result = await getStoreNotifications(storeId, { page: 0, size: 10 });
       }
       
       if (result && result.success) {
         const data = result.data;
+        // Đảm bảo notificationList luôn là array
         // ✅ Đảm bảo notificationList luôn là array
         let notificationList = [];
         if (Array.isArray(result.data)) {
@@ -74,11 +85,13 @@ const NotificationContainer = ({ userType = 'buyer', storeId = null }) => {
         setUnreadCount(unread);
         setHasMore(data?.totalPages > 1);
         setPage(0);
-      } else if (result) {
-        showError(result.error);
+      } else if (result && result.error) {
+        // ✅ Chỉ log error, không hiển thị toast khi chưa đăng nhập
+        console.warn('⚠️ Cannot load notifications:', result.error);
       }
     } catch (err) {
       console.error('❌ Error loading notifications:', err);
+      // ✅ Không hiển thị toast lỗi cho user
     } finally {
       if (!silent) setLoading(false);
     }
@@ -88,10 +101,12 @@ const NotificationContainer = ({ userType = 'buyer', storeId = null }) => {
     try {
       let result;
       
-      if (userType === 'store' && storeId) {
+      if (userType === 'admin') {
+        result = await markAdminNotificationAsRead(notificationId);
+      } else if (userType === 'store' && storeId) {
         result = await markStoreNotificationAsRead(storeId, notificationId);
       } else {
-        result = await markNotificationAsRead(notificationId);
+        result = await markBuyerNotificationAsRead(notificationId);
       }
 
       if (result.success) {
@@ -110,10 +125,12 @@ const NotificationContainer = ({ userType = 'buyer', storeId = null }) => {
     try {
       let result;
       
-      if (userType === 'store' && storeId) {
+      if (userType === 'admin') {
+        result = await markAllAdminNotificationsAsRead();
+      } else if (userType === 'store' && storeId) {
         result = await markAllStoreNotificationsAsRead(storeId);
       } else {
-        result = await markAllNotificationsAsRead();
+        result = await markAllBuyerNotificationsAsRead();
       }
 
       if (result.success) {
@@ -137,10 +154,12 @@ const NotificationContainer = ({ userType = 'buyer', storeId = null }) => {
     try {
       let result;
       
-      if (userType === 'store' && storeId) {
+      if (userType === 'admin') {
+        result = await deleteAdminNotification(notificationId);
+      } else if (userType === 'store' && storeId) {
         result = await deleteStoreNotification(storeId, notificationId);
       } else {
-        result = await deleteNotification(notificationId);
+        result = await deleteBuyerNotification(notificationId);
       }
 
       if (result.success) {

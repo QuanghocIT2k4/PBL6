@@ -1,4 +1,5 @@
 import api from '../common/api';
+import { getShipmentByOrderId, updateShipmentStatus } from './shipmentService';
 
 /**
  * ================================================
@@ -119,23 +120,29 @@ export const getStoreOrderById = async (orderId, storeId) => {
 
 /**
  * 3. CẬP NHẬT TRẠNG THÁI ĐƠN HÀNG
- * PUT /api/v1/b2c/orders/{orderId}/status
+ * ❌ DEPRECATED - API đã bị xóa trong Swagger mới (26/11/2024)
+ * ⚠️ KHÔNG SỬ DỤNG - Chuyển sang dùng Shipment Management
+ * 
+ * OLD: PUT /api/v1/b2c/orders/{orderId}/status
+ * NEW: PUT /api/v1/b2c/shipments/{shipmentId}/status
+ * 
+ * @see shipmentService.js - updateShipmentStatus()
  */
-export const updateOrderStatus = async (orderId, status) => {
-  try {
-    const response = await api.put(`/api/v1/b2c/orders/${orderId}/status`, { status });
-    return {
-      success: true,
-      data: response.data.data,
-      message: 'Cập nhật trạng thái thành công!',
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error.message || 'Không thể cập nhật trạng thái',
-    };
-  }
-};
+// export const updateOrderStatus = async (orderId, status) => {
+//   try {
+//     const response = await api.put(`/api/v1/b2c/orders/${orderId}/status`, { status });
+//     return {
+//       success: true,
+//       data: response.data.data,
+//       message: 'Cập nhật trạng thái thành công!',
+//     };
+//   } catch (error) {
+//     return {
+//       success: false,
+//       error: error.message || 'Không thể cập nhật trạng thái',
+//     };
+//   }
+// };
 
 /**
  * 4. XÁC NHẬN ĐƠN HÀNG
@@ -173,71 +180,89 @@ export const confirmOrder = async (orderId, storeId) => {
 
 /**
  * 5. GIAO HÀNG
- * PUT /api/v1/b2c/orders/{orderId}/ship
- * ⚠️ CẦN storeId trong query params
+ * ❌ DEPRECATED - API đã bị xóa trong Swagger mới (26/11/2024)
+ * ⚠️ KHÔNG SỬ DỤNG - Chuyển sang dùng Shipment Management
+ * 
+ * OLD: PUT /api/v1/b2c/orders/{orderId}/ship
+ * NEW: Dùng updateShipmentStatus(shipmentId, 'SHIPPING')
+ * 
+ * Migration guide:
+ * 1. Lấy shipment từ orderId: getShipmentByOrderId(orderId)
+ * 2. Update shipment status: updateShipmentStatus(shipment.id, 'SHIPPING')
+ * 
+ * @see shipmentService.js - getShipmentByOrderId(), updateShipmentStatus()
  */
-export const shipOrder = async (orderId, storeId) => {
-  try {
-    if (!storeId) {
-      return {
-        success: false,
-        error: 'storeId is required',
-      };
-    }
-
-    const response = await api.put(`/api/v1/b2c/orders/${orderId}/ship`, null, {
-      params: {
-        storeId: String(storeId),
-      },
-    });
-    return {
-      success: true,
-      data: response.data.data,
-      message: 'Đơn hàng đã chuyển sang trạng thái đang giao!',
-    };
-  } catch (error) {
-    console.error('❌ [shipOrder] Error:', error);
-    console.error('❌ [shipOrder] Error response:', error.response?.data);
-    return {
-      success: false,
-      error: error.response?.data?.message || error.message || 'Không thể cập nhật trạng thái giao hàng',
-    };
-  }
-};
+// export const shipOrder = async (orderId, storeId) => {
+//   try {
+//     if (!storeId) {
+//       return {
+//         success: false,
+//         error: 'storeId is required',
+//       };
+//     }
+//
+//     const response = await api.put(`/api/v1/b2c/orders/${orderId}/ship`, null, {
+//       params: {
+//         storeId: String(storeId),
+//       },
+//     });
+//     return {
+//       success: true,
+//       data: response.data.data,
+//       message: 'Đơn hàng đã chuyển sang trạng thái đang giao!',
+//     };
+//   } catch (error) {
+//     console.error('❌ [shipOrder] Error:', error);
+//     console.error('❌ [shipOrder] Error response:', error.response?.data);
+//     return {
+//       success: false,
+//       error: error.response?.data?.message || error.message || 'Không thể cập nhật trạng thái giao hàng',
+//     };
+//   }
+// };
 
 /**
  * 6. HOÀN TẤT GIAO HÀNG
- * PUT /api/v1/b2c/orders/{orderId}/deliver
- * ⚠️ CẦN storeId trong query params
+ * ❌ DEPRECATED - API đã bị xóa trong Swagger mới (26/11/2024)
+ * ⚠️ KHÔNG SỬ DỤNG - Chuyển sang dùng Shipment Management
+ * 
+ * OLD: PUT /api/v1/b2c/orders/{orderId}/deliver
+ * NEW: Dùng updateShipmentStatus(shipmentId, 'DELIVERED')
+ * 
+ * Migration guide:
+ * 1. Lấy shipment từ orderId: getShipmentByOrderId(orderId)
+ * 2. Update shipment status: updateShipmentStatus(shipment.id, 'DELIVERED')
+ * 
+ * @see shipmentService.js - getShipmentByOrderId(), updateShipmentStatus()
  */
-export const deliverOrder = async (orderId, storeId) => {
-  try {
-    if (!storeId) {
-      return {
-        success: false,
-        error: 'storeId is required',
-      };
-    }
-
-    const response = await api.put(`/api/v1/b2c/orders/${orderId}/deliver`, null, {
-      params: {
-        storeId: String(storeId),
-      },
-    });
-    return {
-      success: true,
-      data: response.data.data,
-      message: 'Đơn hàng đã được giao thành công!',
-    };
-  } catch (error) {
-    console.error('❌ [deliverOrder] Error:', error);
-    console.error('❌ [deliverOrder] Error response:', error.response?.data);
-    return {
-      success: false,
-      error: error.response?.data?.message || error.message || 'Không thể hoàn tất giao hàng',
-    };
-  }
-};
+// export const deliverOrder = async (orderId, storeId) => {
+//   try {
+//     if (!storeId) {
+//       return {
+//         success: false,
+//         error: 'storeId is required',
+//       };
+//     }
+//
+//     const response = await api.put(`/api/v1/b2c/orders/${orderId}/deliver`, null, {
+//       params: {
+//         storeId: String(storeId),
+//       },
+//     });
+//     return {
+//       success: true,
+//       data: response.data.data,
+//       message: 'Đơn hàng đã được giao thành công!',
+//     };
+//   } catch (error) {
+//     console.error('❌ [deliverOrder] Error:', error);
+//     console.error('❌ [deliverOrder] Error response:', error.response?.data);
+//     return {
+//       success: false,
+//       error: error.response?.data?.message || error.message || 'Không thể hoàn tất giao hàng',
+//     };
+//   }
+// };
 
 /**
  * 7. HỦY ĐƠN HÀNG
@@ -255,6 +280,97 @@ export const cancelStoreOrder = async (orderId, reason = '') => {
     return {
       success: false,
       error: error.message || 'Không thể hủy đơn hàng',
+    };
+  }
+};
+
+/**
+ * ================================================
+ * NEW WRAPPER FUNCTIONS - SHIPMENT-BASED
+ * ================================================
+ * Thay thế cho shipOrder() và deliverOrder() đã deprecated
+ */
+
+/**
+ * SHIP ORDER - Bắt đầu giao hàng
+ * Wrapper function sử dụng Shipment Management
+ */
+export const shipOrder = async (orderId, storeId) => {
+  try {
+    console.log('🚚 [shipOrder] Starting shipment for order:', orderId);
+    
+    // 1. Lấy shipment từ orderId
+    const shipmentResult = await getShipmentByOrderId(orderId);
+    
+    if (!shipmentResult.success) {
+      return {
+        success: false,
+        error: shipmentResult.error || 'Không tìm thấy vận đơn cho đơn hàng này',
+      };
+    }
+    
+    const shipment = shipmentResult.data;
+    console.log('📦 Found shipment:', shipment);
+    
+    // 2. Update shipment status sang SHIPPING
+    const updateResult = await updateShipmentStatus(shipment.id, 'SHIPPING');
+    
+    if (updateResult.success) {
+      return {
+        success: true,
+        data: updateResult.data,
+        message: 'Đơn hàng đã chuyển sang trạng thái đang giao!',
+      };
+    }
+    
+    return updateResult;
+  } catch (error) {
+    console.error('❌ [shipOrder] Error:', error);
+    return {
+      success: false,
+      error: error.message || 'Không thể cập nhật trạng thái giao hàng',
+    };
+  }
+};
+
+/**
+ * DELIVER ORDER - Hoàn tất giao hàng
+ * Wrapper function sử dụng Shipment Management
+ */
+export const deliverOrder = async (orderId, storeId) => {
+  try {
+    console.log('✅ [deliverOrder] Completing delivery for order:', orderId);
+    
+    // 1. Lấy shipment từ orderId
+    const shipmentResult = await getShipmentByOrderId(orderId);
+    
+    if (!shipmentResult.success) {
+      return {
+        success: false,
+        error: shipmentResult.error || 'Không tìm thấy vận đơn cho đơn hàng này',
+      };
+    }
+    
+    const shipment = shipmentResult.data;
+    console.log('📦 Found shipment:', shipment);
+    
+    // 2. Update shipment status sang DELIVERED
+    const updateResult = await updateShipmentStatus(shipment.id, 'DELIVERED');
+    
+    if (updateResult.success) {
+      return {
+        success: true,
+        data: updateResult.data,
+        message: 'Đơn hàng đã được giao thành công!',
+      };
+    }
+    
+    return updateResult;
+  } catch (error) {
+    console.error('❌ [deliverOrder] Error:', error);
+    return {
+      success: false,
+      error: error.message || 'Không thể hoàn tất giao hàng',
     };
   }
 };
@@ -302,10 +418,10 @@ export const getRevenueStatistics = async (startDate, endDate) => {
 export default {
   getStoreOrders,
   getStoreOrderById,
-  updateOrderStatus,
+  // updateOrderStatus, // ❌ DEPRECATED - Use shipmentService
   confirmOrder,
-  shipOrder,
-  deliverOrder,
+  shipOrder, // ✅ NEW - Wrapper using shipmentService
+  deliverOrder, // ✅ NEW - Wrapper using shipmentService
   cancelStoreOrder,
   getOrderStatistics,
   getRevenueStatistics,

@@ -8,7 +8,7 @@ import AdminStores from '../pages/admin/AdminStores';
 import AdminProducts from '../pages/admin/AdminProducts';
 import AdminVariants from '../pages/admin/AdminVariants';
 import AdminPromotions from '../pages/admin/AdminPromotions';
-import AdminWallets from '../pages/admin/AdminWallets';
+import AdminWithdrawals from '../pages/admin/AdminWithdrawals';
 import AdminRevenue from '../pages/admin/AdminRevenue';
 
 const AdminRoutes = () => {
@@ -22,7 +22,7 @@ const AdminRoutes = () => {
           <Route path="/products" element={<AdminProducts />} />
           <Route path="/variants" element={<AdminVariants />} />
           <Route path="/promotions" element={<AdminPromotions />} />
-          <Route path="/wallets" element={<AdminWallets />} />
+          <Route path="/withdrawals" element={<AdminWithdrawals />} />
           <Route path="/revenue" element={<AdminRevenue />} />
         </Routes>
       </AdminLayout>

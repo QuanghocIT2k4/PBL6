@@ -131,8 +131,11 @@ export const CartProvider = ({ children }) => {
   // ✅ Theo dõi logout event và xóa giỏ hàng khi logout
   useEffect(() => {
     const handleLogout = () => {
+      console.log('🔥 CartContext: Received userLogout event, clearing cart');
+      console.log('🔥 CartContext: Before clear - cartItems.length:', cartItems.length);
       setCartItems([]);
       localStorage.removeItem('cart'); // ✅ XÓA CART KHỎI LOCALSTORAGE
+      console.log('🔥 CartContext: After clear - should be 0');
     };
 
     // Listen for logout event

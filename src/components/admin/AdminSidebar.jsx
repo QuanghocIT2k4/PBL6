@@ -1,18 +1,36 @@
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import AdminNotifications from './AdminNotifications';
+import { logout } from '../../services/common/authService';
+import { useToast } from '../../context/ToastContext';
 
 const AdminSidebar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { success: showSuccess } = useToast();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const isActive = (path) => {
     return location.pathname === path;
   };
 
-  console.log('🔍 [AdminSidebar] Rendering...');
-  console.log('🔍 [AdminSidebar] Current path:', location.pathname);
-  console.log('💰 [AdminSidebar] WALLET MENU SHOULD BE HERE!');
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      const result = await logout();
+      if (result.success) {
+        showSuccess('Đăng xuất thành công!');
+        navigate('/auth');
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Vẫn redirect về login dù có lỗi
+      navigate('/auth');
+    } finally {
+      setLoggingOut(false);
+    }
+  };
 
   return (
     <aside className="w-80 bg-gray-800 h-screen flex flex-col overflow-y-auto fixed left-0 top-0">
@@ -139,22 +157,17 @@ const AdminSidebar = () => {
             Quản lý User
           </Link>
           
-          {/* 💰 VÍ & RÚT TIỀN MENU */}
-          {console.log('💰💰💰 [AdminSidebar] RENDERING WALLET MENU NOW!')}
+          {/* 💰 RÚT TIỀN MENU */}
           <Link
-            to="/admin-dashboard/wallets"
+            to="/admin-dashboard/withdrawals"
             className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
-              isActive('/admin-dashboard/wallets')
+              isActive('/admin-dashboard/withdrawals')
                 ? 'bg-gray-100 text-gray-800 border-r-2 border-gray-800'
                 : 'text-gray-300 hover:bg-gray-700 hover:text-white'
             }`}
-            onClick={() => {
-              console.log('💰💰💰 [AdminSidebar] CLICKED VÍ & RÚT TIỀN!');
-              console.log('💰 [AdminSidebar] Navigating to:', '/admin-dashboard/wallets');
-            }}
           >
             <span className="mr-3 text-lg">💰</span>
-            <span className="flex-1 text-left truncate">💰 VÍ & RÚT TIỀN 💰</span>
+            <span className="flex-1 text-left truncate">Rút tiền</span>
           </Link>
           
           <Link
@@ -194,6 +207,20 @@ const AdminSidebar = () => {
           </Link>
         </div>
       </nav>
+
+      {/* Logout Button */}
+      <div className="px-4 py-4 border-t border-gray-700">
+        <button
+          onClick={handleLogout}
+          disabled={loggingOut}
+          className="w-full flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <span className="mr-3 text-lg">🚪</span>
+          <span className="flex-1 text-left">
+            {loggingOut ? 'Đang đăng xuất...' : 'Đăng xuất'}
+          </span>
+        </button>
+      </div>
 
       {/* Notification Modal */}
       <AdminNotifications 

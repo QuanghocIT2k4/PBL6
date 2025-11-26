@@ -8,6 +8,7 @@ import { login as loginService } from '../../services/common/authService';
 import { useToast } from '../../context/ToastContext';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
+import { getMyStores } from '../../services/b2c/b2cStoreService';
 
 const LoginForm = ({ onSwitchToSignUp, onSwitchToForgotPassword }) => {
   const { login } = useAuth();
@@ -34,6 +35,27 @@ const LoginForm = ({ onSwitchToSignUp, onSwitchToForgotPassword }) => {
     }
   });
 
+  const checkUserStores = async (user) => {
+    try {
+      console.log('🔍 Checking user stores for:', user.id);
+      const storesResult = await getMyStores();
+      
+      if (storesResult.success && storesResult.data && storesResult.data.length > 0) {
+        console.log('🏪 User has stores:', storesResult.data.length);
+        // User có store → redirect đến store-dashboard
+        window.location.href = '/store-dashboard';
+      } else {
+        console.log('👤 User không có store → redirect đến home');
+        // User không có store → redirect đến home
+        window.location.href = '/';
+      }
+    } catch (error) {
+      console.error('❌ Error checking stores:', error);
+      // Nếu lỗi, mặc định redirect về home
+      window.location.href = '/';
+    }
+  };
+
   const onSubmit = async (data) => {
     try {
       const result = await loginService({ email: data.email, password: data.password });
@@ -44,10 +66,12 @@ const LoginForm = ({ onSwitchToSignUp, onSwitchToForgotPassword }) => {
         await new Promise(resolve => setTimeout(resolve, 100));
         const userRoles = result.data.user.roles || [];
         const isAdmin = userRoles.includes('ADMIN') || userRoles.includes('ROLE_ADMIN');
+        
         if (isAdmin) {
-          window.location.href = '/admin-dashboard/dashboard';
+          window.location.href = '/admin-dashboard';
         } else {
-          window.location.href = '/';
+          // Kiểm tra user có store không bằng cách gọi API
+          checkUserStores(result.data.user);
         }
       } else if (result.error) {
         showToast(result.error, 'error');

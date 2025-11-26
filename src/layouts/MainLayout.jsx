@@ -152,18 +152,22 @@ const MainLayout = ({ children }) => {
               {/* Become Store Owner Button + Search Bar */}
               <div className="flex items-center flex-1 max-w-4xl mx-8 gap-4">
                 {/* Button Trở thành chủ Store */}
-                {isAuthenticated && (
-                  <button
-                    onClick={() => navigate('/become-store-owner')}
-                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-lg hover:from-orange-600 hover:to-pink-600 transition-all shadow-md hover:shadow-lg whitespace-nowrap font-medium"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
-                    </svg>
-                    <span className="hidden lg:inline">Trở thành chủ Store</span>
-                    <span className="lg:hidden">Bán hàng</span>
-                  </button>
-                )}
+                <button
+                  onClick={() => {
+                    if (!isAuthenticated) {
+                      navigate('/auth?tab=login');
+                      return;
+                    }
+                    navigate('/become-store-owner');
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-lg hover:from-orange-600 hover:to-pink-600 transition-all shadow-md hover:shadow-lg whitespace-nowrap font-medium"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+                  </svg>
+                  <span className="hidden lg:inline">Trở thành chủ Store</span>
+                  <span className="lg:hidden">Bán hàng</span>
+                </button>
                 
                 {/* Search Bar */}
                 <div className="flex-1">
@@ -174,9 +178,7 @@ const MainLayout = ({ children }) => {
               {/* Cart & Actions */}
               <div className="flex items-center space-x-4">
                 {/* Notifications */}
-                {isAuthenticated && (
-                  <NotificationContainer userType="buyer" />
-                )}
+                <NotificationContainer userType="buyer" />
 
                 {/* Orders - standalone orders page */}
                 <button className="relative p-2 text-gray-600 hover:text-blue-600 transition-colors" onClick={()=>navigate('/orders')}>
@@ -186,26 +188,30 @@ const MainLayout = ({ children }) => {
                 </button>
 
                 {/* Chat */}
-                {isAuthenticated && (
-                  <button 
-                    onClick={() => navigate('/chat')}
-                    className="relative p-2 text-gray-600 hover:text-blue-600 transition-colors group"
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                    </svg>
-                    {unreadCount > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center animate-pulse">
-                        {unreadCount > 99 ? '99+' : unreadCount}
-                      </span>
-                    )}
-                    
-                    {/* Tooltip */}
-                    <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                      {unreadCount > 0 ? `${unreadCount} tin nhắn chưa đọc` : 'Chat'}
-                    </div>
-                  </button>
-                )}
+                <button 
+                  onClick={() => {
+                    if (!isAuthenticated) {
+                      navigate('/auth?tab=login');
+                      return;
+                    }
+                    navigate('/chat');
+                  }}
+                  className="relative p-2 text-gray-600 hover:text-blue-600 transition-colors group"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  {isAuthenticated && unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center animate-pulse">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
+                  
+                  {/* Tooltip */}
+                  <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                    {isAuthenticated && unreadCount > 0 ? `${unreadCount} tin nhắn chưa đọc` : 'Chat'}
+                  </div>
+                </button>
 
                 {/* Cart */}
                 <button 

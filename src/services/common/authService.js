@@ -347,13 +347,101 @@ export const updateAvatar = async (file) => {
 
 /**
  * 11. ĐĂNG XUẤT
- * Clears local storage and logs out user
+ * POST /api/v1/auth/logout
+ * ⚠️ UPDATED: 26/11/2024 - Gọi API logout thay vì chỉ clear localStorage
  */
-export const logout = () => {
-  localStorage.removeItem('token');
-  localStorage.removeItem('refreshToken');
-  localStorage.removeItem('user');
-  return { success: true };
+export const logout = async () => {
+  console.log('🚀 AuthService: logout() function called');
+  try {
+    // Gọi API logout để invalidate token trên server
+    console.log('🚀 AuthService: Calling API logout');
+    await api.post('/api/v1/auth/logout');
+    
+    // Clear localStorage
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+    
+    // Dispatch logout event để CartContext clear cart
+    console.log('🚨 AuthService: Dispatching userLogout event');
+    window.dispatchEvent(new CustomEvent('userLogout'));
+    
+    return { 
+      success: true,
+      message: 'Đăng xuất thành công'
+    };
+  } catch (error) {
+    console.error('Logout error:', error);
+    
+    // Vẫn clear localStorage dù API lỗi
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+    
+    // Dispatch logout event để CartContext clear cart
+    console.log('🚨 AuthService: Dispatching userLogout event (error case)');
+    window.dispatchEvent(new CustomEvent('userLogout'));
+    
+    return { 
+      success: true, // Vẫn return success vì đã clear localStorage
+      message: 'Đăng xuất thành công'
+    };
+  }
+};
+
+/**
+ * 12. LÀM MỚI TOKEN
+ * POST /api/v1/auth/refresh-token
+ * ✅ NEW: 26/11/2024 - Auto refresh token khi hết hạn
+ */
+export const refreshToken = async () => {
+  try {
+    const currentRefreshToken = localStorage.getItem('refreshToken');
+    
+    if (!currentRefreshToken) {
+      return {
+        success: false,
+        error: 'Không tìm thấy refresh token',
+      };
+    }
+    
+    const response = await api.post('/api/v1/auth/refresh-token', {
+      refreshToken: currentRefreshToken,
+    });
+    
+    // BE trả về: { success: true, data: { token, refresh_token }, error: null }
+    if (response.data.success && response.data.data) {
+      const { token, refresh_token } = response.data.data;
+      
+      // Lưu token mới
+      localStorage.setItem('token', token);
+      if (refresh_token) {
+        localStorage.setItem('refreshToken', refresh_token);
+      }
+      
+      return {
+        success: true,
+        data: { token, refresh_token },
+      };
+    } else {
+      return {
+        success: false,
+        error: response.data.error || 'Không thể làm mới token',
+      };
+    }
+  } catch (error) {
+    console.error('Refresh token error:', error);
+    
+    // Nếu refresh token thất bại, logout user
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+    
+    return {
+      success: false,
+      error: error.message || 'Phiên đăng nhập đã hết hạn',
+    };
+  }
 };
 
 export default api;

@@ -2,18 +2,26 @@ import api from '../common/api';
 
 /**
  * ADMIN WALLET SERVICE
- * APIs for admin to manage all store wallets and withdrawal requests
+ * APIs for admin to manage store and customer withdrawal requests
+ * 
+ * ⚠️ UPDATED: 26/11/2024 - Tách riêng Store vs Customer withdrawals
  */
 
 /**
- * 1. GET ALL WITHDRAWAL REQUESTS
- * GET /api/v1/admin/withdrawals
+ * ================================================
+ * STORE WITHDRAWAL MANAGEMENT
+ * ================================================
  */
-export const getAllWithdrawalRequests = async (params = {}) => {
+
+/**
+ * 1. GET STORE WITHDRAWAL REQUESTS
+ * GET /api/v1/admin/withdrawals/store
+ */
+export const getStoreWithdrawals = async (params = {}) => {
   try {
     const { page = 0, size = 10, status, sortBy = 'createdAt', sortDir = 'desc' } = params;
     
-    console.log('📥 Fetching all withdrawal requests:', { 
+    console.log('🏪 Fetching store withdrawal requests:', { 
       page, 
       size, 
       status, 
@@ -21,7 +29,7 @@ export const getAllWithdrawalRequests = async (params = {}) => {
       sortDir 
     });
     
-    const response = await api.get('/api/v1/admin/withdrawals', {
+    const response = await api.get('/api/v1/admin/withdrawals/store', {
       params: {
         page,
         size,
@@ -31,44 +39,43 @@ export const getAllWithdrawalRequests = async (params = {}) => {
       },
     });
     
-    console.log('✅ All withdrawal requests response:', response.data);
+    console.log('✅ Store withdrawal requests response:', response.data);
     
     return {
       success: true,
       data: response.data.data || response.data,
     };
   } catch (error) {
-    console.error('❌ Error fetching withdrawal requests:', error);
+    console.error('❌ Error fetching store withdrawal requests:', error);
     
     return {
       success: false,
-      error: error.response?.data?.message || 'Không thể tải danh sách yêu cầu rút tiền',
+      error: error.response?.data?.message || 'Không thể tải danh sách yêu cầu rút tiền của cửa hàng',
     };
   }
 };
 
 /**
- * 2. APPROVE WITHDRAWAL REQUEST
- * PUT /api/v1/admin/withdrawals/{withdrawalId}/approve
- * Approve withdrawal request after verification
+ * 2. APPROVE STORE WITHDRAWAL REQUEST
+ * PUT /api/v1/admin/withdrawals/store/{requestId}/approve
  */
-export const approveWithdrawal = async (withdrawalId, note = '') => {
+export const approveStoreWithdrawal = async (requestId, note = '') => {
   try {
-    console.log('✅ Approving withdrawal:', { withdrawalId, note });
+    console.log('✅ Approving store withdrawal:', { requestId, note });
     
-    const response = await api.put(`/api/v1/admin/withdrawals/${withdrawalId}/approve`, {
+    const response = await api.put(`/api/v1/admin/withdrawals/store/${requestId}/approve`, {
       note,
     });
     
-    console.log('✅ Withdrawal approved:', response.data);
+    console.log('✅ Store withdrawal approved:', response.data);
     
     return {
       success: true,
       data: response.data.data || response.data,
-      message: 'Đã duyệt yêu cầu rút tiền',
+      message: 'Đã duyệt yêu cầu rút tiền của cửa hàng',
     };
   } catch (error) {
-    console.error('❌ Error approving withdrawal:', error);
+    console.error('❌ Error approving store withdrawal:', error);
     
     return {
       success: false,
@@ -78,58 +85,158 @@ export const approveWithdrawal = async (withdrawalId, note = '') => {
 };
 
 /**
- * 3. COMPLETE WITHDRAWAL REQUEST
- * PUT /api/v1/admin/withdrawals/{withdrawalId}/complete
- * Mark withdrawal as completed after money transfer (auto-deducts from wallet)
+ * 3. REJECT STORE WITHDRAWAL REQUEST
+ * PUT /api/v1/admin/withdrawals/store/{requestId}/reject
  */
-export const completeWithdrawal = async (withdrawalId, adminNote = '') => {
+export const rejectStoreWithdrawal = async (requestId, reason) => {
   try {
-    console.log('💰 Completing withdrawal:', { withdrawalId, adminNote });
+    console.log('❌ Rejecting store withdrawal:', { requestId, reason });
     
-    const response = await api.put(
-      `/api/v1/admin/withdrawals/${withdrawalId}/complete`,
-      null,
-      { params: { adminNote } }
-    );
+    const response = await api.put(`/api/v1/admin/withdrawals/store/${requestId}/reject`, {
+      reason,
+    });
     
-    console.log('✅ Withdrawal completed:', response.data);
+    console.log('✅ Store withdrawal rejected:', response.data);
     
     return {
       success: true,
       data: response.data.data || response.data,
-      message: 'Đã hoàn tất chuyển tiền',
+      message: 'Đã từ chối yêu cầu rút tiền của cửa hàng',
     };
   } catch (error) {
-    console.error('❌ Error completing withdrawal:', error);
+    console.error('❌ Error rejecting store withdrawal:', error);
     
     return {
       success: false,
-      error: error.response?.data?.message || 'Không thể hoàn tất rút tiền',
+      error: error.response?.data?.message || 'Không thể từ chối yêu cầu rút tiền',
     };
   }
 };
 
 /**
- * 4. REJECT WITHDRAWAL REQUEST
- * PUT /api/v1/admin/withdrawals/{withdrawalId}/reject
+ * ================================================
+ * CUSTOMER WITHDRAWAL MANAGEMENT
+ * ================================================
  */
-export const rejectWithdrawal = async (withdrawalId, reason) => {
+
+/**
+ * 4. GET CUSTOMER WITHDRAWAL REQUESTS
+ * GET /api/v1/admin/withdrawals/customer
+ */
+export const getCustomerWithdrawals = async (params = {}) => {
   try {
-    console.log('❌ Rejecting withdrawal:', { withdrawalId, reason });
+    const { page = 0, size = 10, status, sortBy = 'createdAt', sortDir = 'desc' } = params;
     
-    const response = await api.put(`/api/v1/admin/withdrawals/${withdrawalId}/reject`, {
-      reason,
+    console.log('👥 Fetching customer withdrawal requests:', { 
+      page, 
+      size, 
+      status, 
+      sortBy, 
+      sortDir 
     });
     
-    console.log('✅ Withdrawal rejected:', response.data);
+    const response = await api.get('/api/v1/admin/withdrawals/customer', {
+      params: {
+        page,
+        size,
+        sortBy,
+        sortDir,
+        ...(status && { status }),
+      },
+    });
+    
+    console.log('✅ Customer withdrawal requests response:', response.data);
     
     return {
       success: true,
       data: response.data.data || response.data,
-      message: 'Đã từ chối yêu cầu rút tiền',
     };
   } catch (error) {
-    console.error('❌ Error rejecting withdrawal:', error);
+    console.error('❌ Error fetching customer withdrawal requests:', error);
+    
+    return {
+      success: false,
+      error: error.response?.data?.message || 'Không thể tải danh sách yêu cầu rút tiền của khách hàng',
+    };
+  }
+};
+
+/**
+ * 5. GET CUSTOMER WITHDRAWAL BY ID
+ * GET /api/v1/admin/withdrawals/customer/{requestId}
+ */
+export const getCustomerWithdrawalById = async (requestId) => {
+  try {
+    console.log('👥 Fetching customer withdrawal by ID:', requestId);
+    
+    const response = await api.get(`/api/v1/admin/withdrawals/customer/${requestId}`);
+    
+    console.log('✅ Customer withdrawal detail:', response.data);
+    
+    return {
+      success: true,
+      data: response.data.data || response.data,
+    };
+  } catch (error) {
+    console.error('❌ Error fetching customer withdrawal detail:', error);
+    
+    return {
+      success: false,
+      error: error.response?.data?.message || 'Không thể tải chi tiết yêu cầu rút tiền',
+    };
+  }
+};
+
+/**
+ * 6. APPROVE CUSTOMER WITHDRAWAL REQUEST
+ * PUT /api/v1/admin/withdrawals/customer/{requestId}/approve
+ */
+export const approveCustomerWithdrawal = async (requestId, note = '') => {
+  try {
+    console.log('✅ Approving customer withdrawal:', { requestId, note });
+    
+    const response = await api.put(`/api/v1/admin/withdrawals/customer/${requestId}/approve`, {
+      note,
+    });
+    
+    console.log('✅ Customer withdrawal approved:', response.data);
+    
+    return {
+      success: true,
+      data: response.data.data || response.data,
+      message: 'Đã duyệt yêu cầu rút tiền của khách hàng',
+    };
+  } catch (error) {
+    console.error('❌ Error approving customer withdrawal:', error);
+    
+    return {
+      success: false,
+      error: error.response?.data?.message || 'Không thể duyệt yêu cầu rút tiền',
+    };
+  }
+};
+
+/**
+ * 7. REJECT CUSTOMER WITHDRAWAL REQUEST
+ * PUT /api/v1/admin/withdrawals/customer/{requestId}/reject
+ */
+export const rejectCustomerWithdrawal = async (requestId, reason) => {
+  try {
+    console.log('❌ Rejecting customer withdrawal:', { requestId, reason });
+    
+    const response = await api.put(`/api/v1/admin/withdrawals/customer/${requestId}/reject`, {
+      reason,
+    });
+    
+    console.log('✅ Customer withdrawal rejected:', response.data);
+    
+    return {
+      success: true,
+      data: response.data.data || response.data,
+      message: 'Đã từ chối yêu cầu rút tiền của khách hàng',
+    };
+  } catch (error) {
+    console.error('❌ Error rejecting customer withdrawal:', error);
     
     return {
       success: false,
@@ -164,9 +271,18 @@ export const getWithdrawalStatusBadge = (status) => {
 };
 
 export default {
-  getAllWithdrawalRequests,
-  completeWithdrawal,
-  rejectWithdrawal,
+  // Store Withdrawals
+  getStoreWithdrawals,
+  approveStoreWithdrawal,
+  rejectStoreWithdrawal,
+  
+  // Customer Withdrawals
+  getCustomerWithdrawals,
+  getCustomerWithdrawalById,
+  approveCustomerWithdrawal,
+  rejectCustomerWithdrawal,
+  
+  // Helpers
   formatCurrency,
   getWithdrawalStatusBadge,
 };

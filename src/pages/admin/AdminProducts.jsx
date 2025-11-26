@@ -111,49 +111,32 @@ const AdminProducts = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="flex justify-between items-center mb-4">
-                <p className="text-gray-600">
-                  Tổng số: <span className="font-bold text-gray-900">{totalElements}</span> sản phẩm
-                </p>
-              </div>
-
-              {/* Product Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {products.map((product) => (
-                  <div key={product.id} className="bg-white border-2 border-gray-200 rounded-xl overflow-hidden hover:shadow-xl transition-all">
-                    {/* Product Image */}
-                    <div className="relative h-48 bg-gradient-to-br from-blue-50 to-cyan-50">
-                      {product.images && product.images.length > 0 ? (
-                        <img
-                          src={product.images[0]}
-                          alt={product.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <span className="text-6xl">📷</span>
-                        </div>
-                      )}
-                      <div className="absolute top-2 right-2">
-                        <span className="px-3 py-1 bg-yellow-500 text-white rounded-full text-xs font-bold">
-                          Chờ duyệt
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Product Info */}
-                    <div className="p-4">
-                      <h3 className="text-lg font-bold text-gray-900 mb-2 line-clamp-2">{product.name}</h3>
-                      <p className="text-gray-600 text-sm mb-3 line-clamp-2">{product.description || 'Chưa có mô tả'}</p>
-                      
-                      <div className="space-y-2 text-sm mb-4">
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">🏷️ Danh mục:</span>
-                          <span className="font-medium">{product.categoryName || product.category?.name || product.category || 'N/A'}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">🏷️ Thương hiệu:</span>
-                          <span className="font-medium">
+              
+              {/* Product Table */}
+              <div className="bg-white rounded-xl border-2 border-gray-200 overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tên sản phẩm</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Danh mục</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Thương hiệu</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cửa hàng</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trạng thái</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {products.map((product) => (
+                      <tr key={product.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-gray-900">{product.name}</div>
+                          <div className="text-sm text-gray-500 line-clamp-1">{product.description || 'Chưa có mô tả'}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-700">{product.categoryName || product.category?.name || product.category || 'N/A'}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-700">
                             {
                               product.brandName
                               || product.brand?.name
@@ -169,40 +152,42 @@ const AdminProducts = () => {
                               || product.brand
                               || 'N/A'
                             }
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-700">{product.storeName || product.store?.name || 'N/A'}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="px-3 py-1 bg-yellow-500 text-white rounded-full text-xs font-bold">
+                            Chờ duyệt
                           </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">🏪 Cửa hàng:</span>
-                          <span className="font-medium">{product.storeName || product.store?.name || 'N/A'}</span>
-                        </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex flex-col gap-2">
-                        <button
-                          onClick={() => handleViewDetails(product)}
-                          className="w-full px-4 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 transition-colors font-semibold"
-                        >
-                          👁️ Xem chi tiết
-                        </button>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleApprove(product.id)}
-                            className="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-semibold"
-                          >
-                            ✅ Duyệt
-                          </button>
-                          <button
-                            onClick={() => handleRejectClick(product)}
-                            className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-semibold"
-                          >
-                            ❌ Từ chối
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={() => handleViewDetails(product)}
+                              className="px-3 py-1.5 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 transition-colors text-xs font-semibold"
+                            >
+                              👁️ Chi tiết
+                            </button>
+                            <button
+                              onClick={() => handleApprove(product.id)}
+                              className="px-3 py-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-xs font-semibold"
+                            >
+                              ✅ Duyệt
+                            </button>
+                            <button
+                              onClick={() => handleRejectClick(product)}
+                              className="px-3 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-xs font-semibold"
+                            >
+                              ❌ Từ chối
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
 
               {/* Pagination */}

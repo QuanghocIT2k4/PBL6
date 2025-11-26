@@ -29,8 +29,10 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      console.log('🔑 AuthContext: logout() called, calling logoutService()');
       await logoutService();
       setUser(null);
+      console.log('🔑 AuthContext: logout completed, user set to null');
     } catch (error) {
       console.error('Logout failed:', error);
     }

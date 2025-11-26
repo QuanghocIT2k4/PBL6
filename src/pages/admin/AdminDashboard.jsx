@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import useSWR from 'swr';
 import { Link } from 'react-router-dom';
 import AdminPageHeader from '../../components/admin/AdminPageHeader';
+import NotificationContainer from '../../components/notifications/NotificationContainer';
 import { getPendingStores } from '../../services/admin/adminStoreService';
 import { getPendingProducts } from '../../services/admin/adminProductService';
 import { getPendingVariants } from '../../services/admin/adminVariantService';
@@ -48,13 +49,6 @@ const AdminDashboard = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <AdminPageHeader 
-        icon="👑"
-        title="Admin Dashboard"
-        subtitle="Tổng quan hệ thống E-Commerce"
-      />
-
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
           {/* Pending Stores */}

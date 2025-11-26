@@ -4,14 +4,18 @@ import StoreSidebar from '../components/store/StoreSidebar';
 import { useStoreContext } from '../context/StoreContext';
 import { useChat } from '../context/ChatContext';
 import NotificationContainer from '../components/notifications/NotificationContainer';
+import { logout } from '../services/common/authService';
+import { useToast } from '../context/ToastContext';
 
 const StoreLayout = ({ children }) => {
   const [showStoreSwitcher, setShowStoreSwitcher] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { currentStore, userStores, selectStore, loading } = useStoreContext();
   const { unreadCount } = useChat();
+  const { success: showSuccess } = useToast();
 
   // Close menus when clicking outside
   useEffect(() => {
@@ -32,6 +36,22 @@ const StoreLayout = ({ children }) => {
       };
     }
   }, [showUserMenu, showStoreSwitcher]);
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      const result = await logout();
+      if (result.success) {
+        showSuccess('Đăng xuất thành công!');
+        navigate('/auth');
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+      navigate('/auth');
+    } finally {
+      setLoggingOut(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -247,9 +267,10 @@ const StoreLayout = ({ children }) => {
                           e.preventDefault();
                           e.stopPropagation();
                           setShowUserMenu(false);
-                          console.log('Logout');
+                          handleLogout();
                         }}
-                        className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-200 cursor-pointer group"
+                        disabled={loggingOut}
+                        className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-200 cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <div className="flex items-center space-x-3">
                           <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center group-hover:bg-red-200 transition-colors">
@@ -257,7 +278,9 @@ const StoreLayout = ({ children }) => {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
                             </svg>
                           </div>
-                          <span className="font-medium">Đăng xuất</span>
+                          <span className="font-medium">
+                            {loggingOut ? 'Đang đăng xuất...' : 'Đăng xuất'}
+                          </span>
                         </div>
                       </button>
                     </div>
