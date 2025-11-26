@@ -18,7 +18,7 @@ const HomePage = () => {
   const prefetchTimerRef = useRef(null);
   
   // ✅ DÙNG PRODUCT VARIANTS - CÓ ẢNH VÀ GIÁ!
-  const { variants: heroVariants, loading: heroLoading } = useProductVariants('latest', { size: 10 });
+  const { variants: heroVariants, loading: heroLoading } = useProductVariants('latest', { size: 5 });
   const { categories, loading: categoriesLoading } = useCategories();
   
   // ✅ BANNER QUẢNG CÁO - 5 BANNER
@@ -138,8 +138,8 @@ const HomePage = () => {
   
   const featuredLoading = cat1.loading || cat2.loading || cat3.loading || cat4.loading || cat5.loading;
   
-  const { variants: laptopVariants, loading: laptopLoading } = useProductVariants('laptops', { size: 10 });
-  const { variants: smartphoneVariants, loading: smartphoneLoading } = useProductVariants('smartphones', { size: 10 });
+  const { variants: laptopVariants, loading: laptopLoading } = useProductVariants('laptops', { size: 5 });
+  const { variants: smartphoneVariants, loading: smartphoneLoading } = useProductVariants('smartphones', { size: 5 });
 
   // GIỚI HẠN 5 SẢN PHẨM CHO HOMEPAGE
   const limitedFeaturedVariants = featuredVariants.slice(0, 5);

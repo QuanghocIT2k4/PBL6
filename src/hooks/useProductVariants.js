@@ -84,7 +84,7 @@ const variantsFetcher = async ([type, category, options]) => {
 export const useProductVariants = (category, options = {}) => {
   const {
     page = 0,
-    size = 100, // ✅ Giảm default size xuống 100 để tránh timeout
+    size = 20, // ✅ Giảm default size xuống 20 để load nhanh hơn
     sortBy = 'createdAt',
     sortDir = 'desc',
   } = options;
@@ -212,7 +212,7 @@ export const useProductVariants = (category, options = {}) => {
 export const usePrefetchVariants = () => {
   const { mutate } = useSWRConfig();
   
-  const prefetch = (category, size = 100) => {
+  const prefetch = (category, size = 20) => {
     const key = ['product-variants', category, { page: 0, size, sortBy: 'createdAt', sortDir: 'desc' }];
     
     mutate(
