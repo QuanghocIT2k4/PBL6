@@ -171,15 +171,6 @@ const StoreProductDetail = () => {
       variant?.approval_state ??
       null;
     
-    // Debug: log để xem API trả về gì
-    console.log('🔍 [Variant Detail] Checking status:', {
-      approvalStatus: variant?.approvalStatus,
-      status: variant?.status,
-      approval: variant?.approval,
-      approval_state: variant?.approval_state,
-      raw,
-      fullVariant: variant
-    });
     
     const upper = typeof raw === 'string' ? raw.toUpperCase() : raw;
     if (upper === 'APPROVED' || upper === true || upper === 'ACTIVE' || upper === 'ENABLED' || upper === 'VISIBLE') {

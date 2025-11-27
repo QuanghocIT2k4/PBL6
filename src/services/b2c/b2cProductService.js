@@ -22,19 +22,6 @@ export const getProductsByStore = async (storeId, params = {}) => {
       const products = Array.isArray(response.data.data) ? response.data.data : (response.data.data?.content || []);
       if (products.length > 0) {
         const firstProduct = products[0];
-        console.log('🔍 [DEBUG] First product structure:', {
-          id: firstProduct?.id || firstProduct?._id,
-          name: firstProduct?.name,
-          status: firstProduct?.status,
-          approvalStatus: firstProduct?.approvalStatus,
-          // ✅ Brand fields
-          brand: firstProduct?.brand,
-          brandId: firstProduct?.brandId,
-          brandName: firstProduct?.brandName,
-          allKeys: Object.keys(firstProduct || {})
-        });
-        // ✅ Log toàn bộ JSON để xem có field nào khác không
-        console.log('🔍 [DEBUG] First product FULL JSON:', JSON.stringify(firstProduct, null, 2));
       }
     }
 
@@ -78,11 +65,6 @@ export const getProductVariantsByStore = async (storeId, params = {}) => {
     // ✅ Debug: Log toàn bộ response JSON để kiểm tra có field status không
     if (response.data?.success && response.data?.data) {
       const variants = Array.isArray(response.data.data) ? response.data.data : (response.data.data?.content || []);
-      console.log(`🔍 [DEBUG] Total variants: ${variants.length}`);
-      console.log('🔍 [DEBUG] Full response JSON:', JSON.stringify(response.data, null, 2));
-      variants.forEach((variant, index) => {
-        console.log(`🔍 [DEBUG] Variant ${index + 1} FULL JSON:`, JSON.stringify(variant, null, 2));
-      });
     }
 
     if (response.data.success) {
@@ -476,6 +458,45 @@ export const updateVariantColor = async (variantId, colorId, colorData) => {
 };
 
 /**
+ * 10. CẬP NHẬT ẢNH CỦA VARIANT
+ * PUT /api/v1/b2c/product-variants/update-images/{variantId}?indexPrimary=0
+ */
+export const updateVariantImages = async (variantId, images, indexPrimary = 0) => {
+  try {
+    console.log('🖼️ [B2C] Updating variant images:', variantId, images.length, 'images');
+
+    const formData = new FormData();
+    images.forEach((image) => {
+      formData.append('images', image);
+    });
+
+    const response = await api.put(
+      `/api/v1/b2c/product-variants/update-images/${variantId}?indexPrimary=${indexPrimary}`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+
+    console.log('✅ [B2C] Variant images updated:', response.data);
+
+    if (response.data.success || response.data) {
+      return { success: true, data: response.data.data || response.data };
+    } else {
+      return { success: false, error: response.data.error || 'Không thể cập nhật ảnh' };
+    }
+  } catch (error) {
+    console.error('❌ [B2C] Error updating images:', error);
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Lỗi khi cập nhật ảnh',
+    };
+  }
+};
+
+/**
  * ================================================
  * EXPORT DEFAULT
  * ================================================
@@ -502,4 +523,7 @@ export default {
   // Variant colors
   addColorToVariant,
   updateVariantColor,
+  
+  // Variant images
+  updateVariantImages,
 };

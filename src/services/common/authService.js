@@ -16,19 +16,34 @@ import api from './api';
 // ===============================================
 
 /**
- * 1. ĐĂNG KÝ TÀI KHOẢN
+ * 1. ĐĂNG KÝ - UPDATED (27/11/2024)
  * POST /api/v1/users/register
- * Body: { email, password, retype_password, full_name }
+ * Body: { email, password, retype_password, full_name, phone?, dateOfBirth? }
  * Response: { success, data: { user info }, error }
+ * 
+ * ✅ NEW: Thêm phone và dateOfBirth (optional)
  */
-export const register = async ({ fullName, email, password, confirmPassword }) => {
+export const register = async ({ fullName, email, password, confirmPassword, phone, dateOfBirth }) => {
   try {
-    const response = await api.post('/api/v1/users/register', {
+    const requestBody = {
       full_name: fullName,
       email: email,
       password: password,
       retype_password: confirmPassword,
-    });
+    };
+
+    // ✅ NEW: Thêm phone và dateOfBirth nếu có
+    if (phone && phone.trim()) {
+      requestBody.phone = phone.trim();
+    }
+    
+    if (dateOfBirth) {
+      requestBody.dateOfBirth = dateOfBirth; // Format: YYYY-MM-DD
+    }
+
+    console.log('📝 Registration request:', requestBody);
+
+    const response = await api.post('/api/v1/users/register', requestBody);
     
     return {
       success: true,
@@ -347,7 +362,7 @@ export const updateAvatar = async (file) => {
 
 /**
  * 11. ĐĂNG XUẤT
- * POST /api/v1/auth/logout
+ * POST /api/v1/users/logout
  * ⚠️ UPDATED: 26/11/2024 - Gọi API logout thay vì chỉ clear localStorage
  */
 export const logout = async () => {
@@ -355,7 +370,7 @@ export const logout = async () => {
   try {
     // Gọi API logout để invalidate token trên server
     console.log('🚀 AuthService: Calling API logout');
-    await api.post('/api/v1/auth/logout');
+    await api.post('/api/v1/users/logout');
     
     // Clear localStorage
     localStorage.removeItem('token');
@@ -391,7 +406,7 @@ export const logout = async () => {
 
 /**
  * 12. LÀM MỚI TOKEN
- * POST /api/v1/auth/refresh-token
+ * POST /api/v1/users/refresh-token
  * ✅ NEW: 26/11/2024 - Auto refresh token khi hết hạn
  */
 export const refreshToken = async () => {
@@ -405,7 +420,7 @@ export const refreshToken = async () => {
       };
     }
     
-    const response = await api.post('/api/v1/auth/refresh-token', {
+    const response = await api.post('/api/v1/users/refresh-token', {
       refreshToken: currentRefreshToken,
     });
     
@@ -440,6 +455,42 @@ export const refreshToken = async () => {
     return {
       success: false,
       error: error.message || 'Phiên đăng nhập đã hết hạn',
+    };
+  }
+};
+
+/**
+ * 13. CẬP NHẬT THÔNG TIN USER - NEW (27/11/2024)
+ * PUT /api/v1/users/profile
+ * Body: { fullName, phone, dateOfBirth }
+ * ✅ NEW: API cập nhật thông tin user
+ */
+export const updateProfile = async ({ fullName, phone, dateOfBirth }) => {
+  try {
+    if (!fullName || !phone || !dateOfBirth) {
+      throw new Error('fullName, phone và dateOfBirth là bắt buộc');
+    }
+
+    console.log('📝 Updating user profile:', { fullName, phone, dateOfBirth });
+
+    const response = await api.put('/api/v1/users/profile', {
+      fullName: fullName.trim(),
+      phone: phone.trim(),
+      dateOfBirth: dateOfBirth, // Format: YYYY-MM-DD
+    });
+
+    console.log('✅ Profile updated successfully:', response.data);
+
+    return {
+      success: true,
+      data: response.data.data || response.data,
+      message: 'Cập nhật thông tin thành công',
+    };
+  } catch (error) {
+    console.error('❌ Error updating profile:', error);
+    return {
+      success: false,
+      error: error.response?.data?.message || error.message || 'Không thể cập nhật thông tin',
     };
   }
 };

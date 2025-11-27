@@ -23,7 +23,8 @@ const AdminRoutes = () => {
           <Route path="/variants" element={<AdminVariants />} />
           <Route path="/promotions" element={<AdminPromotions />} />
           <Route path="/withdrawals" element={<AdminWithdrawals />} />
-          <Route path="/revenue" element={<AdminRevenue />} />
+          <Route path="/statistics" element={<AdminRevenue />} />
+          <Route path="/revenue" element={<AdminRevenue />} /> {/* Backward compatibility */}
         </Routes>
       </AdminLayout>
     </AdminAuthGuard>

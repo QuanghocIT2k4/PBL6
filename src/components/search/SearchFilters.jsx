@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useCategories } from '../../hooks/useCategories';
 import { getAllBrands } from '../../services/common/productService';
+import { useDebounce } from '../../hooks/useDebounce';
 
 const SearchFilters = ({ onFiltersChange, initialFilters = {}, currentProducts = [], categoryBrands = [], loadingCategoryBrands = false }) => {
   const [filters, setFilters] = useState({

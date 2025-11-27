@@ -34,27 +34,6 @@ const AdminUsers = () => {
   const totalPages = usersData?.data?.totalPages || 0;
   const totalElements = usersData?.data?.totalElements || 0;
 
-  // Debug: Log để xem structure của user object
-  React.useEffect(() => {
-    if (users.length > 0) {
-      console.log('📊 Total users loaded:', users.length);
-      console.log('🔍 Sample user object:', users[0]);
-      console.log('🔍 User fields:', Object.keys(users[0]));
-      console.log('🔍 Has active?', 'active' in users[0], users[0].active);
-      console.log('🔍 Has isActive?', 'isActive' in users[0], users[0].isActive);
-      
-      // 🔍 Tìm user bị ban
-      const bannedUser = users.find(u => u.email === 'Ndnquang3072004@gmail.com');
-      if (bannedUser) {
-        console.log('🔍 FOUND BANNED USER:');
-        console.log('  - Email:', bannedUser.email);
-        console.log('  - active:', bannedUser.active);
-        console.log('  - isActive:', bannedUser.isActive);
-        console.log('  - Full data:', JSON.stringify(bannedUser, null, 2));
-      }
-    }
-  }, [users]);
-
   // Không cần filter client-side nữa vì backend đã filter
   const filteredUsers = users;
 
@@ -230,16 +209,6 @@ const AdminUsers = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredUsers.map((user) => {
-                      // 🔍 DEBUG LOG CHI TIẾT
-                      console.log('='.repeat(80));
-                      console.log(`🔍 USER DEBUG:`);
-                      console.log(`  - Email: ${user.email}`);
-                      console.log(`  - active: ${user.active}`);
-                      console.log(`  - Type: ${typeof user.active}`);
-                      console.log(`  - !user.active: ${!user.active}`);
-                      console.log(`  - user.active === false: ${user.active === false}`);
-                      console.log(`  - user.active === true: ${user.active === true}`);
-                      console.log('='.repeat(80));
                       
                       return (
                       <tr key={user.id} className="hover:bg-gray-50">

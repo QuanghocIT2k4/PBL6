@@ -150,7 +150,7 @@ const AdminWithdrawals = () => {
             onClick={() => setActiveTab('STORE')}
             className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all ${
               activeTab === 'STORE'
-                ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg'
+                ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
@@ -160,7 +160,7 @@ const AdminWithdrawals = () => {
             onClick={() => setActiveTab('CUSTOMER')}
             className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all ${
               activeTab === 'CUSTOMER'
-                ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg'
+                ? 'bg-gradient-to-r from-teal-500 to-green-500 text-white shadow-lg'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
@@ -224,7 +224,7 @@ const AdminWithdrawals = () => {
                           <p className="text-sm font-medium text-gray-900">
                             {activeTab === 'STORE' 
                               ? (wd.store?.name || wd.storeName || 'N/A')
-                              : (wd.customer?.fullName || wd.customerName || 'N/A')
+                              : (wd.customer?.fullName || wd.customer?.name || wd.customerName || wd.fullName || wd.userName || wd.user?.fullName || wd.user?.name || 'N/A')
                             }
                           </p>
                           {activeTab === 'CUSTOMER' && wd.customer?.email && (
@@ -282,7 +282,7 @@ const AdminWithdrawals = () => {
                                       <p><strong>${activeTab === 'STORE' ? 'Cửa hàng' : 'Khách hàng'}:</strong> ${
                                         activeTab === 'STORE' 
                                           ? (wd.store?.name || wd.storeName || 'N/A')
-                                          : (wd.customer?.fullName || wd.customerName || 'N/A')
+                                          : (wd.customer?.fullName || wd.customer?.name || wd.customerName || wd.fullName || wd.userName || wd.user?.fullName || wd.user?.name || 'N/A')
                                       }</p>
                                       <p><strong>Số tiền:</strong> ${formatCurrency(wd.amount)}</p>
                                       <p><strong>Ngân hàng:</strong> ${wd.bankName}</p>

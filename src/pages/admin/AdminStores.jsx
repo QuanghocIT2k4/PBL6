@@ -214,23 +214,11 @@ const AdminStores = () => {
                             <div>
                               <span className="text-gray-500 block">👤 Chủ shop:</span>
                               <span className="font-medium">
-                                {(() => {
-                                  // Debug log
-                                  console.log('🔍 Store owner data:', {
-                                    storeId: store.id,
-                                    storeName: store.name,
-                                    ownerName: store.ownerName,
-                                    owner: store.owner,
-                                    ownerId: store.ownerId,
-                                    fullStore: store
-                                  });
-                                  
-                                  return store.ownerName || 
-                                         store.owner?.name || 
-                                         store.owner?.username || 
-                                         store.owner?.fullName ||
-                                         'N/A';
-                                })()}
+                                {store.ownerName || 
+                                 store.owner?.name || 
+                                 store.owner?.username || 
+                                 store.owner?.fullName ||
+                                 'N/A'}
                               </span>
                             </div>
                             <div>

@@ -36,30 +36,19 @@ export const ChatProvider = ({ children }) => {
    * Kết nối WebSocket khi user đăng nhập
    */
   useEffect(() => {
-    console.log('🔧 [ChatContext] useEffect - Checking WebSocket connection:', {
-      hasUser: !!user,
-      userId: user?.id,
-      userName: user?.username
-    });
-    
     if (user && user.id) {
       const token = localStorage.getItem('token');
-      console.log('🔑 [ChatContext] Token found:', !!token);
       
       if (token) {
-        console.log('🚀 [ChatContext] Connecting WebSocket...');
         chatWebSocketService.connect(token);
         chatWebSocketService.sendPresence(user.id, true, 'online');
       } else {
         console.error('❌ [ChatContext] No token found!');
       }
-    } else {
-      console.log('⚠️ [ChatContext] No user, skipping WebSocket connection');
     }
 
     return () => {
       if (user && user.id) {
-        console.log('🔌 [ChatContext] Cleanup - Disconnecting WebSocket');
         chatWebSocketService.sendPresence(user.id, false, 'offline');
         chatWebSocketService.disconnect();
       }
@@ -75,24 +64,11 @@ export const ChatProvider = ({ children }) => {
       const isCurrentConversation = currentConversation?.id === message.conversationId;
       const isOwnMessage = message.senderId === user?.id;
       
-      console.log('🔔 [ChatContext] Received NEW message via WebSocket:', {
-        messageId: message.id,
-        conversationId: message.conversationId,
-        currentConversationId: currentConversation?.id,
-        isCurrentConversation,
-        isOwnMessage,
-        'message.senderId': message.senderId,
-        'user.id': user?.id,
-        'senderId === user.id': message.senderId === user?.id,
-        content: message.content
-      });
-      
       // 1. Nếu là conversation đang mở → Add vào messages
       if (isCurrentConversation) {
         setMessages(prev => {
           // Check duplicate by ID
           if (prev.some(m => m.id === message.id)) {
-            console.log('⚠️ [ChatContext] Duplicate message (same ID), skipping');
             return prev;
           }
           
@@ -104,13 +80,11 @@ export const ChatProvider = ({ children }) => {
           );
           
           if (optimisticIndex !== -1) {
-            console.log('✅ [ChatContext] Replacing optimistic message with real message');
             const newMessages = [...prev];
             newMessages[optimisticIndex] = message;
             return newMessages;
           }
           
-          console.log('✅ [ChatContext] Adding new message to current conversation');
           return [...prev, message];
         });
         
@@ -150,7 +124,6 @@ export const ChatProvider = ({ children }) => {
         // 3. Update global unread count (badge icon chat)
         // ⭐ ĐẾM SỐ CONVERSATIONS có tin chưa đọc, không phải tổng số tin
         const unreadConversationsCount = sorted.filter(conv => conv.unreadCount > 0).length;
-        console.log('📬 [ChatContext] Updating global unread count:', unreadConversationsCount);
         setUnreadCount(unreadConversationsCount);
         
         return sorted;
@@ -233,7 +206,6 @@ export const ChatProvider = ({ children }) => {
         // ⭐ Tính số conversations có tin chưa đọc
         const unreadConversationsCount = convs.filter(conv => conv.unreadCount > 0).length;
         setUnreadCount(unreadConversationsCount);
-        console.log('📬 [ChatContext] Loaded conversations, unread count:', unreadConversationsCount);
       } else {
         console.error('❌ Failed to load conversations:', result.error);
       }

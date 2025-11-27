@@ -23,12 +23,6 @@ export const getAllPromotions = async (params = {}) => {
       params: { page, size, sortBy, sortDir },
     });
 
-    // 🔍 DEBUG: Log response để xem backend trả về gì
-    console.log('🔍 getAllPromotions response:', response.data);
-    const promotions = response.data.data || response.data;
-    if (promotions.content && promotions.content.length > 0) {
-      console.log('🔍 Sample promotion:', promotions.content[0]);
-    }
 
     return {
       success: true,

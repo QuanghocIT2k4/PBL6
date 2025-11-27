@@ -14,8 +14,7 @@ const personalInfoSchema = z.object({
     message: 'Số điện thoại không hợp lệ'
   }),
   dateOfBirth: z.string().optional(),
-  gender: z.string().optional(),
-  address: z.string().optional()
+  gender: z.string().optional()
 });
 
 const PersonalInfoForm = ({ profile, onSubmit: onSubmitForm, loading }) => {
@@ -32,8 +31,7 @@ const PersonalInfoForm = ({ profile, onSubmit: onSubmitForm, loading }) => {
       name: '',
       phone: '',
       dateOfBirth: '',
-      gender: '',
-      address: ''
+      gender: ''
     }
   });
 
@@ -43,8 +41,7 @@ const PersonalInfoForm = ({ profile, onSubmit: onSubmitForm, loading }) => {
         name: profile.name || '',
         phone: profile.phone || '',
         dateOfBirth: profile.dateOfBirth || '',
-        gender: profile.gender || '',
-        address: profile.address || ''
+        gender: profile.gender || ''
       });
     }
   }, [profile, reset]);
@@ -151,19 +148,6 @@ const PersonalInfoForm = ({ profile, onSubmit: onSubmitForm, loading }) => {
               <option value="other">Khác</option>
             </select>
           </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Địa chỉ
-          </label>
-          <textarea
-            {...register('address')}
-            rows={3}
-            placeholder="Nhập địa chỉ của bạn"
-            disabled={isSubmitting}
-            className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
         </div>
 
         <div className="flex justify-end">

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
 import { getAllStores } from '../../services/common/storeService';
+import { getDashboardAnalytics } from '../../services/b2c/b2cAnalyticsService';
 import { useToast } from '../../context/ToastContext';
 import { getFullImageUrl } from '../../utils/imageUtils';
 
@@ -24,7 +25,7 @@ const StoresPage = () => {
       // ✅ Gọi API thật
       const result = await getAllStores({
         page: 0,
-        size: 100, // Lấy nhiều để filter/sort trên frontend
+        size: 20, // ✅ Giảm từ 100 xuống 20 để load nhanh
         sortBy: 'createdAt',
         sortDir: 'desc',
       });
@@ -33,9 +34,45 @@ const StoresPage = () => {
         const data = result.data;
         const storeList = data.content || data || [];
         
+        // 🔍 DEBUG: Log store structure để tìm field đúng
+        if (storeList.length > 0) {
+          console.log('🔍 [Stores] Sample store structure:', {
+            id: storeList[0].id,
+            name: storeList[0].name,
+            productCount: storeList[0].productCount,
+            totalProducts: storeList[0].totalProducts,
+            orderCount: storeList[0].orderCount,
+            totalOrders: storeList[0].totalOrders,
+            stats: storeList[0].stats,
+            fullStore: storeList[0]
+          });
+        }
+        
         // ✅ Chỉ hiển thị stores đã được duyệt
         const approvedStores = storeList.filter(store => store.status === 'APPROVED');
-        setStores(approvedStores);
+        
+        // 📊 Lấy thống kê cho từng store
+        const storesWithStats = await Promise.all(
+          approvedStores.map(async (store) => {
+            try {
+              const analyticsResult = await getDashboardAnalytics(store.id);
+              if (analyticsResult.success) {
+                return {
+                  ...store,
+                  analytics: analyticsResult.data,
+                  productCount: analyticsResult.data?.totalProducts || 0,
+                  orderCount: analyticsResult.data?.totalOrders || 0,
+                };
+              }
+              return store;
+            } catch (error) {
+              console.error(`Error fetching analytics for store ${store.id}:`, error);
+              return store;
+            }
+          })
+        );
+        
+        setStores(storesWithStats);
       } else {
         console.error('Failed to fetch stores:', result.error);
         showError('Không thể tải danh sách cửa hàng');
@@ -59,17 +96,13 @@ const StoresPage = () => {
     })
     .sort((a, b) => {
       switch (sortBy) {
-        case 'rating':
-          const ratingA = a.stats?.averageRating || a.averageRating || 0;
-          const ratingB = b.stats?.averageRating || b.averageRating || 0;
-          return ratingB - ratingA;
         case 'products':
-          const productsA = a.stats?.totalProducts || a.totalProducts || 0;
-          const productsB = b.stats?.totalProducts || b.totalProducts || 0;
+          const productsA = a.productCount || a.totalProducts || a.stats?.totalProducts || 0;
+          const productsB = b.productCount || b.totalProducts || b.stats?.totalProducts || 0;
           return productsB - productsA;
         case 'orders':
-          const ordersA = a.stats?.totalOrders || a.totalOrders || 0;
-          const ordersB = b.stats?.totalOrders || b.totalOrders || 0;
+          const ordersA = a.orderCount || a.totalOrders || a.stats?.totalOrders || 0;
+          const ordersB = b.orderCount || b.totalOrders || b.stats?.totalOrders || 0;
           return ordersB - ordersA;
         default:
           return a.name.localeCompare(b.name);
@@ -81,23 +114,6 @@ const StoresPage = () => {
     success(`🏪 Đang xem chi tiết cửa hàng`);
   };
 
-  const renderStars = (rating) => {
-    return (
-      <div className="flex items-center space-x-1">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <span
-            key={star}
-            className={`text-sm ${
-              star <= rating ? 'text-yellow-400' : 'text-gray-300'
-            }`}
-          >
-            ★
-          </span>
-        ))}
-        <span className="text-sm text-gray-600 ml-1">({rating})</span>
-      </div>
-    );
-  };
 
   if (loading) {
     return (
@@ -147,7 +163,6 @@ const StoresPage = () => {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="name">Sắp xếp theo tên</option>
-              <option value="rating">Sắp xếp theo đánh giá</option>
               <option value="products">Sắp xếp theo sản phẩm</option>
               <option value="orders">Sắp xếp theo đơn hàng</option>
             </select>
@@ -221,16 +236,16 @@ const StoresPage = () => {
                   {/* Stats */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Đánh giá:</span>
-                      {renderStars(store.stats?.averageRating || store.averageRating || 0)}
+                      <span className="text-gray-600">Sản phẩm:</span>
+                      <span className="font-medium text-blue-600">{(store.productCount || 0).toLocaleString()}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-600">Đơn hàng:</span>
-                      <span className="font-medium">{(store.stats?.totalOrders || store.totalOrders || 0).toLocaleString()}</span>
+                      <span className="font-medium text-green-600">{(store.orderCount || 0).toLocaleString()}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Reviews:</span>
-                      <span className="font-medium">{store.stats?.totalReviews || store.totalReviews || 0}</span>
+                      <span className="text-gray-600">Ngày tạo:</span>
+                      <span className="font-medium text-gray-500">{new Date(store.createdAt).toLocaleDateString('vi-VN')}</span>
                     </div>
                   </div>
 
@@ -250,7 +265,7 @@ const StoresPage = () => {
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               Thống kê tổng quan
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-3 gap-6">
               <div className="text-center">
                 <div className="text-2xl font-bold text-blue-600">
                   {stores.length}
@@ -258,25 +273,16 @@ const StoresPage = () => {
                 <div className="text-sm text-gray-600">Cửa hàng</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">
-                  {stores.reduce((sum, store) => sum + (store.stats?.totalProducts || store.totalProducts || 0), 0)}
+                <div className="text-2xl font-bold text-blue-600">
+                  {stores.reduce((sum, store) => sum + (store.productCount || 0), 0).toLocaleString()}
                 </div>
                 <div className="text-sm text-gray-600">Sản phẩm</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-purple-600">
-                  {stores.reduce((sum, store) => sum + (store.stats?.totalOrders || store.totalOrders || 0), 0).toLocaleString()}
+                <div className="text-2xl font-bold text-green-600">
+                  {stores.reduce((sum, store) => sum + (store.orderCount || 0), 0).toLocaleString()}
                 </div>
                 <div className="text-sm text-gray-600">Đơn hàng</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-orange-600">
-                  {stores.length > 0 
-                    ? (stores.reduce((sum, store) => sum + (store.stats?.averageRating || store.averageRating || 0), 0) / stores.length).toFixed(1)
-                    : '0.0'
-                  }
-                </div>
-                <div className="text-sm text-gray-600">Đánh giá TB</div>
               </div>
             </div>
           </div>

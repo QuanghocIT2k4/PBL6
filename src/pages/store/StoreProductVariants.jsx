@@ -5,7 +5,7 @@ import StoreLayout from '../../layouts/StoreLayout';
 import { useStoreContext } from '../../context/StoreContext';
 import StoreStatusGuard from '../../components/store/StoreStatusGuard';
 import StorePageHeader from '../../components/store/StorePageHeader';
-import { getProductVariantsByStore, updateVariantPrice, updateVariantStock, deleteProductVariant } from '../../services/b2c/b2cProductService';
+import { getProductVariantsByStore, updateVariantPrice, updateVariantStock, deleteProductVariant, updateVariantImages } from '../../services/b2c/b2cProductService';
 import { getInventoryAnalytics } from '../../services/b2c/b2cAnalyticsService';
 import { useToast } from '../../hooks/useToast';
 
@@ -15,6 +15,9 @@ const StoreProductVariants = () => {
   const toast = useToast();
   const [modal, setModal] = useState({ open: false, type: null, variant: null, value: '' });
   const [detailModal, setDetailModal] = useState({ open: false, variant: null });
+  const [imageModal, setImageModal] = useState({ open: false, variant: null });
+  const [selectedImages, setSelectedImages] = useState([]);
+  const [uploadingImages, setUploadingImages] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
   const pageSize = 20;
@@ -161,6 +164,54 @@ const StoreProductVariants = () => {
   };
 
   const closeModal = () => setModal({ open: false, type: null, variant: null, value: '' });
+
+  // ✅ Image modal handlers
+  const openImageModal = (e, variant) => {
+    e?.stopPropagation?.();
+    if (deriveApprovalStatus(variant) !== 'APPROVED') {
+      toast?.error?.('Chỉ có thể cập nhật ảnh của biến thể đã được duyệt');
+      return;
+    }
+    setImageModal({ open: true, variant });
+    setSelectedImages([]);
+  };
+
+  const closeImageModal = () => {
+    setImageModal({ open: false, variant: null });
+    setSelectedImages([]);
+  };
+
+  const handleImageSelect = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length > 5) {
+      toast?.error?.('Tối đa 5 ảnh');
+      return;
+    }
+    setSelectedImages(files);
+  };
+
+  const submitImageUpdate = async () => {
+    if (!imageModal.variant || selectedImages.length === 0) {
+      toast?.error?.('Vui lòng chọn ít nhất 1 ảnh');
+      return;
+    }
+
+    setUploadingImages(true);
+    try {
+      const result = await updateVariantImages(imageModal.variant.id, selectedImages, 0);
+      if (result.success) {
+        toast?.success?.('Cập nhật ảnh thành công');
+        closeImageModal();
+        mutate();
+      } else {
+        toast?.error?.(result.error || 'Không thể cập nhật ảnh');
+      }
+    } catch (error) {
+      toast?.error?.('Lỗi khi cập nhật ảnh');
+    } finally {
+      setUploadingImages(false);
+    }
+  };
 
   const submitModal = async () => {
     if (!modal.variant) return;
@@ -497,6 +548,21 @@ const StoreProductVariants = () => {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h18v4H3zM3 13h18v8H3zM7 7v6M12 7v6M17 7v6"/>
                               </svg>
                             </button>
+                            {/* Nút đổi ảnh */}
+                            <button
+                              onClick={(e) => openImageModal(e, variant)}
+                              className={`p-2 rounded-lg transition-colors ${
+                                deriveApprovalStatus(variant) === 'APPROVED'
+                                  ? 'bg-purple-50 text-purple-600 hover:bg-purple-100'
+                                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                              }`}
+                              title={deriveApprovalStatus(variant) === 'APPROVED' ? 'Đổi ảnh' : 'Chỉ đổi ảnh được khi đã duyệt'}
+                              disabled={deriveApprovalStatus(variant) !== 'APPROVED'}
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </button>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -830,6 +896,93 @@ const StoreProductVariants = () => {
                     className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 font-semibold shadow-lg transition-all"
                   >
                     Đóng
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Cập nhật ảnh */}
+        {imageModal.open && imageModal.variant && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl max-w-lg w-full p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900">📸 Cập nhật ảnh biến thể</h3>
+                <button
+                  onClick={closeImageModal}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">
+                    Biến thể: <strong>{imageModal.variant.productName || imageModal.variant.name}</strong>
+                  </p>
+                  
+                  {/* Ảnh hiện tại */}
+                  {imageModal.variant.images && imageModal.variant.images.length > 0 && (
+                    <div className="mb-4">
+                      <p className="text-sm text-gray-500 mb-2">Ảnh hiện tại:</p>
+                      <div className="flex gap-2 flex-wrap">
+                        {imageModal.variant.images.map((img, idx) => (
+                          <img key={idx} src={img} alt={`Ảnh ${idx + 1}`} className="w-16 h-16 object-cover rounded-lg border" />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Chọn ảnh mới (tối đa 5 ảnh)</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleImageSelect}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                  
+                  {/* Preview ảnh đã chọn */}
+                  {selectedImages.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-sm text-gray-500 mb-2">Ảnh đã chọn ({selectedImages.length}):</p>
+                      <div className="flex gap-2 flex-wrap">
+                        {selectedImages.map((file, idx) => (
+                          <img 
+                            key={idx} 
+                            src={URL.createObjectURL(file)} 
+                            alt={`Preview ${idx + 1}`} 
+                            className="w-16 h-16 object-cover rounded-lg border border-purple-300" 
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={closeImageModal}
+                    className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-medium transition-colors"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    onClick={submitImageUpdate}
+                    disabled={uploadingImages || selectedImages.length === 0}
+                    className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                      uploadingImages || selectedImages.length === 0
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-purple-600 hover:bg-purple-700 text-white'
+                    }`}
+                  >
+                    {uploadingImages ? '⏳ Đang tải...' : '📸 Cập nhật ảnh'}
                   </button>
                 </div>
               </div>

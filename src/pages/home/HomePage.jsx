@@ -157,7 +157,7 @@ const HomePage = () => {
   };
 
   // ✅ PREFETCH KHI HOVER - DEBOUNCED (chỉ chạy nếu hover > 200ms)
-  const debouncedPrefetch = (category, size = 100) => {
+  const debouncedPrefetch = (category, size) => { // ✅ Bắt buộc truyền size
     // Clear timer cũ nếu có
     if (prefetchTimerRef.current) {
       clearTimeout(prefetchTimerRef.current);
@@ -170,15 +170,15 @@ const HomePage = () => {
   };
 
   const handleHoverFeatured = () => {
-    debouncedPrefetch('all', 100);
+    debouncedPrefetch('all', 5); // ✅ Prefetch 5 sản phẩm (giống section)
   };
 
   const handleHoverLaptops = () => {
-    debouncedPrefetch('laptops', 100);
+    debouncedPrefetch('laptops', 5); // ✅ Prefetch 5 sản phẩm (giống section)
   };
 
   const handleHoverSmartphones = () => {
-    debouncedPrefetch('smartphones', 100);
+    debouncedPrefetch('smartphones', 5); // ✅ Prefetch 5 sản phẩm (giống section)
   };
 
   const handleViewAllFeatured = () => {
@@ -200,7 +200,7 @@ const HomePage = () => {
 
   // ✅ PREFETCH KHI HOVER CATEGORY - DEBOUNCED
   const handleHoverCategory = (category) => {
-    debouncedPrefetch(category.key, 100);
+    debouncedPrefetch(category.key, 5); // ✅ Prefetch 5 sản phẩm (giống section)
   };
 
   // ✅ SLIDER LOGIC CHO BANNER QUẢNG CÁO

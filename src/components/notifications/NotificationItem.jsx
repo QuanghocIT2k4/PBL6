@@ -6,6 +6,35 @@ import {
 } from '../../services/buyer/notificationService';
 
 /**
+ * Format số tiền trong message notification
+ * VD: "2.05E+7 VNĐ" → "20,500,000 VNĐ"
+ * VD: "500080.0 VNĐ" → "500,080 VNĐ"
+ */
+const formatMoneyInMessage = (message) => {
+  if (!message) return message;
+  
+  // Regex để tìm số tiền (bao gồm scientific notation và số thập phân)
+  // Matches: 2.05E+7, 500080.0, 1000000, etc.
+  const moneyRegex = /(\d+\.?\d*(?:E[+-]?\d+)?)\s*(VNĐ|VND|đ)/gi;
+  
+  return message.replace(moneyRegex, (match, number, currency) => {
+    try {
+      // Parse số (xử lý cả scientific notation)
+      const parsedNumber = parseFloat(number);
+      
+      if (isNaN(parsedNumber)) return match;
+      
+      // Format số với dấu phẩy ngăn cách hàng nghìn
+      const formattedNumber = new Intl.NumberFormat('vi-VN').format(Math.round(parsedNumber));
+      
+      return `${formattedNumber} ${currency}`;
+    } catch (e) {
+      return match;
+    }
+  });
+};
+
+/**
  * NotificationItem Component
  * Single notification card
  * Style: Shopee/Lazada inspired
@@ -88,9 +117,9 @@ const NotificationItem = ({ notification, onMarkAsRead, onDelete }) => {
             )}
           </div>
 
-          {/* Message */}
+          {/* Message - Format số tiền */}
           <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-            {notification.message}
+            {formatMoneyInMessage(notification.message)}
           </p>
 
           {/* Time */}

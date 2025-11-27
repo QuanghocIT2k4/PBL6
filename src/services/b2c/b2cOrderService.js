@@ -375,45 +375,9 @@ export const deliverOrder = async (orderId, storeId) => {
   }
 };
 
-/**
- * 8. LẤY THỐNG KÊ ĐƠN HÀNG
- * GET /api/v1/b2c/orders/statistics
- */
-export const getOrderStatistics = async () => {
-  try {
-    const response = await api.get('/api/v1/b2c/orders/statistics');
-    return {
-      success: true,
-      data: response.data.data || response.data,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error.message || 'Không thể tải thống kê đơn hàng',
-    };
-  }
-};
-
-/**
- * 9. LẤY THỐNG KÊ DOANH THU
- * GET /api/v1/b2c/orders/revenue
- */
-export const getRevenueStatistics = async (startDate, endDate) => {
-  try {
-    const response = await api.get('/api/v1/b2c/orders/revenue', {
-      params: { startDate, endDate },
-    });
-    return {
-      success: true,
-      data: response.data.data || response.data,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error.message || 'Không thể tải thống kê doanh thu',
-    };
-  }
-};
+// ❌ DEPRECATED: API cũ đã bị xóa
+// - /api/v1/b2c/orders/statistics → Dùng shopStatisticsService.getOverviewStatistics()
+// - /api/v1/b2c/orders/revenue → Dùng shopStatisticsService.getRevenueChartData()
 
 export default {
   getStoreOrders,
@@ -423,7 +387,5 @@ export default {
   shipOrder, // ✅ NEW - Wrapper using shipmentService
   deliverOrder, // ✅ NEW - Wrapper using shipmentService
   cancelStoreOrder,
-  getOrderStatistics,
-  getRevenueStatistics,
 };
 

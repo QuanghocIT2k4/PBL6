@@ -4,24 +4,28 @@ import StoreStatusGuard from '../../components/store/StoreStatusGuard';
 import { useStoreContext } from '../../context/StoreContext';
 import { getStoreOrders } from '../../services/b2c/b2cOrderService';
 import { getProductsByStore } from '../../services/b2c/b2cProductService';
-import { 
-  getDashboardAnalytics,
-  getRevenueAnalytics,
-  getRevenueByDateRange,
-  getOrderAnalytics,
-  getOrderStatusAnalytics,
-  getProductAnalytics,
-  getTopProducts,
-  getCustomerAnalytics,
-  getTopCustomers,
-  getCustomerGrowth,
-  getReviewAnalytics,
-  getRatingDistribution,
-  getInventoryAnalytics,
-  getSalesTrend,
-  getSalesByCategory,
-  getPerformanceMetrics,
-} from '../../services/b2c/b2cAnalyticsService';
+// ✅ NEW: Dùng Shop Statistics Service (27/11/2024)
+import {
+  getOverviewStatistics,
+  getRevenueChartData,
+  getOrderCountByStatus,
+  getOrdersChartData,
+  getVariantCountByStockStatus,
+  formatCurrency,
+  getPeriodLabel,
+  getOrderStatusBadge,
+  getStockStatusBadge,
+  formatNumber,
+  calculatePercentageChange,
+  getPercentageChangeDisplay,
+} from '../../services/b2c/shopStatisticsService';
+
+// ❌ OLD: b2cAnalyticsService (17 APIs - nhiều lỗi 500)
+// import { 
+//   getDashboardAnalytics,
+//   getRevenueAnalytics,
+//   ...
+// } from '../../services/b2c/b2cAnalyticsService';
 
 const StoreAnalytics = () => {
   const { currentStore, loading: storeLoading } = useStoreContext();
@@ -29,92 +33,120 @@ const StoreAnalytics = () => {
   const [analyticsData, setAnalyticsData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch real analytics data from backend
+  // Fetch analytics data using new Shop Statistics APIs
   useEffect(() => {
     const fetchAnalytics = async () => {
       if (!currentStore?.id) return;
       
       setLoading(true);
       try {
-        console.log('📊 Calculating analytics for store:', currentStore.id);
+        console.log('📊 Fetching analytics using new Shop Statistics APIs for store:', currentStore.id);
         
-        // ⚠️ Backend analytics APIs toàn lỗi 500 → Skip và tính trực tiếp từ orders/products
-        console.warn('⚠️ Skipping analytics APIs (all return 500), calculating from orders/products...');
-        
-        // Calculate analytics from orders and products
-        const [ordersResult, productsResult] = await Promise.all([
-          getStoreOrders({ storeId: currentStore.id, page: 0, size: 1000 }),
-          getProductsByStore(currentStore.id, { page: 0, size: 1000 }),
+        // ✅ NEW: Use Shop Statistics APIs (5 endpoints)
+        const [
+          overviewResult,
+          revenueChartResult,
+          orderCountResult,
+          ordersChartResult,
+          variantCountResult
+        ] = await Promise.all([
+          getOverviewStatistics(currentStore.id),
+          getRevenueChartData(currentStore.id, 'MONTH'),
+          getOrderCountByStatus(currentStore.id),
+          getOrdersChartData(currentStore.id, 'MONTH'),
+          getVariantCountByStockStatus(currentStore.id),
         ]);
         
-        if (ordersResult.success && ordersResult.data) {
-          const orders = ordersResult.data.content || ordersResult.data;
-          const products = productsResult.success ? (productsResult.data.content || productsResult.data) : [];
+        // Process API responses - ensure arrays for charts
+        const overview = overviewResult.success ? overviewResult.data : {};
+        const revenueChart = revenueChartResult.success ? 
+          (Array.isArray(revenueChartResult.data) ? revenueChartResult.data : []) : [];
+        const orderCount = orderCountResult.success ? orderCountResult.data : {};
+        const ordersChart = ordersChartResult.success ? 
+          (Array.isArray(ordersChartResult.data) ? ordersChartResult.data : []) : [];
+        const variantCount = variantCountResult.success ? variantCountResult.data : {};
+        
+        console.log('🔍 [DEBUG] Processed data:', {
+          overview,
+          revenueChart,
+          orderCount,
+          ordersChart,
+          variantCount
+        });
+        
+        // Calculate totals from individual APIs since overview is empty
+        const totalOrders = Object.values(orderCount).reduce((sum, count) => sum + (count || 0), 0);
+        const totalVariants = Object.values(variantCount).reduce((sum, count) => sum + (count || 0), 0);
+        
+        // Build analytics data from API responses
+        setAnalyticsData({
+          // Overview stats - calculated from other APIs
+          revenue: { 
+            total: overview.totalRevenue || 0, // Still 0 until backend fixes overview API
+            growth: overview.revenueGrowth || 0, 
+            chart: revenueChart || [] 
+          },
+          orders: { 
+            total: totalOrders, // ✅ Calculated from orderCount API
+            growth: overview.orderGrowth || 0, 
+            chart: ordersChart || [] 
+          },
           
-          // Calculate order status
-          const orderStatus = {
-            pending: orders.filter(o => o.status === 'PENDING').length,
-            processing: orders.filter(o => o.status === 'PROCESSING').length,
-            shipped: orders.filter(o => o.status === 'SHIPPED').length,
-            delivered: orders.filter(o => o.status === 'DELIVERED').length,
-            cancelled: orders.filter(o => o.status === 'CANCELLED').length,
-          };
+          // Order status from API
+          orderStatus: {
+            pending: orderCount.PENDING || 0,
+            confirmed: orderCount.CONFIRMED || 0,
+            shipping: orderCount.SHIPPING || 0,
+            delivered: orderCount.DELIVERED || 0,
+            cancelled: orderCount.CANCELLED || 0,
+          },
           
-          // Calculate revenue
-          const totalRevenue = orders
-            .filter(o => o.status === 'DELIVERED')
-            .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+          // Variant/Product stats - calculated from variant count API
+          products: {
+            total: totalVariants, // ✅ Calculated from variantCount API
+            active: variantCount.IN_STOCK || 0,
+            inactive: (variantCount.LOW_STOCK || 0) + (variantCount.OUT_OF_STOCK || 0),
+            topSelling: overview.topProducts || [],
+          },
           
-          // Calculate products stats
-          const productsStats = {
-            total: products.length,
-            active: products.filter(p => p.status === 'APPROVED').length,
-            inactive: products.filter(p => p.status !== 'APPROVED').length,
-            topSelling: [],
-          };
+          // Inventory from variant count API
+          inventory: {
+            total: totalVariants, // ✅ Calculated total
+            inStock: variantCount.IN_STOCK || 0,
+            lowStock: variantCount.LOW_STOCK || 0,
+            outOfStock: variantCount.OUT_OF_STOCK || 0,
+          },
           
-          setAnalyticsData({
-            revenue: { total: totalRevenue, growth: 0, chart: [] },
-            orders: { total: orders.length, growth: 0, chart: [] },
-            orderStatus,
-            products: productsStats,
-            customers: { total: 0, new: 0, returning: 0, chart: [] },
-            topCustomers: [],
-            customerGrowth: { growth: 0, chart: [] },
-            reviews: { total: 0, average: 0, chart: [] },
-            ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
-            inventory: { total: productsStats.total, lowStock: 0, outOfStock: 0 },
-            salesTrend: { chart: [] },
-            salesByCategory: [],
-            performance: { conversionRate: 0, avgOrderValue: totalRevenue / (orders.length || 1), customerLifetimeValue: 0 },
-          });
-          
-          console.log('✅ Analytics calculated from orders/products');
-        } else {
-          // Set empty data if calculation fails
-          setAnalyticsData({
-            revenue: { total: 0, growth: 0, chart: [] },
-            orders: { total: 0, growth: 0, chart: [] },
-            orderStatus: { pending: 0, processing: 0, shipped: 0, delivered: 0, cancelled: 0 },
-            products: { total: 0, active: 0, inactive: 0, topSelling: [] },
-            customers: { total: 0, new: 0, returning: 0, chart: [] },
-            topCustomers: [],
-            customerGrowth: { growth: 0, chart: [] },
-            reviews: { total: 0, average: 0, chart: [] },
-            ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
-            inventory: { total: 0, lowStock: 0, outOfStock: 0 },
-            salesTrend: { chart: [] },
-            salesByCategory: [],
-            performance: { conversionRate: 0, avgOrderValue: 0, customerLifetimeValue: 0 },
-          });
-        }
+          // Default values for other metrics (not in new APIs)
+          customers: { total: overview.totalCustomers || 0, new: 0, returning: 0, chart: [] },
+          topCustomers: overview.topCustomers || [],
+          customerGrowth: { growth: 0, chart: [] },
+          reviews: { total: overview.totalReviews || 0, average: overview.averageRating || 0, chart: [] },
+          ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+          salesTrend: { chart: revenueChart || [] },
+          salesByCategory: overview.salesByCategory || [],
+          performance: { 
+            conversionRate: overview.conversionRate || 0, 
+            avgOrderValue: overview.avgOrderValue || 0, 
+            customerLifetimeValue: overview.customerLifetimeValue || 0 
+          },
+        });
+        
+        console.log('✅ Analytics loaded from Shop Statistics APIs:', {
+          overview: overviewResult.success,
+          revenueChart: revenueChartResult.success,
+          orderCount: orderCountResult.success,
+          ordersChart: ordersChartResult.success,
+          variantCount: variantCountResult.success,
+        });
+        
       } catch (error) {
         console.error('❌ Error fetching analytics:', error);
-        // Set empty data instead of mock
+        // Set empty data on error
         setAnalyticsData({
           revenue: { total: 0, growth: 0, chart: [] },
           orders: { total: 0, growth: 0, chart: [] },
-          orderStatus: { pending: 0, processing: 0, shipped: 0, delivered: 0, cancelled: 0 },
+          orderStatus: { pending: 0, confirmed: 0, shipping: 0, delivered: 0, cancelled: 0 },
           products: { total: 0, active: 0, inactive: 0, topSelling: [] },
           customers: { total: 0, new: 0, returning: 0, chart: [] },
           topCustomers: [],

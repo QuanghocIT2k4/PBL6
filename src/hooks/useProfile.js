@@ -119,7 +119,6 @@ export const useProfile = () => {
         // ✅ Parse paginated response
         const orders = response.data.content || response.data || [];
         setOrderHistory(orders);
-        console.log(`✅ Loaded ${orders.length} orders from API`);
       }
     } catch (err) {
       console.error('❌ Error fetching order history:', err);

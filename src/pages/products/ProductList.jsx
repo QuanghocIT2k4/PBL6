@@ -290,18 +290,22 @@ const ProductList = () => {
     totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
   } else {
     // ✅ FALLBACK: Nếu API không trả về totalElements, ước tính từ số items đã load
-    // Nếu load được đúng ITEMS_PER_PAGE items, có thể còn trang tiếp theo
-    // Hiển thị pagination nếu có ít nhất ITEMS_PER_PAGE items
-    if (allFilteredProducts.length >= ITEMS_PER_PAGE) {
-      // ✅ Nếu đang ở trang > 1, chắc chắn có nhiều trang
-      // Ước tính: có ít nhất currentPage + 1 trang (vì đã load được đến trang này)
+    // CHỈ hiển thị pagination khi chắc chắn có nhiều trang
+    if (allFilteredProducts.length >= ITEMS_PER_PAGE && currentPage > 1) {
+      // ✅ Nếu đang ở trang > 1 VÀ có đủ items, chắc chắn có nhiều trang
       totalPages = Math.max(2, currentPage + 1);
       totalItems = totalPages * ITEMS_PER_PAGE; // Ước tính
     } else {
-      // Nếu ít hơn ITEMS_PER_PAGE items, chỉ có 1 trang
+      // ✅ Nếu ở trang 1 hoặc ít hơn ITEMS_PER_PAGE items → chỉ có 1 trang
       totalPages = 1;
       totalItems = allFilteredProducts.length;
     }
+  }
+  
+  // ✅ FORCE: Nếu tổng số sản phẩm hiển thị < ITEMS_PER_PAGE → chỉ có 1 trang
+  if (allFilteredProducts.length < ITEMS_PER_PAGE && currentPage === 1) {
+    totalPages = 1;
+    totalItems = allFilteredProducts.length;
   }
   
   // ✅ Đảm bảo totalPages ít nhất bằng currentPage (nếu đang ở trang > 1)
@@ -515,8 +519,8 @@ const ProductList = () => {
             )}
             
             {/* ✅ PAGINATION COMPONENT */}
-            {/* Hiển thị pagination nếu: có sản phẩm VÀ (totalPages > 1 HOẶC có >= ITEMS_PER_PAGE items) */}
-            {allFilteredProducts.length > 0 && (totalPages > 1 || allFilteredProducts.length >= ITEMS_PER_PAGE) && (
+            {/* Chỉ hiển thị pagination khi thực sự có nhiều hơn 1 trang */}
+            {allFilteredProducts.length > 0 && totalPages > 1 && (
               <div className="flex items-center justify-center mt-8 mb-8">
                 {/* Pagination Controls */}
                 <div className="flex items-center justify-center gap-2">

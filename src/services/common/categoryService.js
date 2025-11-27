@@ -110,7 +110,7 @@ export const getCategoryById = async (categoryId) => {
  */
 export const getCategoryByKey = async (key) => {
   try {
-    const result = await getAllCategories({ size: 100 });
+    const result = await getAllCategories({ size: 20 }); // ✅ Giảm từ 100 xuống 20
     
     if (result.success) {
       const category = result.data.find(c => c.key === key);

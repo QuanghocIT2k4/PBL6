@@ -20,29 +20,39 @@ const PromotionList = ({
   selectedCode = null,
 }) => {
   const [showList, setShowList] = useState(false);
-  const [activeTab, setActiveTab] = useState('platform'); // 'platform' | 'store'
+  // 🔥 FIX: Force store tab when storeId exists
+  const [activeTab, setActiveTab] = useState('store'); // Always start with store tab
+  
 
   // ✅ Fetch platform promotions
   const { data: platformData, isLoading: loadingPlatform } = useSWR(
     showList && orderTotal ? ['platform-promotions', orderTotal] : null,
-    () => getPlatformAvailablePromotions({
-      orderValue: orderTotal,
-      page: 0,
-      size: 20,
-    }),
+    async () => {
+      const result = await getPlatformAvailablePromotions({
+        orderValue: orderTotal,
+        page: 0,
+        size: 20,
+      });
+      
+      
+      return result;
+    },
     { revalidateOnFocus: false }
   );
 
 
   // ✅ Fetch store promotions - BỎ CHECK showList để fetch ngay khi có storeId
   const { data: storeData, isLoading: loadingStore, error: storeError } = useSWR(
-    orderTotal && storeId ? ['store-promotions', storeId, orderTotal] : null,  // ✅ Bỏ showList
+    storeId && orderTotal > 0 ? ['store-promotions', storeId, orderTotal] : null,  // 🔥 FIX: Check orderTotal > 0
     async () => {
-      return await getStoreAvailablePromotions(storeId, {
-        orderValue: orderTotal,
+      const result = await getStoreAvailablePromotions(storeId, {
+        orderValue: orderTotal, // 🔥 Back to real orderValue
         page: 0,
         size: 20,
       });
+      
+      
+      return result;
     },
     { revalidateOnFocus: false }
   );
@@ -64,28 +74,27 @@ const PromotionList = ({
       }
       return [];
     } else {
-      if (!storeData || !storeData.success) {
+      if (!storeData?.success) {
         return [];
       }
       
       const data = storeData.data;
-      
-      // Handle different response structures
       let promotions = [];
+      
       if (Array.isArray(data)) {
         promotions = data;
-      } else if (data?.content && Array.isArray(data.content)) {
-        promotions = data.content;
       } else if (data && typeof data === 'object') {
-        promotions = data.content || data.promotions || data.items || [];
+        // 🔥 FIX: Paginated response structure
+        promotions = data.content || data.data?.content || data.promotions || data.items || [];
       }
       
       return promotions;
     }
   };
 
-  const promotions = getPromotions();
+  const promotions = getPromotions() || []; // ✅ Ensure always array
   const isLoading = activeTab === 'platform' ? loadingPlatform : loadingStore;
+
 
   const handleSelectPromotion = (promotion) => {
     if (isPromotionValid(promotion)) {
@@ -117,7 +126,7 @@ const PromotionList = ({
 
       {/* Promotion list modal/dropdown */}
       {showList && (
-        <div className="mt-4 border-2 border-blue-200 rounded-xl bg-white shadow-2xl overflow-hidden animate-fadeIn">
+        <div className="mt-4 border-2 border-blue-200 rounded-xl bg-white shadow-2xl overflow-hidden">
           {/* Header with tabs */}
           <div className="bg-gradient-to-r from-purple-600 via-pink-500 to-orange-400 p-4">
             <h3 className="font-bold text-white text-lg mb-3">🎉 Mã khuyến mãi có sẵn</h3>
@@ -281,21 +290,6 @@ const PromotionList = ({
         </div>
       )}
 
-      <style jsx>{`
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out;
-        }
-      `}</style>
     </div>
   );
 };

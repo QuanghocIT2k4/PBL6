@@ -19,6 +19,7 @@ import OrderDetailPage from './pages/orders/OrderDetailPage';
 import SearchResults from './pages/search/SearchResults';
 import ProfilePage from './pages/profile/ProfilePage';
 import BuyerNotifications from './pages/buyer/BuyerNotifications';
+import BuyerWallet from './pages/buyer/BuyerWallet';
 import StoresPage from './pages/stores/StoresPage';
 import StoreDetailPage from './pages/stores/StoreDetailPage';
 import StoreRoutes from './routes/StoreRoutes';
@@ -57,6 +58,7 @@ const AppContent = () => {
       <Route path="/orders" element={<OrdersPage />} />
       <Route path="/orders/:id" element={<OrderDetailPage />} />
       <Route path="/notifications" element={<BuyerNotifications />} />
+      <Route path="/wallet" element={<BuyerWallet />} />
       <Route path="/payment/callback" element={<PaymentCallback />} />
       <Route path="/profile" element={<ProfilePage />} />
       <Route path="/chat" element={<ChatPage />} />

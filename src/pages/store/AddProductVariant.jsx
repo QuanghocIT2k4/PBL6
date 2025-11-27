@@ -50,7 +50,7 @@ const AddProductVariant = () => {
   // Fetch products
   const { data: productsData } = useSWR(
     currentStore?.id ? ['store-products-for-variant', currentStore.id] : null,
-    () => getProductsByStore(currentStore.id, { page: 0, size: 100 }),
+    () => getProductsByStore(currentStore.id, { page: 0, size: 20 }), // ✅ Giảm từ 100 xuống 20
     { revalidateOnFocus: false }
   );
 

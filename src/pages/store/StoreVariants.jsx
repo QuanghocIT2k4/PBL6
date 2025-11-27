@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import StoreLayout from '../../layouts/StoreLayout';
 import StoreStatusGuard from '../../components/store/StoreStatusGuard';
 import { useStoreContext } from '../../context/StoreContext';
-import { getProductVariantsByStore, updateVariantPrice, updateVariantStock, deleteProductVariant } from '../../services/b2c';
+import { getProductVariantsByStore, updateVariantPrice, updateVariantStock, deleteProductVariant, updateVariantImages } from '../../services/b2c';
 import { useToast } from '../../hooks/useToast';
 
 const StoreVariants = () => {
@@ -16,6 +16,9 @@ const StoreVariants = () => {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [editData, setEditData] = useState({ price: 0, stock: 0 });
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [selectedImages, setSelectedImages] = useState([]);
+  const [uploadingImages, setUploadingImages] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -143,6 +146,51 @@ const StoreVariants = () => {
     } catch (error) {
       console.error('Error deleting variant:', error);
       toast?.error('Lỗi khi xóa biến thể');
+    }
+  };
+
+  // ✅ Xử lý cập nhật ảnh variant
+  const handleEditImages = (variant) => {
+    if (variant.status !== 'APPROVED') {
+      toast?.error('Chỉ có thể cập nhật ảnh của biến thể đã được duyệt');
+      return;
+    }
+    setSelectedVariant(variant);
+    setSelectedImages([]);
+    setShowImageModal(true);
+  };
+
+  const handleImageSelect = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length > 5) {
+      toast?.error('Tối đa 5 ảnh');
+      return;
+    }
+    setSelectedImages(files);
+  };
+
+  const handleUpdateImages = async () => {
+    if (!selectedVariant || selectedImages.length === 0) {
+      toast?.error('Vui lòng chọn ít nhất 1 ảnh');
+      return;
+    }
+
+    setUploadingImages(true);
+    try {
+      const result = await updateVariantImages(selectedVariant.id, selectedImages, 0);
+      if (result.success) {
+        toast?.success('Cập nhật ảnh thành công');
+        setShowImageModal(false);
+        setSelectedImages([]);
+        fetchVariants();
+      } else {
+        toast?.error(result.error || 'Không thể cập nhật ảnh');
+      }
+    } catch (error) {
+      console.error('Error updating images:', error);
+      toast?.error('Lỗi khi cập nhật ảnh');
+    } finally {
+      setUploadingImages(false);
     }
   };
 
@@ -356,6 +404,21 @@ const StoreVariants = () => {
 
                     {/* Action Icons */}
                     <div className="flex gap-1 justify-end">
+                      {/* Nút đổi ảnh */}
+                      <button
+                        onClick={() => handleEditImages(variant)}
+                        disabled={variant.status !== 'APPROVED'}
+                        className={`p-2 rounded-lg transition-colors ${
+                          variant.status === 'APPROVED'
+                            ? 'bg-purple-50 text-purple-600 hover:bg-purple-100'
+                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        }`}
+                        title={variant.status === 'APPROVED' ? 'Đổi ảnh' : 'Chỉ đổi ảnh được khi đã duyệt'}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </button>
                       <button
                         onClick={() => handleEditPrice(variant)}
                         disabled={variant.status !== 'APPROVED'}
@@ -471,11 +534,100 @@ const StoreVariants = () => {
             </div>
           </div>
         )}
+
+        {/* Modal Cập nhật ảnh */}
+        {showImageModal && selectedVariant && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl max-w-lg w-full p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900">📸 Cập nhật ảnh biến thể</h3>
+                <button
+                  onClick={() => {
+                    setShowImageModal(false);
+                    setSelectedImages([]);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">Biến thể: <strong>{selectedVariant.name}</strong></p>
+                  
+                  {/* Ảnh hiện tại */}
+                  {selectedVariant.images && selectedVariant.images.length > 0 && (
+                    <div className="mb-4">
+                      <p className="text-sm text-gray-500 mb-2">Ảnh hiện tại:</p>
+                      <div className="flex gap-2 flex-wrap">
+                        {selectedVariant.images.map((img, idx) => (
+                          <img key={idx} src={img} alt={`Ảnh ${idx + 1}`} className="w-16 h-16 object-cover rounded-lg border" />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Chọn ảnh mới (tối đa 5 ảnh)</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleImageSelect}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                  
+                  {/* Preview ảnh đã chọn */}
+                  {selectedImages.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-sm text-gray-500 mb-2">Ảnh đã chọn ({selectedImages.length}):</p>
+                      <div className="flex gap-2 flex-wrap">
+                        {selectedImages.map((file, idx) => (
+                          <img 
+                            key={idx} 
+                            src={URL.createObjectURL(file)} 
+                            alt={`Preview ${idx + 1}`} 
+                            className="w-16 h-16 object-cover rounded-lg border border-purple-300" 
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={() => {
+                      setShowImageModal(false);
+                      setSelectedImages([]);
+                    }}
+                    className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-medium transition-colors"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    onClick={handleUpdateImages}
+                    disabled={uploadingImages || selectedImages.length === 0}
+                    className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                      uploadingImages || selectedImages.length === 0
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-purple-600 hover:bg-purple-700 text-white'
+                    }`}
+                  >
+                    {uploadingImages ? '⏳ Đang tải...' : '📸 Cập nhật ảnh'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </StoreLayout>
     </StoreStatusGuard>
   );
 };
 
 export default StoreVariants;
-
-//// ĐÃ LẤY LẠI ĐƯỢC

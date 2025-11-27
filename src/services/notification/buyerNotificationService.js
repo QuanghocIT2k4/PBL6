@@ -19,13 +19,10 @@ export const getBuyerNotifications = async (params = {}) => {
   try {
     const { page = 0, size = 20, sortBy = 'createdAt', sortDir = 'desc' } = params;
     
-    console.log('📬 [Buyer] Fetching notifications:', { page, size, sortBy, sortDir });
-    
+      
     const response = await api.get('/api/v1/buyer/notifications', {
       params: { page, size, sortBy, sortDir },
     });
-    
-    console.log('✅ [Buyer] Notifications response:', response.data);
     
     if (response.data.success) {
       return {
@@ -53,11 +50,9 @@ export const getBuyerNotifications = async (params = {}) => {
  */
 export const getBuyerUnreadCount = async () => {
   try {
-    console.log('🔢 [Buyer] Fetching unread count');
     
     const response = await api.get('/api/v1/buyer/notifications/unread-count');
     
-    console.log('✅ [Buyer] Unread count:', response.data);
     
     if (response.data.success) {
       return {
@@ -85,11 +80,9 @@ export const getBuyerUnreadCount = async () => {
  */
 export const markBuyerNotificationAsRead = async (notificationId) => {
   try {
-    console.log('✅ [Buyer] Marking notification as read:', notificationId);
     
     const response = await api.put(`/api/v1/buyer/notifications/${notificationId}/read`);
     
-    console.log('✅ [Buyer] Marked as read:', response.data);
     
     if (response.data.success) {
       return {
@@ -118,11 +111,9 @@ export const markBuyerNotificationAsRead = async (notificationId) => {
  */
 export const markAllBuyerNotificationsAsRead = async () => {
   try {
-    console.log('✅ [Buyer] Marking all notifications as read');
     
     const response = await api.put('/api/v1/buyer/notifications/read-all');
     
-    console.log('✅ [Buyer] Marked all as read:', response.data);
     
     if (response.data.success) {
       return {
@@ -150,11 +141,9 @@ export const markAllBuyerNotificationsAsRead = async () => {
  */
 export const deleteBuyerNotification = async (notificationId) => {
   try {
-    console.log('🗑️ [Buyer] Deleting notification:', notificationId);
     
     const response = await api.delete(`/api/v1/buyer/notifications/${notificationId}`);
     
-    console.log('✅ [Buyer] Deleted notification:', response.data);
     
     if (response.data.success) {
       return {

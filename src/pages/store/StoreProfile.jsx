@@ -72,10 +72,6 @@ const StoreProfile = () => {
         const updatedStore = storesResult.data.find(s => s.id === currentStore.id);
         
         if (updatedStore) {
-          console.log('✅ Store fetched! Full store data:', updatedStore);
-          console.log('🔍 logoUrl:', updatedStore.logoUrl);
-          console.log('🔍 bannerUrl:', updatedStore.bannerUrl);
-          console.log('⚠️ Are they the same?', updatedStore.logoUrl === updatedStore.bannerUrl);
           
           // Map backend fields to frontend format
           const mappedStore = {
@@ -204,15 +200,19 @@ const StoreProfile = () => {
                 </div>
               </div>
 
-                  {/* Banner */}
+                  {/* Banner - Kích thước lớn hơn */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Banner cửa hàng</label>
-                    <div className="relative w-full h-32 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl overflow-hidden border-2 border-gray-200">
-                      {currentStore?.banner && (
+                    <div className="relative w-full h-48 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl overflow-hidden border-2 border-gray-200">
+                      {currentStore?.banner ? (
                         <img src={currentStore.banner} alt="Banner" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-white text-lg">
+                          📸 Thêm banner cho cửa hàng
+                        </div>
                       )}
-                      <label className="absolute bottom-2 right-2 px-3 py-1.5 bg-white text-gray-700 rounded-lg cursor-pointer hover:bg-gray-50 shadow-lg text-sm">
-                        {uploading.banner ? 'Đang tải...' : '📸 Đổi'}
+                      <label className="absolute bottom-2 right-2 px-4 py-2 bg-white text-gray-700 rounded-lg cursor-pointer hover:bg-gray-50 shadow-lg text-sm font-medium">
+                        {uploading.banner ? '⏳ Đang tải...' : '📸 Đổi banner'}
                         <input
                           type="file"
                           accept="image/*"

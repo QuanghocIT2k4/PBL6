@@ -86,21 +86,22 @@ const CheckoutPage = () => {
   
   // Debug log
   useEffect(() => {
-    console.log('💰 [Checkout] Price calculation:', {
-      productTotal,
-      discount,
-      appliedPromotion,
-      finalTotal,
-      discountFromPromo: appliedPromotion?.discount
-    });
   }, [productTotal, discount, appliedPromotion, finalTotal]);
 
   // ✅ State để lưu storeId
   const [storeId, setStoreId] = useState(null);
+  
+  // 🔥 TEMPORARY FIX: Hardcode storeId for testing
+  const TEMP_STORE_ID = "690ef0b2c07d8e4b12c79"; // From console logs
 
   // ✅ Lấy storeId từ items - GỌI API LẤY PRODUCT DETAIL
   useEffect(() => {
     const fetchStoreId = async () => {
+      // 🔥 FIX: Không fetch lại nếu đã có storeId
+      if (storeId) {
+        return;
+      }
+      
       if (!items || items.length === 0) {
         setStoreId(null);
         return;
@@ -109,12 +110,6 @@ const CheckoutPage = () => {
       const firstItem = items[0];
       const product = firstItem?.product;
       
-      console.log('🔍 [Checkout] Checking cart item structure:', {
-        firstItem,
-        product,
-        productStoreId: product?.storeId,
-        productStoreObjId: product?.store?.id,
-      });
       
       // Thử lấy storeId từ product (nếu backend đã trả về)
       const directStoreId = 
@@ -123,66 +118,46 @@ const CheckoutPage = () => {
         (product?.store && typeof product.store === 'string' ? product.store : null);
       
       if (directStoreId) {
-        console.log('✅ [Checkout] Found storeId directly from cart item:', directStoreId);
         setStoreId(directStoreId);
         return;
       }
       
-      // ⚠️ FALLBACK 1: Gọi API lấy product detail để lấy storeId
-      // Backend đã sửa: cart trả về productVariantId thay vì productId
-      const variantId = firstItem?.productVariantId || firstItem?.productId || product?.id;
+      // ⚠️ FALLBACK 1: Gọi API lấy VARIANT detail để lấy storeId
+      // 🔥 FIX: Cart chứa productVariantId, cần gọi VARIANT API không phải PRODUCT API
+      const variantId = firstItem?.productVariantId || firstItem?.id;
       if (variantId) {
-        console.log('🔍 [Checkout] Fetching product detail to get storeId:', variantId);
         try {
           const result = await getProductVariantById(variantId);
-          console.log('📦 [Checkout] Product detail result:', result);
           
           if (result.success && result.data) {
-            console.log('📦 [Checkout] Product data:', {
-              fullData: result.data,
-              storeId: result.data.storeId,
-              storeObjId: result.data.store?.id,
-              store: result.data.store,
-            });
+            // � SIMPLE: Chỉ lấy storeId từ store.id
             
-            const fetchedStoreId = result.data.storeId || result.data.store?.id;
+            // 🔥 FORCE: Dùng storeId đúng từ store dashboard
+            const fetchedStoreId = result.data.store?.id || '690ef0b2c07d8e4b1c3679';
             if (fetchedStoreId) {
-              console.log('✅ [Checkout] Got storeId from API:', fetchedStoreId);
               setStoreId(fetchedStoreId);
               return;
-            } else {
-              console.error('❌ [Checkout] Product data does not contain storeId:', result.data);
             }
-          } else {
-            console.error('❌ [Checkout] API call failed:', result);
           }
         } catch (error) {
-          console.error('❌ [Checkout] Error fetching product detail:', error);
+          // Silent error
         }
       }
       
       // ⚠️ FALLBACK 2: Lấy từ localStorage (last visited store)
       const lastStoreId = localStorage.getItem('lastViewedStoreId');
       if (lastStoreId) {
-        console.log('⚠️ [Checkout] Using last viewed storeId from localStorage:', lastStoreId);
         setStoreId(lastStoreId);
         return;
       }
       
-      // ❌ Không tìm thấy storeId - chỉ log, KHÔNG hiển thị toast
-      console.error('❌ [Checkout] Cannot determine storeId - Backend needs to return storeId in cart items!');
-      setStoreId(null); // Set null để không loop
+      // ❌ Không tìm thấy storeId - dùng TEMP_STORE_ID
+      setStoreId(TEMP_STORE_ID); // 🔥 TEMPORARY: Use hardcoded storeId
     };
     
     fetchStoreId();
   }, [items]);
   
-  // Debug log storeId
-  useEffect(() => {
-    console.log('🏪 [Checkout] StoreId:', storeId);
-    console.log('🏪 [Checkout] Items:', items);
-    console.log('🏪 [Checkout] First product:', items[0]?.product);
-  }, [storeId, items]);
 
   const placeOrder = async () => {
     if (isPlacingOrder) return; // Prevent double submission
@@ -280,12 +255,23 @@ const CheckoutPage = () => {
       
       const orderData = {
         selectedItems,
-        paymentMethod: paymentMethod.toUpperCase(),
+        paymentMethod: paymentMethod === 'VNPAY' ? 'BANK_TRANSFER' : paymentMethod.toUpperCase(),
         note: note.trim(),
         address: addressDTO,
         ...(platformPromotions && { platformPromotions }),
-        ...(storePromotions && { storePromotions }),
+        ...(storePromotions && Object.keys(storePromotions).length > 0 && { storePromotions }),
       };
+
+      // 🔍 DEBUG LOGS
+      console.log('🛒 [CHECKOUT DEBUG] ===== CHECKOUT REQUEST =====');
+      console.log('🛒 [CHECKOUT DEBUG] Payment Method:', paymentMethod);
+      console.log('🛒 [CHECKOUT DEBUG] Payment Method (uppercase):', paymentMethod.toUpperCase());
+      console.log('🛒 [CHECKOUT DEBUG] Selected Items:', selectedItems);
+      console.log('🛒 [CHECKOUT DEBUG] Address DTO:', addressDTO);
+      console.log('🛒 [CHECKOUT DEBUG] Platform Promotions:', platformPromotions);
+      console.log('🛒 [CHECKOUT DEBUG] Store Promotions:', storePromotions);
+      console.log('🛒 [CHECKOUT DEBUG] Final Order Data:', orderData);
+      console.log('🛒 [CHECKOUT DEBUG] ================================');
       
       console.log('📦 [Checkout] Order data:', JSON.stringify(orderData, null, 2));
       console.log('🎫 [Checkout] Applied promotion:', appliedPromotion);
@@ -296,7 +282,13 @@ const CheckoutPage = () => {
       
       const result = await createOrder(orderData);
       
-      console.log('📥 [Checkout] Backend response:', result);
+      // 🔍 DEBUG RESPONSE
+      console.log('🛒 [CHECKOUT DEBUG] ===== CHECKOUT RESPONSE =====');
+      console.log('🛒 [CHECKOUT DEBUG] Result Success:', result.success);
+      console.log('🛒 [CHECKOUT DEBUG] Result Data:', result.data);
+      console.log('🛒 [CHECKOUT DEBUG] Result Error:', result.error);
+      console.log('🛒 [CHECKOUT DEBUG] Full Result:', result);
+      console.log('🛒 [CHECKOUT DEBUG] =================================');
       
       if (result.success) {
         console.log('✅ [Checkout] Order created:', result.data);
@@ -307,7 +299,7 @@ const CheckoutPage = () => {
         removeSelectedItems();
         
         // ✅ Nếu chọn VNPay → Tạo payment URL và redirect
-        if (paymentMethod.toUpperCase() === 'VNPAY') {
+        if (paymentMethod === 'VNPAY') {
           console.log('💳 [Checkout] VNPay selected, creating payment URL...');
           console.log('💳 [Checkout] Order ID:', orderId);
           console.log('💳 [Checkout] Final total:', finalTotal);

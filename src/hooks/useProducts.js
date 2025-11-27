@@ -34,7 +34,7 @@ const productsFetcher = async ([type, category, options]) => {
     result = await searchProductVariants({
       name: '',
       page: options.page || 0,
-      size: options.size || 100,
+      size: options.size || 12, // ✅ Default 12 sản phẩm/trang
       sortBy: options.sortBy || 'createdAt',
       sortDir: options.sortDir || 'desc',
     });
@@ -55,7 +55,7 @@ const productsFetcher = async ([type, category, options]) => {
 export const useProducts = (category, options = {}) => {
   const {
     page = 0,
-    size = 100,
+    size = 12, // ✅ Default 12 sản phẩm/trang (phù hợp grid 3x4 hoặc 4x3)
     sortBy = 'createdAt',
     sortDir = 'desc',
   } = options;
@@ -96,7 +96,7 @@ export const useProducts = (category, options = {}) => {
 export const usePrefetchProducts = () => {
   const { mutate } = useSWRConfig();
   
-  const prefetch = (category, size = 100) => {
+  const prefetch = (category, size = 12) => { // ✅ Default 12 sản phẩm/trang
     const key = ['products', category, { page: 0, size, sortBy: 'createdAt', sortDir: 'desc' }];
     
     // ✅ SỬA: Gọi fetcher với key đúng format (mảng 3 phần tử)

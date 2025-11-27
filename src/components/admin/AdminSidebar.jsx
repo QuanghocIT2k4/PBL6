@@ -171,15 +171,15 @@ const AdminSidebar = () => {
           </Link>
           
           <Link
-            to="/admin-dashboard/analytics"
+            to="/admin-dashboard/statistics"
             className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
-              isActive('/admin-dashboard/analytics')
+              isActive('/admin-dashboard/statistics')
                 ? 'bg-gray-100 text-gray-800 border-r-2 border-gray-800'
                 : 'text-gray-300 hover:bg-gray-700 hover:text-white'
             }`}
           >
-            <span className="mr-3 text-lg">📈</span>
-            Thống kê & Phân tích
+            <span className="mr-3 text-lg">📊</span>
+            Thống kê Doanh thu
           </Link>
 
           <button

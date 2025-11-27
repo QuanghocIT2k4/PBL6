@@ -28,7 +28,7 @@ const variantsFetcher = async ([type, category, options]) => {
       categoryName = KEY_TO_API_NAME[category];
     } else {
       // ✅ Fallback: Gọi API để tìm (nếu category mới không có trong mapping)
-      const categoriesResult = await getCategories({ page: 0, size: 100 });
+      const categoriesResult = await getCategories({ page: 0, size: 20 }); // ✅ Giảm size để load nhanh
       if (categoriesResult.success) {
         const apiCategory = categoriesResult.data.find(
           cat => cat.name.toLowerCase() === category.toLowerCase() || 
@@ -84,7 +84,7 @@ const variantsFetcher = async ([type, category, options]) => {
 export const useProductVariants = (category, options = {}) => {
   const {
     page = 0,
-    size = 20, // ✅ Giảm default size xuống 20 để load nhanh hơn
+    size = 12, // ✅ Default 12 sản phẩm/trang (phù hợp grid layout)
     sortBy = 'createdAt',
     sortDir = 'desc',
   } = options;

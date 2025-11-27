@@ -10,7 +10,7 @@ export const searchService = {
     // ✅ Dùng API thay vì mock data
     const result = await searchProductVariants(query, {
       page: 0,
-      size: 100,
+      size: 20, // ✅ Giảm từ 100 xuống 20 để tối ưu tốc độ
       sortBy: filters.sortBy === 'price-asc' || filters.sortBy === 'price-desc' ? 'price' : 'createdAt',
       sortDir: filters.sortBy === 'price-asc' ? 'asc' : 'desc'
     });

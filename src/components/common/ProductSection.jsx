@@ -104,7 +104,8 @@ const ProductSection = memo(({
                         src={product.image || product.primaryImage} 
                         alt={product.name}
                         loading="lazy"
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 ease-out"
+                        decoding="async"
+                        className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 ease-out"
                         onError={(e) => {
                           e.target.onerror = null;
                           e.target.src = 'https://via.placeholder.com/200x200?text=No+Image';
@@ -115,7 +116,8 @@ const ProductSection = memo(({
                         src={product.images[0]} 
                         alt={product.name}
                         loading="lazy"
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 ease-out"
+                        decoding="async"
+                        className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 ease-out"
                         onError={(e) => {
                           e.target.onerror = null;
                           e.target.src = 'https://via.placeholder.com/200x200?text=No+Image';

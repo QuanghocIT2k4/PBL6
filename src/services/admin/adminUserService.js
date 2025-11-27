@@ -26,27 +26,6 @@ export const getAllUsers = async (params = {}) => {
       params: { page, size, sortBy, sortDir, userName, userEmail, userPhone },
     });
 
-    // 🔍 DEBUG: Log FULL raw response
-    console.log('🔍 ========== RAW API RESPONSE ==========');
-    console.log('🔍 Full response:', response);
-    console.log('🔍 response.data:', response.data);
-    console.log('🔍 response.data.data:', response.data.data);
-    console.log('🔍 response.data.data.content:', response.data.data?.content);
-    
-    if (response.data.data?.content && response.data.data.content.length > 0) {
-      console.log('🔍 First user:', response.data.data.content[0]);
-      console.log('🔍 First user fields:', Object.keys(response.data.data.content[0]));
-      
-      // Tìm user bị ban
-      const bannedUser = response.data.data.content.find(u => 
-        u.email === 'Ndnquang3072004@gmail.com' || u.banReason
-      );
-      if (bannedUser) {
-        console.log('🔍 ========== BANNED USER FOUND ==========');
-        console.log('🔍 Banned user:', JSON.stringify(bannedUser, null, 2));
-      }
-    }
-    console.log('🔍 ========================================');
 
     return {
       success: true,

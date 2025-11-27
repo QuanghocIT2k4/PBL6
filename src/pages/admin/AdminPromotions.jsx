@@ -53,12 +53,6 @@ const AdminPromotions = () => {
   const totalPages = data?.data?.totalPages || 0;
   const totalElements = data?.data?.totalElements || 0;
 
-  // 🔍 DEBUG: Check issuer field
-  if (allPromotions.length > 0) {
-    console.log('🔍 Total promotions:', allPromotions.length);
-    console.log('🔍 Sample promotion:', allPromotions[0]);
-    console.log('🔍 Issuer values:', allPromotions.map(p => p.issuer));
-  }
 
   // Helper: Check if expired
   const isExpired = (promo) => {

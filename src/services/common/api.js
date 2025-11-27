@@ -75,45 +75,11 @@ api.interceptors.response.use(
       }
     }
     
-    // ✅ Handle 401 Unauthorized - try refresh token first
+    // ✅ Handle 401 Unauthorized - auto logout
     if (error.response?.status === 401) {
       const isLoginPage = window.location.pathname === '/auth';
-      const refreshToken = localStorage.getItem('refreshToken');
-      
-      // Nếu không phải trang login và có refresh token, thử refresh
-      if (!isLoginPage && refreshToken && !config._retry) {
-        config._retry = true; // Đánh dấu để không retry vô hạn
-        
-        try {
-          console.log('🔄 Token expired, trying to refresh...');
-          
-          // Gọi API refresh token
-          const response = await axios.post(`${API_BASE_URL}/api/v1/auth/refresh-token`, {
-            refreshToken: refreshToken,
-          });
-          
-          if (response.data.success && response.data.data) {
-            const { token, refresh_token } = response.data.data;
-            
-            // Lưu token mới
-            localStorage.setItem('token', token);
-            if (refresh_token) {
-              localStorage.setItem('refreshToken', refresh_token);
-            }
-            
-            // Retry request cũ với token mới
-            config.headers.Authorization = `Bearer ${token}`;
-            return api(config);
-          }
-        } catch (refreshError) {
-          console.error('❌ Refresh token failed:', refreshError);
-          // Nếu refresh thất bại, logout
-        }
-      }
-      
-      // Nếu không có refresh token hoặc refresh thất bại, logout
       if (!isLoginPage) {
-        console.warn('🔒 Unauthorized - Logging out');
+        console.warn('🔒 Unauthorized - Token expired or invalid');
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         localStorage.removeItem('refreshToken');

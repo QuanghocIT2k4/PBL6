@@ -435,9 +435,11 @@ const StoreWallet = () => {
                   max={wallet?.balance || 0}
                   required
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Số dư khả dụng: {formatCurrency(getAvailableBalance())}
-                </p>
+                <div className="mt-2 p-3 bg-green-50 rounded-lg border border-green-200">
+                  <p className="text-sm text-green-700 font-medium">
+                    💳 Số dư khả dụng: <span className="font-bold">{formatCurrency(getAvailableBalance())}</span>
+                  </p>
+                </div>
               </div>
 
               <div className="mb-4">

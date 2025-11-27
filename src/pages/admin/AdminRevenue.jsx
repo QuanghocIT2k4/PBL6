@@ -2,17 +2,20 @@ import React, { useState, useEffect } from 'react';
 import AdminLayout from '../../layouts/AdminLayout';
 import AdminPageHeader from '../../components/admin/AdminPageHeader';
 import { getOrderCode } from '../../utils/displayCodeUtils';
+// ✅ TESTING: Dùng API mới với enhanced logging
 import {
+  getOverviewStatistics,
   getRevenueStatistics,
   getServiceFees,
   getPlatformDiscountLosses,
   getRevenueByDateRange,
-  getAllRevenues,
+  getRevenueChartData,
   formatCurrency,
   formatDateForAPI,
   getDateRange,
   getRevenueTypeBadge,
-} from '../../services/admin/adminRevenueService';
+  getPeriodLabel,
+} from '../../services/admin/adminStatisticsService';
 
 const AdminRevenue = () => {
   // States
@@ -22,7 +25,7 @@ const AdminRevenue = () => {
   const [error, setError] = useState(null);
   
   // Filter states
-  const [activeTab, setActiveTab] = useState('all'); // 'all', 'serviceFee', 'platformLoss', 'dateRange'
+  const [activeTab, setActiveTab] = useState('serviceFee'); // 'serviceFee', 'platformLoss', 'dateRange'
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
@@ -85,8 +88,8 @@ const AdminRevenue = () => {
             return;
           }
           break;
-        default: // 'all'
-          result = await getAllRevenues(params);
+        default:
+          result = await getServiceFees(params);
       }
 
       if (result.success) {
@@ -135,8 +138,8 @@ const AdminRevenue = () => {
     <div className="space-y-6">
       <AdminPageHeader 
         icon="📊"
-        title="Quản lý Doanh Thu"
-        subtitle="Theo dõi phí dịch vụ và doanh thu"
+        title="Thống Kê Doanh Thu"
+        subtitle="Theo dõi phí dịch vụ và thống kê doanh thu nền tảng"
       />
       <div className="space-y-6">
         {/* Statistics Cards - VER 1.0 */}
@@ -194,18 +197,8 @@ const AdminRevenue = () => {
 
         {/* Filters */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          {/* Tab Filters - VER 1.0 */}
+          {/* Tab Filters - VER 2.0 (27/11/2024) */}
           <div className="flex flex-wrap gap-3 mb-6">
-            <button
-              onClick={() => { setActiveTab('all'); setCurrentPage(0); }}
-              className={`px-6 py-3 rounded-xl font-semibold transition-all ${
-                activeTab === 'all'
-                  ? 'bg-purple-600 text-white shadow-lg'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              📊 Tất Cả
-            </button>
             <button
               onClick={() => { setActiveTab('serviceFee'); setCurrentPage(0); }}
               className={`px-6 py-3 rounded-xl font-semibold transition-all ${
@@ -360,9 +353,28 @@ const AdminRevenue = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {revenues.map((revenue) => {
+                      // 🔍 DEBUG: Log revenue structure để tìm field tên cửa hàng
+                      if (revenue.revenueType === 'SERVICE_FEE') {
+                        console.log('🔍 [Revenue] SERVICE_FEE structure:', {
+                          id: revenue.id,
+                          shop: revenue.shop,
+                          store: revenue.store,
+                          storeName: revenue.storeName,
+                          shopName: revenue.shopName,
+                          order: revenue.order,
+                          fullRevenue: revenue
+                        });
+                      }
+                      
                       const typeBadge = getRevenueTypeBadge(revenue.revenueType);
                       const orderTotal = revenue.order?.totalPrice || 0;
-                      const shopName = revenue.shop?.name || '-';
+                      const shopName = revenue.shop?.name || 
+                                       revenue.store?.name || 
+                                       revenue.storeName || 
+                                       revenue.shopName || 
+                                       revenue.order?.store?.name ||
+                                       revenue.order?.storeName ||
+                                       '-';
                       
                       return (
                         <tr key={revenue.id} className="hover:bg-gray-50 transition-colors">

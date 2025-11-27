@@ -30,7 +30,7 @@ const PromoCodeInput = ({
     () => getPlatformAvailablePromotions({
       orderValue: orderTotal,
       page: 0,
-      size: 100,
+      size: 20, // ✅ Giảm từ 100 xuống 20 để load nhanh
     }),
     { revalidateOnFocus: false }
   );
@@ -41,7 +41,7 @@ const PromoCodeInput = ({
     () => getStoreAvailablePromotions(storeId, {
       orderValue: orderTotal,
       page: 0,
-      size: 100,
+      size: 20, // ✅ Giảm từ 100 xuống 20 để load nhanh
     }),
     { revalidateOnFocus: false }
   );
