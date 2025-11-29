@@ -426,13 +426,15 @@ const StoreWallet = () => {
                   Số tiền rút
                 </label>
                 <input
-                  type="number"
-                  value={withdrawalForm.amount}
-                  onChange={(e) => setWithdrawalForm({ ...withdrawalForm, amount: e.target.value })}
+                  type="text"
+                  value={withdrawalForm.amount ? new Intl.NumberFormat('vi-VN').format(withdrawalForm.amount) : ''}
+                  onChange={(e) => {
+                    // Chỉ cho phép nhập số
+                    const value = e.target.value.replace(/[^\d]/g, '');
+                    setWithdrawalForm({ ...withdrawalForm, amount: value });
+                  }}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Nhập số tiền"
-                  min="0"
-                  max={wallet?.balance || 0}
+                  placeholder="Nhập số tiền (VD: 1.000.000)"
                   required
                 />
                 <div className="mt-2 p-3 bg-green-50 rounded-lg border border-green-200">

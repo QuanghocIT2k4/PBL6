@@ -18,6 +18,8 @@ const reviewSchema = z.object({
 const ReviewForm = ({ productVariantId, orderId, existingReview = null, onSuccess, onCancel }) => {
   const { success, error: showError } = useToast();
   const [hoveredRating, setHoveredRating] = useState(0);
+  const [uploadedImages, setUploadedImages] = useState([]); // State cho ảnh đã upload
+  const [uploading, setUploading] = useState(false); // State loading khi upload
 
   const {
     register,
@@ -71,13 +73,20 @@ const ReviewForm = ({ productVariantId, orderId, existingReview = null, onSucces
       }
     }
 
+    // TODO: Khi backend có API upload ảnh review, thêm logic upload ở đây
+    // Hiện tại chỉ gửi review không có ảnh
     const reviewData = {
       rating: data.rating,
       comment: data.comment.trim(),
-      images: data.images || [],
+      images: [], // Tạm thời bỏ qua ảnh vì backend chưa có API upload
       ...((!existingReview && productVariantId) && { productVariantId }),
       ...((!existingReview && orderId) && { orderId }),
     };
+    
+    // Log thông tin ảnh đã chọn (để debug)
+    if (uploadedImages.length > 0) {
+      console.log('📷 Ảnh đã chọn (chưa upload):', uploadedImages.map(img => img.name));
+    }
 
     try {
       let result;
@@ -106,21 +115,46 @@ const ReviewForm = ({ productVariantId, orderId, existingReview = null, onSucces
     }
   };
 
-  const handleImageUrlAdd = () => {
-    const url = prompt('Nhập URL hình ảnh:');
-    if (url && url.trim()) {
-      const currentImages = images || [];
-      if (currentImages.length >= 5) {
-        showError('Tối đa 5 hình ảnh');
+  // Handle file upload
+  const handleImageUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    
+    const currentImages = uploadedImages || [];
+    const remainingSlots = 5 - currentImages.length;
+    
+    if (files.length > remainingSlots) {
+      showError(`Chỉ có thể thêm ${remainingSlots} ảnh nữa (tối đa 5 ảnh)`);
+      return;
+    }
+    
+    // Validate file size (max 5MB each)
+    for (const file of files) {
+      if (file.size > 5 * 1024 * 1024) {
+        showError(`Ảnh "${file.name}" vượt quá 5MB`);
         return;
       }
-      setValue('images', [...currentImages, url.trim()]);
     }
+    
+    // Create preview URLs
+    const newImages = files.map(file => ({
+      file,
+      preview: URL.createObjectURL(file),
+      name: file.name
+    }));
+    
+    setUploadedImages([...currentImages, ...newImages]);
+    
+    // Clear input
+    e.target.value = '';
   };
 
   const handleImageRemove = (index) => {
-    const currentImages = images || [];
-    setValue('images', currentImages.filter((_, i) => i !== index));
+    // Revoke URL để tránh memory leak
+    if (uploadedImages[index]?.preview) {
+      URL.revokeObjectURL(uploadedImages[index].preview);
+    }
+    setUploadedImages(prev => prev.filter((_, i) => i !== index));
   };
 
   return (
@@ -206,42 +240,59 @@ const ReviewForm = ({ productVariantId, orderId, existingReview = null, onSucces
           Hình ảnh (Tùy chọn)
         </label>
         
-        <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-3">
-          {(images || []).map((img, index) => (
-            <div key={index} className="relative group aspect-square">
-              <img
-                src={img}
-                alt={`Review ${index + 1}`}
-                className="w-full h-full object-cover rounded-lg border-2 border-gray-200"
-              />
-              <button
-                type="button"
-                onClick={() => handleImageRemove(index)}
-                className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          ))}
-          
-          {(images || []).length < 5 && (
-            <button
-              type="button"
-              onClick={handleImageUrlAdd}
-              className="aspect-square border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all flex flex-col items-center justify-center text-gray-400 hover:text-blue-500"
-            >
-              <svg className="w-8 h-8 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        {/* Upload Button */}
+        {uploadedImages.length < 5 && (
+          <div className="mb-4">
+            <label className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-all">
+              <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
-              <span className="text-xs font-medium">Thêm ảnh</span>
-            </button>
-          )}
-        </div>
+              <span className="text-sm font-medium text-gray-600">
+                📷 Chọn ảnh từ máy tính
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleImageUpload}
+                className="hidden"
+              />
+            </label>
+            <p className="text-xs text-gray-500 mt-2 text-center">
+              PNG, JPG, GIF tối đa 5MB mỗi ảnh
+            </p>
+          </div>
+        )}
+        
+        {/* Image Preview Grid */}
+        {uploadedImages.length > 0 && (
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-3">
+            {uploadedImages.map((img, index) => (
+              <div key={index} className="relative group aspect-square">
+                <img
+                  src={img.preview}
+                  alt={`Review ${index + 1}`}
+                  className="w-full h-full object-cover rounded-lg border-2 border-gray-200"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleImageRemove(index)}
+                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+                <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 truncate rounded-b-lg">
+                  {img.name}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         
         <p className="text-xs text-gray-500">
-          Tối đa 5 hình ảnh. Click "Thêm ảnh" để thêm URL hình ảnh.
+          {uploadedImages.length}/5 hình ảnh đã chọn
         </p>
       </div>
 

@@ -7,6 +7,7 @@ import ShopInfo from '../../components/products/ShopInfo';
 import ProductSection from '../../components/common/ProductSection';
 import ReviewList from '../../components/reviews/ReviewList';
 import ReviewForm from '../../components/reviews/ReviewForm';
+import SEO from '../../components/seo/SEO';
 import { useState } from 'react';
 import { useProductDetail } from '../../hooks/useProductDetail';
 import { useCategories } from '../../hooks/useCategories';
@@ -77,8 +78,25 @@ const ProductDetail = () => {
     navigate(`/product/${relatedProduct.id}`);
   };
 
+  // SEO data từ product
+  const productTitle = product?.name || 'Sản phẩm';
+  const productDescription = product?.description 
+    ? `${product.description.substring(0, 160)}...` 
+    : `Mua ${productTitle} với giá tốt nhất. Giao hàng nhanh, thanh toán an toàn.`;
+  const productPrice = product?.price ? new Intl.NumberFormat('vi-VN').format(product.price) : '';
+  const productImage = product?.images?.[0] || product?.image || '';
+  const productKeywords = `${productTitle}, ${categoryName}, mua sắm online, công nghệ`;
+
   return (
     <MainLayout>
+      <SEO
+        title={productTitle}
+        description={productDescription}
+        keywords={productKeywords}
+        image={productImage}
+        url={`/product/${id}`}
+        type="product"
+      />
       {/* Breadcrumb */}
       <div className="bg-gray-50 py-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

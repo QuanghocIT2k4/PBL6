@@ -1,10 +1,11 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import { getOrderCode } from '../../utils/displayCodeUtils';
 import MainLayout from '../../layouts/MainLayout';
 import ReviewForm from '../../components/reviews/ReviewForm';
 import { getOrderById, cancelOrder, canCancelOrder, canReviewOrder, getOrderStatusBadge, getPaymentMethodLabel } from '../../services/buyer/orderService';
+import { checkExistingReview } from '../../services/buyer/reviewService';
 import { useToast } from '../../context/ToastContext';
 import { confirmCancelOrder } from '../../utils/sweetalert';
 
@@ -41,6 +42,8 @@ const OrderDetailPage = () => {
   const { success, error: showError } = useToast();
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [reviewedItems, setReviewedItems] = useState({}); // Track which items have been reviewed
+  const [existingReviews, setExistingReviews] = useState({}); // Store existing reviews for editing
 
   // Fetch order details
   const { data: orderData, error, mutate } = useSWR(
@@ -52,6 +55,32 @@ const OrderDetailPage = () => {
   );
 
   const order = orderData?.success ? orderData.data : null;
+
+  // Check which items have been reviewed
+  useEffect(() => {
+    const checkReviews = async () => {
+      if (!order || !canReviewOrder(order.status)) return;
+      
+      const items = order.items || order.orderItems || [];
+      const reviewStatus = {};
+      const reviews = {};
+      
+      for (const item of items) {
+        const variantId = item.productVariantId || item.id;
+        const result = await checkExistingReview(variantId, order.id);
+        
+        if (result.success && result.hasReviewed) {
+          reviewStatus[variantId] = true;
+          reviews[variantId] = result.existingReview;
+        }
+      }
+      
+      setReviewedItems(reviewStatus);
+      setExistingReviews(reviews);
+    };
+    
+    checkReviews();
+  }, [order]);
 
   // Handle cancel
   const handleCancel = async () => {
@@ -74,6 +103,12 @@ const OrderDetailPage = () => {
   };
 
   const handleReviewSuccess = () => {
+    // Mark item as reviewed
+    if (selectedItem) {
+      const variantId = selectedItem.productVariantId || selectedItem.id;
+      setReviewedItems(prev => ({ ...prev, [variantId]: true }));
+    }
+    
     setShowReviewModal(false);
     setSelectedItem(null);
     success('Đánh giá của bạn đã được gửi thành công!');
@@ -270,16 +305,35 @@ const OrderDetailPage = () => {
                   {/* Review Section for DELIVERED orders */}
                   {canReview && (
                     <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
-                      <div className="text-sm text-blue-600">
-                        <p className="font-medium">Đánh giá sản phẩm</p>
-                        <p className="text-xs">Chia sẻ trải nghiệm của bạn về sản phẩm này</p>
-                      </div>
-                      <button
-                        onClick={() => handleReviewClick(item)}
-                        className="px-6 py-2 bg-blue-600 text-white rounded-md font-semibold hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg"
-                      >
-                        ✍️ Đánh Giá
-                      </button>
+                      {reviewedItems[item.productVariantId || item.id] ? (
+                        <>
+                          <div className="text-sm text-green-600">
+                            <p className="font-medium flex items-center gap-1">
+                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                              </svg>
+                              Đã đánh giá
+                            </p>
+                            <p className="text-xs text-gray-500">Bạn đã đánh giá sản phẩm này</p>
+                          </div>
+                          <span className="px-4 py-2 bg-gray-100 text-gray-500 rounded-md font-medium cursor-not-allowed">
+                            ✅ Đã đánh giá
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-sm text-blue-600">
+                            <p className="font-medium">Đánh giá sản phẩm</p>
+                            <p className="text-xs">Chia sẻ trải nghiệm của bạn về sản phẩm này</p>
+                          </div>
+                          <button
+                            onClick={() => handleReviewClick(item)}
+                            className="px-6 py-2 bg-blue-600 text-white rounded-md font-semibold hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg"
+                          >
+                            ✍️ Đánh Giá
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

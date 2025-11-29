@@ -3,6 +3,7 @@ import useSWR from 'swr';
 import ReviewForm from '../reviews/ReviewForm';
 import ChatButton from '../chat/ChatButton';
 import { getOrderById, getOrderStatusBadge, getPaymentMethodLabel, canCancelOrder, canReviewOrder } from '../../services/buyer/orderService';
+import { checkExistingReview } from '../../services/buyer/reviewService';
 import { useToast } from '../../context/ToastContext';
 
 /**
@@ -37,6 +38,7 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [expanded, setExpanded] = useState(false);
+  const [reviewedItems, setReviewedItems] = useState({}); // Track which items have been reviewed
 
   // Fetch order details to get items
   const { data: detailData } = useSWR(
@@ -100,6 +102,29 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
     setExpanded(true);
   }, []);
 
+  // Check which items have been reviewed
+  useEffect(() => {
+    const checkReviews = async () => {
+      if (!orderDetail || !canReview) return;
+      
+      const items = orderDetail.items || orderDetail.orderItems || [];
+      const reviewStatus = {};
+      
+      for (const item of items) {
+        const variantId = item.productVariantId || item.id;
+        const result = await checkExistingReview(variantId, order.id);
+        
+        if (result.success && result.hasReviewed) {
+          reviewStatus[variantId] = true;
+        }
+      }
+      
+      setReviewedItems(reviewStatus);
+    };
+    
+    checkReviews();
+  }, [orderDetail, canReview, order.id]);
+
   const handleCancelClick = () => {
     if (onCancel) {
       onCancel(order);
@@ -112,6 +137,12 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
   };
 
   const handleReviewSuccess = () => {
+    // Mark item as reviewed
+    if (selectedItem) {
+      const variantId = selectedItem.productVariantId || selectedItem.id;
+      setReviewedItems(prev => ({ ...prev, [variantId]: true }));
+    }
+    
     setShowReviewModal(false);
     setSelectedItem(null);
     success('Đánh giá của bạn đã được gửi thành công!');
@@ -335,18 +366,35 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
 
             {/* Right: Action Buttons */}
             <div className="flex items-center gap-2">
-              {/* Review Button */}
-              {canReview && (
-                <button
-                  onClick={() => handleReviewClick(items[0])}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white text-sm font-semibold rounded-lg hover:from-orange-600 hover:to-pink-600 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
-                  </svg>
-                  Đánh giá
-                </button>
-              )}
+              {/* Review Button - Check if all items are reviewed */}
+              {canReview && (() => {
+                const firstItem = items[0];
+                const variantId = firstItem?.productVariantId || firstItem?.id;
+                const hasReviewed = reviewedItems[variantId];
+                
+                if (hasReviewed) {
+                  return (
+                    <span className="flex items-center gap-1.5 px-4 py-2 bg-gray-100 text-gray-500 text-sm font-medium rounded-lg cursor-not-allowed">
+                      <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      Đã đánh giá
+                    </span>
+                  );
+                }
+                
+                return (
+                  <button
+                    onClick={() => handleReviewClick(firstItem)}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white text-sm font-semibold rounded-lg hover:from-orange-600 hover:to-pink-600 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+                    </svg>
+                    Đánh giá
+                  </button>
+                );
+              })()}
               
               {/* Cancel Button */}
               {canCancel && (

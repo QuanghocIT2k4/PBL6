@@ -76,23 +76,6 @@ const StoreDetailPage = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const renderStars = (rating) => {
-    return (
-      <div className="flex items-center space-x-1">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <span
-            key={star}
-            className={`text-sm ${
-              star <= rating ? 'text-yellow-400' : 'text-gray-300'
-            }`}
-          >
-            ★
-          </span>
-        ))}
-        <span className="text-sm text-gray-600 ml-1">({rating})</span>
-      </div>
-    );
-  };
 
   if (loading) {
     return (
@@ -147,8 +130,8 @@ const StoreDetailPage = () => {
               </span>
             </div>
             <div className="absolute bottom-4 right-4 text-white">
-              <div className="text-lg font-semibold">{store.stats?.totalProducts || store.totalProducts || 0} sản phẩm</div>
-              <div className="text-sm opacity-90">{(store.stats?.totalOrders || store.totalOrders || 0).toLocaleString()} đơn hàng</div>
+              <div className="text-lg font-semibold">{totalProducts} sản phẩm</div>
+              <div className="text-sm opacity-90">Cửa hàng chính hãng</div>
             </div>
           </div>
 
@@ -189,12 +172,10 @@ const StoreDetailPage = () => {
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-blue-600 mb-1">
-                  {store.stats?.averageRating || store.averageRating || 0}
-                </div>
-                {renderStars(store.stats?.averageRating || store.averageRating || 0)}
-                <div className="text-sm text-gray-600 mt-1">
-                  {store.stats?.totalReviews || store.totalReviews || 0} đánh giá
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full font-medium">
+                    🏪 {totalProducts} sản phẩm
+                  </span>
                 </div>
               </div>
             </div>
@@ -213,7 +194,7 @@ const StoreDetailPage = () => {
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                Sản phẩm ({products.length})
+                Sản phẩm ({totalProducts})
               </button>
               <button
                 onClick={() => setActiveTab('about')}
@@ -224,16 +205,6 @@ const StoreDetailPage = () => {
                 }`}
               >
                 Giới thiệu
-              </button>
-              <button
-                onClick={() => setActiveTab('reviews')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'reviews'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Đánh giá ({store.stats?.totalReviews || store.totalReviews || 0})
               </button>
             </nav>
           </div>
@@ -403,47 +374,24 @@ const StoreDetailPage = () => {
                   <h3 className="text-lg font-semibold text-gray-900 mb-3">
                     Thống kê cửa hàng
                   </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="text-center p-4 bg-blue-50 rounded-lg">
                       <div className="text-2xl font-bold text-blue-600">
-                        {store.stats?.totalProducts || store.totalProducts || 0}
+                        {totalProducts}
                       </div>
                       <div className="text-sm text-gray-600">Sản phẩm</div>
                     </div>
                     <div className="text-center p-4 bg-green-50 rounded-lg">
                       <div className="text-2xl font-bold text-green-600">
-                        {(store.stats?.totalOrders || store.totalOrders || 0).toLocaleString()}
+                        ✅
                       </div>
-                      <div className="text-sm text-gray-600">Đơn hàng</div>
-                    </div>
-                    <div className="text-center p-4 bg-yellow-50 rounded-lg">
-                      <div className="text-2xl font-bold text-yellow-600">
-                        {store.stats?.averageRating || store.averageRating || 0}
-                      </div>
-                      <div className="text-sm text-gray-600">Đánh giá TB</div>
-                    </div>
-                    <div className="text-center p-4 bg-purple-50 rounded-lg">
-                      <div className="text-2xl font-bold text-purple-600">
-                        {store.stats?.totalReviews || store.totalReviews || 0}
-                      </div>
-                      <div className="text-sm text-gray-600">Đánh giá</div>
+                      <div className="text-sm text-gray-600">Đã xác thực</div>
                     </div>
                   </div>
                 </div>
               </div>
             )}
 
-            {activeTab === 'reviews' && (
-              <div className="text-center py-12">
-                <div className="text-gray-400 text-6xl mb-4">⭐</div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                  Tính năng đánh giá cửa hàng
-                </h3>
-                <p className="text-gray-600">
-                  Tính năng này sẽ được phát triển trong phiên bản tiếp theo
-                </p>
-              </div>
-            )}
           </div>
         </div>
 

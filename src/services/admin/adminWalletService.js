@@ -59,12 +59,16 @@ export const getStoreWithdrawals = async (params = {}) => {
  * 2. APPROVE STORE WITHDRAWAL REQUEST
  * PUT /api/v1/admin/withdrawals/store/{requestId}/approve
  */
-export const approveStoreWithdrawal = async (requestId, note = '') => {
+export const approveStoreWithdrawal = async (requestId, adminNote = '') => {
   try {
-    console.log('✅ Approving store withdrawal:', { requestId, note });
+    console.log('✅ Approving store withdrawal:', { requestId, adminNote });
     
-    const response = await api.put(`/api/v1/admin/withdrawals/store/${requestId}/approve`, {
-      note,
+    const url = `/api/v1/admin/withdrawals/store/${requestId}/approve`;
+    console.log('🔗 API URL:', url);
+    
+    // ⚠️ adminNote là QUERY PARAMETER, không phải body
+    const response = await api.put(url, null, {
+      params: adminNote ? { adminNote } : undefined,
     });
     
     console.log('✅ Store withdrawal approved:', response.data);
@@ -76,10 +80,12 @@ export const approveStoreWithdrawal = async (requestId, note = '') => {
     };
   } catch (error) {
     console.error('❌ Error approving store withdrawal:', error);
+    console.error('❌ Error response:', error.response?.data);
+    console.error('❌ Error status:', error.response?.status);
     
     return {
       success: false,
-      error: error.response?.data?.message || 'Không thể duyệt yêu cầu rút tiền',
+      error: error.response?.data?.error || error.response?.data?.message || 'Không thể duyệt yêu cầu rút tiền',
     };
   }
 };
@@ -88,12 +94,15 @@ export const approveStoreWithdrawal = async (requestId, note = '') => {
  * 3. REJECT STORE WITHDRAWAL REQUEST
  * PUT /api/v1/admin/withdrawals/store/{requestId}/reject
  */
-export const rejectStoreWithdrawal = async (requestId, reason) => {
+export const rejectStoreWithdrawal = async (requestId, adminNote) => {
   try {
-    console.log('❌ Rejecting store withdrawal:', { requestId, reason });
+    console.log('❌ Rejecting store withdrawal:', { requestId, adminNote });
     
-    const response = await api.put(`/api/v1/admin/withdrawals/store/${requestId}/reject`, {
-      reason,
+    // ⚠️ adminNote là QUERY PARAMETER, không phải body
+    const response = await api.put(`/api/v1/admin/withdrawals/store/${requestId}/reject`, null, {
+      params: {
+        ...(adminNote && { adminNote }),
+      },
     });
     
     console.log('✅ Store withdrawal rejected:', response.data);
@@ -108,7 +117,7 @@ export const rejectStoreWithdrawal = async (requestId, reason) => {
     
     return {
       success: false,
-      error: error.response?.data?.message || 'Không thể từ chối yêu cầu rút tiền',
+      error: error.response?.data?.error || error.response?.data?.message || 'Không thể từ chối yêu cầu rút tiền',
     };
   }
 };
@@ -191,12 +200,15 @@ export const getCustomerWithdrawalById = async (requestId) => {
  * 6. APPROVE CUSTOMER WITHDRAWAL REQUEST
  * PUT /api/v1/admin/withdrawals/customer/{requestId}/approve
  */
-export const approveCustomerWithdrawal = async (requestId, note = '') => {
+export const approveCustomerWithdrawal = async (requestId, adminNote = '') => {
   try {
-    console.log('✅ Approving customer withdrawal:', { requestId, note });
+    console.log('✅ Approving customer withdrawal:', { requestId, adminNote });
     
-    const response = await api.put(`/api/v1/admin/withdrawals/customer/${requestId}/approve`, {
-      note,
+    // ⚠️ adminNote là QUERY PARAMETER, không phải body
+    const response = await api.put(`/api/v1/admin/withdrawals/customer/${requestId}/approve`, null, {
+      params: {
+        ...(adminNote && { adminNote }),
+      },
     });
     
     console.log('✅ Customer withdrawal approved:', response.data);
@@ -211,7 +223,7 @@ export const approveCustomerWithdrawal = async (requestId, note = '') => {
     
     return {
       success: false,
-      error: error.response?.data?.message || 'Không thể duyệt yêu cầu rút tiền',
+      error: error.response?.data?.error || error.response?.data?.message || 'Không thể duyệt yêu cầu rút tiền',
     };
   }
 };
@@ -220,12 +232,15 @@ export const approveCustomerWithdrawal = async (requestId, note = '') => {
  * 7. REJECT CUSTOMER WITHDRAWAL REQUEST
  * PUT /api/v1/admin/withdrawals/customer/{requestId}/reject
  */
-export const rejectCustomerWithdrawal = async (requestId, reason) => {
+export const rejectCustomerWithdrawal = async (requestId, adminNote) => {
   try {
-    console.log('❌ Rejecting customer withdrawal:', { requestId, reason });
+    console.log('❌ Rejecting customer withdrawal:', { requestId, adminNote });
     
-    const response = await api.put(`/api/v1/admin/withdrawals/customer/${requestId}/reject`, {
-      reason,
+    // ⚠️ adminNote là QUERY PARAMETER, không phải body
+    const response = await api.put(`/api/v1/admin/withdrawals/customer/${requestId}/reject`, null, {
+      params: {
+        ...(adminNote && { adminNote }),
+      },
     });
     
     console.log('✅ Customer withdrawal rejected:', response.data);
@@ -240,7 +255,7 @@ export const rejectCustomerWithdrawal = async (requestId, reason) => {
     
     return {
       success: false,
-      error: error.response?.data?.message || 'Không thể từ chối yêu cầu rút tiền',
+      error: error.response?.data?.error || error.response?.data?.message || 'Không thể từ chối yêu cầu rút tiền',
     };
   }
 };

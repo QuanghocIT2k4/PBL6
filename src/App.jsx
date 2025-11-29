@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { SWRConfig } from 'swr';
+import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { StoreProvider } from './context/StoreContext';
@@ -77,29 +78,31 @@ const AppContent = () => {
 
 export default function App() {
   return (
-    <SWRConfig
-      value={{
-        // ✅ CẤU HÌNH SWR CHO TOÀN APP
-        dedupingInterval: 60000, // Cache 60s
-        focusThrottleInterval: 60000,
-        revalidateOnFocus: false,
-        revalidateOnReconnect: false,
-        shouldRetryOnError: false,
-      }}
-    >
-      <AuthProvider>
-        <CartProvider>
-          <StoreProvider>
-            <ChatProvider>
-              <ToastProvider>
-                <BrowserRouter>
-                  <AppContent />
-                </BrowserRouter>
-              </ToastProvider>
-            </ChatProvider>
-          </StoreProvider>
-        </CartProvider>
-      </AuthProvider>
-    </SWRConfig>
+    <HelmetProvider>
+      <SWRConfig
+        value={{
+          // ✅ CẤU HÌNH SWR CHO TOÀN APP
+          dedupingInterval: 60000, // Cache 60s
+          focusThrottleInterval: 60000,
+          revalidateOnFocus: false,
+          revalidateOnReconnect: false,
+          shouldRetryOnError: false,
+        }}
+      >
+        <AuthProvider>
+          <CartProvider>
+            <StoreProvider>
+              <ChatProvider>
+                <ToastProvider>
+                  <BrowserRouter>
+                    <AppContent />
+                  </BrowserRouter>
+                </ToastProvider>
+              </ChatProvider>
+            </StoreProvider>
+          </CartProvider>
+        </AuthProvider>
+      </SWRConfig>
+    </HelmetProvider>
   );
 }

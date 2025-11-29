@@ -229,6 +229,48 @@ export const canReviewProduct = async (productVariantId, orderId) => {
   }
 };
 
+/**
+ * Check if user has already reviewed a product variant in an order
+ * @param {string} productVariantId - Product Variant ID
+ * @param {string} orderId - Order ID
+ * @returns {Promise} Has reviewed status and existing review if any
+ */
+export const checkExistingReview = async (productVariantId, orderId) => {
+  try {
+    // Lấy tất cả reviews của user
+    const result = await getBuyerReviews({ page: 0, size: 100 });
+    
+    if (result.success && result.data) {
+      const reviews = result.data.content || result.data || [];
+      
+      // Tìm review đã tồn tại cho productVariantId + orderId này
+      const existingReview = reviews.find(review => 
+        (review.productVariantId === productVariantId || review.productVariant?.id === productVariantId) &&
+        (review.orderId === orderId || review.order?.id === orderId)
+      );
+      
+      return {
+        success: true,
+        hasReviewed: !!existingReview,
+        existingReview: existingReview || null,
+      };
+    }
+    
+    return {
+      success: true,
+      hasReviewed: false,
+      existingReview: null,
+    };
+  } catch (error) {
+    console.error('Error checking existing review:', error);
+    return {
+      success: false,
+      hasReviewed: false,
+      existingReview: null,
+    };
+  }
+};
+
 export default {
   // Public APIs (✅ Validated with Swagger)
   getProductVariantReviews,
@@ -242,4 +284,5 @@ export default {
   
   // Helpers
   canReviewProduct,
+  checkExistingReview,
 };

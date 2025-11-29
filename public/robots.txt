@@ -1,0 +1,18 @@
+# robots.txt for E-Commerce Platform
+
+User-agent: *
+Allow: /
+Disallow: /admin-dashboard/
+Disallow: /store-dashboard/
+Disallow: /auth
+Disallow: /cart
+Disallow: /checkout
+Disallow: /orders
+Disallow: /profile
+Disallow: /wallet
+Disallow: /chat
+Disallow: /payment/
+
+# Sitemap
+Sitemap: https://yourdomain.com/sitemap.xml
+

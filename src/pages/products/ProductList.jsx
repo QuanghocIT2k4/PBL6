@@ -2,6 +2,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
 import ProductSection from '../../components/common/ProductSection';
 import SearchFilters from '../../components/search/SearchFilters';
+import SEO from '../../components/seo/SEO';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useProductVariants } from '../../hooks/useProductVariants';
 import { useCategories } from '../../hooks/useCategories';
@@ -445,6 +446,12 @@ const ProductList = () => {
 
   return (
     <MainLayout>
+      <SEO
+        title={categoryName}
+        description={`Khám phá ${categoryName} với hàng ngàn sản phẩm chất lượng cao, giá tốt nhất. Giao hàng nhanh, thanh toán an toàn.`}
+        keywords={`${categoryName}, mua sắm online, công nghệ, sản phẩm ${categoryName.toLowerCase()}`}
+        url={`/products/${category}`}
+      />
       {/* Breadcrumb */}
       <div className="bg-gray-50 py-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

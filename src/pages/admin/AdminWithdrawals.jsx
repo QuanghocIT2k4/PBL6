@@ -77,6 +77,14 @@ const AdminWithdrawals = () => {
   const handleApprove = async () => {
     if (!selectedWithdrawal) return;
     
+    // Kiểm tra trạng thái trước khi duyệt
+    if (selectedWithdrawal.status !== 'PENDING') {
+      showError(`Yêu cầu này đã ở trạng thái "${selectedWithdrawal.status}", không thể duyệt!`);
+      setShowApproveModal(false);
+      loadData();
+      return;
+    }
+    
     setProcessing(true);
     
     try {
@@ -91,11 +99,18 @@ const AdminWithdrawals = () => {
         setSelectedWithdrawal(null);
         loadData();
       } else {
-        showError(result.error);
+        showError(result.error || 'Không thể duyệt yêu cầu');
+        // Refresh data để cập nhật trạng thái mới nhất
+        loadData();
+        setShowApproveModal(false);
+        setSelectedWithdrawal(null);
       }
     } catch (err) {
       console.error('Error approving withdrawal:', err);
       showError('Không thể duyệt yêu cầu');
+      // Refresh data
+      loadData();
+      setShowApproveModal(false);
     } finally {
       setProcessing(false);
     }

@@ -2,6 +2,7 @@ import MainLayout from '../../layouts/MainLayout';
 import ProductSection from '../../components/common/ProductSection';
 import ProductSkeleton from '../../components/common/ProductSkeleton';
 import BrandsSection from '../../components/common/BrandsSection';
+import SEO from '../../components/seo/SEO';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useProductVariants, usePrefetchVariants } from '../../hooks/useProductVariants';
@@ -259,6 +260,12 @@ const HomePage = () => {
 
   return (
     <MainLayout>
+      <SEO
+        title="Trang chủ"
+        description="Khám phá hàng ngàn sản phẩm công nghệ chất lượng cao với giá tốt nhất. Điện thoại, laptop, tai nghe, camera và nhiều hơn nữa. Giao hàng nhanh, thanh toán an toàn."
+        keywords="mua sắm online, điện thoại, laptop, công nghệ, e-commerce, sản phẩm công nghệ"
+        url="/"
+      />
       {/* Hero Section */}
       <section className="bg-white py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
