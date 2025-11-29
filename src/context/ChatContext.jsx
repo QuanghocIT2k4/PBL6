@@ -473,6 +473,14 @@ export const ChatProvider = ({ children }) => {
     if (user && user.id) {
       loadConversations();
       loadUnreadCount();
+    } else {
+      // ✅ Clear chat data when user logs out
+      setConversations([]);
+      setCurrentConversation(null);
+      setMessages([]);
+      setUnreadCount(0);
+      setIsConnected(false);
+      chatWebSocketService.disconnect();
     }
   }, [user, loadConversations, loadUnreadCount]);
 

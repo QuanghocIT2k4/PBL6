@@ -64,14 +64,14 @@ const NotificationBell = ({
           />
         </svg>
 
-        {/* Unread Badge */}
+        {/* Unread Badge - CHỈ HIỂN THỊ KHI CÓ THÔNG BÁO CHƯA ĐỌC */}
         {unreadCount > 0 && (
           <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-500 rounded-full min-w-[20px] animate-pulse">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
 
-        {/* Ping animation for new notifications */}
+        {/* Ping animation for new notifications - CHỈ KHI CÓ THÔNG BÁO */}
         {unreadCount > 0 && (
           <span className="absolute top-0 right-0 inline-flex h-3 w-3 translate-x-1/2 -translate-y-1/2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>

@@ -8,6 +8,7 @@ import ProductSection from '../../components/common/ProductSection';
 import ReviewList from '../../components/reviews/ReviewList';
 import ReviewForm from '../../components/reviews/ReviewForm';
 import SEO from '../../components/seo/SEO';
+import { ProductSchema, BreadcrumbSchema } from '../../components/seo/StructuredData';
 import { useState } from 'react';
 import { useProductDetail } from '../../hooks/useProductDetail';
 import { useCategories } from '../../hooks/useCategories';
@@ -87,6 +88,13 @@ const ProductDetail = () => {
   const productImage = product?.images?.[0] || product?.image || '';
   const productKeywords = `${productTitle}, ${categoryName}, mua sắm online, công nghệ`;
 
+  // Breadcrumb items for structured data
+  const breadcrumbItems = [
+    { name: 'Trang chủ', url: `${window.location.origin}/` },
+    { name: categoryName, url: `${window.location.origin}/products/${product?.categoryKey || 'all'}` },
+    { name: productTitle, url: `${window.location.origin}/product/${id}` }
+  ];
+
   return (
     <MainLayout>
       <SEO
@@ -97,6 +105,8 @@ const ProductDetail = () => {
         url={`/product/${id}`}
         type="product"
       />
+      <ProductSchema product={product} store={store} />
+      <BreadcrumbSchema items={breadcrumbItems} />
       {/* Breadcrumb */}
       <div className="bg-gray-50 py-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

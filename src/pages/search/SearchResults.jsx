@@ -4,6 +4,7 @@ import MainLayout from '../../layouts/MainLayout';
 import SearchFilters from '../../components/search/SearchFilters';
 import ProductSection from '../../components/common/ProductSection';
 import { useSearch } from '../../hooks/useSearch';
+import SEO from '../../components/seo/SEO';
 
 const SearchResults = () => {
   const [searchParams] = useSearchParams();
@@ -34,8 +35,24 @@ const SearchResults = () => {
     }
   };
 
+  // SEO data
+  const searchTitle = query ? `Tìm kiếm: "${query}"` : 'Tìm kiếm sản phẩm';
+  const searchDescription = query 
+    ? `Tìm thấy ${totalResults} kết quả cho "${query}". Khám phá sản phẩm công nghệ với giá tốt nhất.`
+    : 'Tìm kiếm sản phẩm công nghệ, điện tử với nhiều lựa chọn và giá tốt nhất.';
+  const searchKeywords = query 
+    ? `${query}, tìm kiếm, sản phẩm, mua sắm online`
+    : 'tìm kiếm, sản phẩm, mua sắm online, công nghệ';
+
   return (
     <MainLayout>
+      <SEO
+        title={searchTitle}
+        description={searchDescription}
+        keywords={searchKeywords}
+        url={`/search${query ? `?q=${encodeURIComponent(query)}` : ''}`}
+        type="website"
+      />
       {/* Breadcrumb */}
       <div className="bg-gray-50 py-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

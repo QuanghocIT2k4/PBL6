@@ -5,6 +5,7 @@ import { getAllStores } from '../../services/common/storeService';
 import { useToast } from '../../context/ToastContext';
 import { getFullImageUrl } from '../../utils/imageUtils';
 import api from '../../services/common/api';
+import SEO from '../../components/seo/SEO';
 
 const StoresPage = () => {
   const navigate = useNavigate();
@@ -163,6 +164,13 @@ const StoresPage = () => {
 
   return (
     <MainLayout>
+      <SEO
+        title="Danh sách cửa hàng"
+        description="Khám phá các cửa hàng uy tín tại Đà Nẵng. Tìm kiếm cửa hàng công nghệ, điện tử với nhiều sản phẩm chất lượng và giá tốt nhất."
+        keywords="cửa hàng, shop, cửa hàng công nghệ, cửa hàng điện tử, mua sắm online, Đà Nẵng"
+        url="/stores"
+        type="website"
+      />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">

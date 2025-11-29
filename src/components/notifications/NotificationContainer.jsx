@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import NotificationBell from './NotificationBell';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 
 // Import services based on user type
 import {
@@ -34,6 +35,7 @@ import {
  */
 const NotificationContainer = ({ userType = 'buyer', storeId = null }) => {
   const { success, error: showError } = useToast();
+  const { isAuthenticated } = useAuth();
   
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -41,21 +43,27 @@ const NotificationContainer = ({ userType = 'buyer', storeId = null }) => {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
 
-  // Load notifications on mount and every 30 seconds
-  useEffect(() => {
-    loadNotifications();
-    
-    const interval = setInterval(() => {
-      loadNotifications(true); // Silent reload
-    }, 30000); // 30 seconds
-
-    return () => clearInterval(interval);
-  }, [userType, storeId]);
-
+  // ✅ Define loadNotifications BEFORE useEffect to avoid initialization error
   const loadNotifications = useCallback(async (silent = false) => {
+    // ✅ KHÔNG load nếu chưa đăng nhập - RETURN NGAY
+    if (!isAuthenticated) {
+      setNotifications([]);
+      setUnreadCount(0);
+      setLoading(false);
+      return;
+    }
+
     if (!silent) setLoading(true);
     
     try {
+      // ✅ Double check - nếu logout trong lúc đang gọi API
+      if (!isAuthenticated) {
+        setNotifications([]);
+        setUnreadCount(0);
+        setLoading(false);
+        return;
+      }
+
       let result;
       
       if (userType === 'buyer') {
@@ -64,6 +72,14 @@ const NotificationContainer = ({ userType = 'buyer', storeId = null }) => {
         result = await getAdminNotifications({ page: 0, size: 10 });
       } else if (userType === 'store' && storeId) {
         result = await getStoreNotifications(storeId, { page: 0, size: 10 });
+      }
+      
+      // ✅ Check lại isAuthenticated sau khi API trả về
+      if (!isAuthenticated) {
+        setNotifications([]);
+        setUnreadCount(0);
+        setLoading(false);
+        return;
       }
       
       if (result && result.success) {
@@ -86,16 +102,56 @@ const NotificationContainer = ({ userType = 'buyer', storeId = null }) => {
         setHasMore(data?.totalPages > 1);
         setPage(0);
       } else if (result && result.error) {
-        // ✅ Chỉ log error, không hiển thị toast khi chưa đăng nhập
-        console.warn('⚠️ Cannot load notifications:', result.error);
+        // ✅ Chỉ log error nếu vẫn đang đăng nhập, không log khi đã logout
+        if (isAuthenticated) {
+          console.warn('⚠️ Cannot load notifications:', result.error);
+        }
       }
     } catch (err) {
-      console.error('❌ Error loading notifications:', err);
-      // ✅ Không hiển thị toast lỗi cho user
+      // ✅ Chỉ log error nếu vẫn đang đăng nhập
+      if (isAuthenticated) {
+        console.error('❌ Error loading notifications:', err);
+      }
+      // ✅ Clear state nếu có lỗi và đã logout
+      if (!isAuthenticated) {
+        setNotifications([]);
+        setUnreadCount(0);
+      }
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [userType, storeId, showError]);
+  }, [userType, storeId, showError, isAuthenticated]);
+
+  // ✅ Clear notifications IMMEDIATELY when user logs out
+  useEffect(() => {
+    if (!isAuthenticated) {
+      // Clear ngay lập tức, không đợi
+      setNotifications([]);
+      setUnreadCount(0);
+      setPage(0);
+      setHasMore(false);
+    }
+  }, [isAuthenticated]);
+
+  // Load notifications on mount and every 30 seconds - CHỈ KHI ĐÃ ĐĂNG NHẬP
+  useEffect(() => {
+    if (!isAuthenticated) {
+      // Clear khi logout
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
+
+    loadNotifications();
+    
+    const interval = setInterval(() => {
+      if (isAuthenticated) {
+        loadNotifications(true); // Silent reload
+      }
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [userType, storeId, isAuthenticated, loadNotifications]);
 
   const handleMarkAsRead = async (notificationId) => {
     try {
@@ -209,15 +265,19 @@ const NotificationContainer = ({ userType = 'buyer', storeId = null }) => {
     }
   };
 
+  // ✅ CHỈ HIỂN THỊ BADGE KHI ĐÃ ĐĂNG NHẬP VÀ CÓ THÔNG BÁO
+  // Icon luôn hiển thị, nhưng badge chỉ hiển thị khi isAuthenticated
+  const displayUnreadCount = isAuthenticated ? unreadCount : 0;
+
   return (
     <NotificationBell
-      notifications={notifications}
-      unreadCount={unreadCount}
-      onMarkAsRead={handleMarkAsRead}
-      onMarkAllAsRead={handleMarkAllAsRead}
-      onDelete={handleDelete}
-      onLoadMore={handleLoadMore}
-      hasMore={hasMore}
+      notifications={isAuthenticated ? notifications : []}
+      unreadCount={displayUnreadCount}
+      onMarkAsRead={isAuthenticated ? handleMarkAsRead : undefined}
+      onMarkAllAsRead={isAuthenticated ? handleMarkAllAsRead : undefined}
+      onDelete={isAuthenticated ? handleDelete : undefined}
+      onLoadMore={isAuthenticated ? handleLoadMore : undefined}
+      hasMore={isAuthenticated ? hasMore : false}
       loading={loading}
       userType={userType}
     />

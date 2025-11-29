@@ -6,6 +6,8 @@ import { getStoreById as getStoreByIdAPI } from '../../services/common/storeServ
 import { getProductVariantsByStore } from '../../services/common/productService';
 import { useToast } from '../../context/ToastContext';
 import { getFullImageUrl } from '../../utils/imageUtils';
+import SEO from '../../components/seo/SEO';
+import { Helmet } from 'react-helmet-async';
 
 const StoreDetailPage = () => {
   const { storeId } = useParams();
@@ -116,8 +118,49 @@ const StoreDetailPage = () => {
     );
   }
 
+  // SEO data
+  const storeTitle = store?.name || 'Cửa hàng';
+  const storeDescription = store?.description 
+    ? `${store.description.substring(0, 160)}...` 
+    : `Khám phá ${storeTitle} - Cửa hàng công nghệ uy tín với nhiều sản phẩm chất lượng và giá tốt nhất.`;
+  const storeKeywords = `${storeTitle}, cửa hàng công nghệ, mua sắm online, ${store?.address?.province || 'Đà Nẵng'}`;
+
   return (
     <MainLayout>
+      <SEO
+        title={storeTitle}
+        description={storeDescription}
+        keywords={storeKeywords}
+        image={getFullImageUrl(store?.logoUrl)}
+        url={`/store/${storeId}`}
+        type="website"
+      />
+      {store && (
+        <Helmet>
+          <script type="application/ld+json">
+            {JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "LocalBusiness",
+              "name": store.name,
+              "description": store.description || `${store.name} - Cửa hàng công nghệ uy tín`,
+              "url": `${window.location.origin}/store/${store.id}`,
+              "logo": getFullImageUrl(store.logoUrl) || undefined,
+              "image": getFullImageUrl(store.logoUrl) || undefined,
+              "address": {
+                "@type": "PostalAddress",
+                "streetAddress": store.address?.homeAddress || "",
+                "addressLocality": store.address?.ward || "",
+                "addressRegion": store.address?.province || "",
+                "addressCountry": "VN"
+              },
+              "telephone": store.owner?.phone || "",
+              "email": store.owner?.email || "",
+              "priceRange": "$$",
+              "openingHours": "Mo-Su 08:00-22:00"
+            })}
+          </script>
+        </Helmet>
+      )}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Store Header */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">

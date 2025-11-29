@@ -3,6 +3,7 @@ import ProductSection from '../../components/common/ProductSection';
 import ProductSkeleton from '../../components/common/ProductSkeleton';
 import BrandsSection from '../../components/common/BrandsSection';
 import SEO from '../../components/seo/SEO';
+import { OrganizationSchema, WebSiteSchema } from '../../components/seo/StructuredData';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useProductVariants, usePrefetchVariants } from '../../hooks/useProductVariants';
@@ -266,6 +267,8 @@ const HomePage = () => {
         keywords="mua sắm online, điện thoại, laptop, công nghệ, e-commerce, sản phẩm công nghệ"
         url="/"
       />
+      <OrganizationSchema />
+      <WebSiteSchema />
       {/* Hero Section */}
       <section className="bg-white py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

@@ -14,5 +14,6 @@ Disallow: /chat
 Disallow: /payment/
 
 # Sitemap
-Sitemap: https://yourdomain.com/sitemap.xml
+Sitemap: https://pbl-6-eight.vercel.app/sitemap.xml
+
 

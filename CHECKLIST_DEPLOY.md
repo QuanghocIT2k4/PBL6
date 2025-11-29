@@ -140,3 +140,4 @@ Hoặc nếu dùng Spring Security:
 - Backend CORS là bước QUAN TRỌNG nhất
 - Nếu Backend không cho phép CORS từ Vercel domain → FE không thể gọi API được
 
+
