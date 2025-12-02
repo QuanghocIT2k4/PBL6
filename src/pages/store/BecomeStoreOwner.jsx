@@ -5,6 +5,7 @@ import { useStoreContext } from '../../context/StoreContext';
 import { createStore } from '../../services/b2c/b2cStoreService';
 import { useToast } from '../../hooks/useToast';
 import MainLayout from '../../layouts/MainLayout';
+import SEO from '../../components/seo/SEO';
 
 const BecomeStoreOwner = () => {
   const navigate = useNavigate();
@@ -130,6 +131,12 @@ const BecomeStoreOwner = () => {
   if (!isAuthenticated || storesLoading) {
     return (
       <MainLayout>
+        <SEO 
+          title="Trở thành chủ Store | E-Comm"
+          description="Đăng ký trở thành chủ cửa hàng trên E-Comm. Bán sản phẩm và phát triển kinh doanh online."
+          keywords="trở thành chủ store, đăng ký cửa hàng, bán hàng online, seller"
+          url="https://pbl-6-eight.vercel.app/become-store-owner"
+        />
         <div className="flex items-center justify-center h-96">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
         </div>
@@ -139,6 +146,12 @@ const BecomeStoreOwner = () => {
 
   return (
     <MainLayout>
+      <SEO 
+        title="Trở thành chủ Store | E-Comm"
+        description="Đăng ký trở thành chủ cửa hàng trên E-Comm. Tạo cửa hàng của riêng bạn, bán sản phẩm và phát triển kinh doanh online. Dễ dàng quản lý đơn hàng, sản phẩm và doanh thu."
+        keywords="trở thành chủ store, đăng ký cửa hàng, bán hàng online, seller, tạo cửa hàng, kinh doanh online"
+        url="https://pbl-6-eight.vercel.app/become-store-owner"
+      />
       <div className="min-h-screen bg-gradient-to-br from-orange-50 via-pink-50 to-purple-50 py-12">
         <div className="max-w-4xl mx-auto px-4">
           {/* Header */}

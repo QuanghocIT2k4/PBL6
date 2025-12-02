@@ -3,7 +3,7 @@ import { useCategories } from '../../hooks/useCategories';
 import { getAllBrands } from '../../services/common/productService';
 import { useDebounce } from '../../hooks/useDebounce';
 
-const SearchFilters = ({ onFiltersChange, initialFilters = {}, currentProducts = [], categoryBrands = [], loadingCategoryBrands = false }) => {
+const SearchFilters = ({ onFiltersChange, initialFilters = {}, currentProducts = [], categoryBrands = [], loadingCategoryBrands = false, hideBrandFilter = false }) => {
   const [filters, setFilters] = useState({
     category: 'all',
     minPrice: '',
@@ -95,10 +95,11 @@ const SearchFilters = ({ onFiltersChange, initialFilters = {}, currentProducts =
   }, [initialFilters.category]);
 
   // ✅ Gọi onFiltersChange khi filters thay đổi (với debounce để tránh spam API)
+  // ✅ TĂNG DEBOUNCE LÊN 500ms ĐỂ GIẢM SỐ LẦN GỌI API
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       onFiltersChange(filters);
-    }, 300); // Debounce 300ms
+    }, 500); // Debounce 500ms (tăng từ 300ms để tối ưu hơn)
 
     return () => clearTimeout(timeoutId);
   }, [filters, onFiltersChange]);
@@ -213,49 +214,52 @@ const SearchFilters = ({ onFiltersChange, initialFilters = {}, currentProducts =
           </div>
         </div>
 
-        {/* Brand Filter */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Thương hiệu:
-            {categoryBrands && categoryBrands.length > 0 && (
-              <span className="ml-2 text-xs text-gray-500 font-normal">
-                ({categoryBrands.length} thương hiệu trong danh mục này)
-              </span>
+        {/* Brand Filter - Ẩn khi category = 'all' */}
+        {!hideBrandFilter && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Thương hiệu:
+              {categoryBrands && categoryBrands.length > 0 && (
+                <span className="ml-2 text-xs text-gray-500 font-normal">
+                  ({categoryBrands.length} thương hiệu trong danh mục này)
+                </span>
+              )}
+            </label>
+            {brandsLoading || loadingCategoryBrands ? (
+              <div className="space-y-2">
+                <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-4 bg-gray-200 rounded animate-pulse w-3/4"></div>
+                <div className="h-4 bg-gray-200 rounded animate-pulse w-1/2"></div>
+              </div>
+            ) : availableBrands.length === 0 ? (
+              <div className="text-sm text-gray-500">
+                {categoryBrands && categoryBrands.length === 0 && categoryBrands !== null
+                  ? 'Không có thương hiệu nào trong danh mục này'
+                  : 'Không có brands'}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+                {availableBrands.map(brand => (
+                  <label key={brand} className="flex items-center space-x-2 text-sm hover:bg-gray-50 p-1 rounded">
+                    <input 
+                      type="checkbox" 
+                      checked={filters.brands.includes(brand)} 
+                      onChange={(e) => {
+                        const next = e.target.checked 
+                          ? [...filters.brands, brand] 
+                          : filters.brands.filter(x => x !== brand);
+                        handleFilterChange('brands', next);
+                      }}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="truncate">{brand}</span>
+                  </label>
+                ))}
+              </div>
             )}
-          </label>
-          {brandsLoading || loadingCategoryBrands ? (
-            <div className="space-y-2">
-              <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
-              <div className="h-4 bg-gray-200 rounded animate-pulse w-3/4"></div>
-              <div className="h-4 bg-gray-200 rounded animate-pulse w-1/2"></div>
-            </div>
-          ) : availableBrands.length === 0 ? (
-            <div className="text-sm text-gray-500">
-              {categoryBrands && categoryBrands.length === 0 && categoryBrands !== null
-                ? 'Không có thương hiệu nào trong danh mục này'
-                : 'Không có brands'}
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
-              {availableBrands.map(brand => (
-                <label key={brand} className="flex items-center space-x-2 text-sm hover:bg-gray-50 p-1 rounded">
-                  <input 
-                    type="checkbox" 
-                    checked={filters.brands.includes(brand)} 
-                    onChange={(e) => {
-                      const next = e.target.checked 
-                        ? [...filters.brands, brand] 
-                        : filters.brands.filter(x => x !== brand);
-                      handleFilterChange('brands', next);
-                    }}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="truncate">{brand}</span>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
+        
       </div>
     </div>
   );

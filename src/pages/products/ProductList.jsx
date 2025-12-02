@@ -3,10 +3,11 @@ import MainLayout from '../../layouts/MainLayout';
 import ProductSection from '../../components/common/ProductSection';
 import SearchFilters from '../../components/search/SearchFilters';
 import SEO from '../../components/seo/SEO';
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useProductVariants } from '../../hooks/useProductVariants';
 import { useCategories } from '../../hooks/useCategories';
 import { useSWRConfig } from 'swr';
+import { useDebounce } from '../../hooks/useDebounce';
 import { 
   getProductVariantsByCategoryAndBrand,
   getProductsByCategoryAndBrand 
@@ -19,22 +20,32 @@ const ProductList = () => {
   const location = useLocation();
   const { mutate } = useSWRConfig(); // ✅ Để prefetch data
   
-  // ✅ PAGINATION: Mỗi trang 20 sản phẩm (tối ưu hiệu suất)
+  // ✅ PAGINATION: Mỗi trang 15 sản phẩm (tối ưu hiệu suất và UI)
   const [currentPage, setCurrentPage] = useState(1); // Trang hiện tại (bắt đầu từ 1)
-  const ITEMS_PER_PAGE = 20; // Mỗi trang hiển thị 20 sản phẩm (giảm từ 50 để load nhanh hơn)
+  const ITEMS_PER_PAGE = 15; // Mỗi trang hiển thị 15 sản phẩm
+  
+  // ✅ KHAI BÁO FILTERS TRƯỚC để dùng trong shouldLoadMoreForFilter
+  const [filters, setFilters] = useState({ category, brands: [], sortBy: 'relevance', minPrice: '', maxPrice: '' });
   
   // ✅ SERVER-SIDE PAGINATION: Chỉ load số lượng sản phẩm cần thiết cho trang hiện tại
+  // ✅ SỬA: Khi category = 'all' và có brand filter → Load nhiều items hơn để filter client-side
+  // ✅ GIẢM: Từ 100 xuống 50 items để load nhanh hơn
+  const hasBrandFilter = filters.brands && filters.brands.length > 0;
+  const shouldLoadMoreForFilter = (category === 'all' || !category) && hasBrandFilter;
+  const loadSize = shouldLoadMoreForFilter ? 50 : ITEMS_PER_PAGE; // Load 50 items khi filter brand ở 'all' (giảm từ 100 để nhanh hơn)
+  
   // Chuyển đổi từ page 1-based (UI) sang page 0-based (API)
   const apiPage = currentPage - 1;
   const { variants: allVariants, loading, error, totalElements, pagination } = useProductVariants(
     category || 'all', 
     { 
-      page: apiPage, // Sử dụng server-side pagination
-      size: ITEMS_PER_PAGE // Chỉ load số lượng cần thiết
+      page: shouldLoadMoreForFilter ? 0 : apiPage, // Khi filter brand ở 'all' → luôn load từ trang 0
+      size: loadSize // Load nhiều hơn khi cần filter
     }
   );
   
-  const [filters, setFilters] = useState({ category, brands: [], sortBy: 'relevance', minPrice: '', maxPrice: '' });
+  // ✅ DEBOUNCE FILTERS để tránh gọi API quá nhiều lần
+  const debouncedFilters = useDebounce(filters, 500);
   
   // ✅ State cho API mới: Category + Brand filter
   const [categoryBrandProducts, setCategoryBrandProducts] = useState(null);
@@ -112,11 +123,12 @@ const ProductList = () => {
   // Brands đã được set trong useEffect reset category ở trên
   
   // ✅ LOGIC MỚI: Khi user chọn 1 brand duy nhất + đang ở category cụ thể → Gọi API mới
+  // ✅ DÙNG DEBOUNCED FILTERS để tránh gọi API quá nhiều lần
   useEffect(() => {
     const fetchCategoryBrandProducts = async () => {
       // Điều kiện: Phải chọn ĐÚNG 1 brand
       // Nếu category = 'all' → Không gọi API (vì backend không hỗ trợ), để client-side filter
-      if (!filters.brands.length || filters.brands.length !== 1) {
+      if (!debouncedFilters.brands.length || debouncedFilters.brands.length !== 1) {
         setCategoryBrandProducts(null);
         setCategoryBrandTotalElements(null);
         return;
@@ -129,7 +141,7 @@ const ProductList = () => {
         return;
       }
       
-      const selectedBrand = filters.brands[0];
+      const selectedBrand = debouncedFilters.brands[0];
       
       // Map category key sang API name (giống logic trong useProductVariants)
       const KEY_TO_API_NAME = {
@@ -158,14 +170,14 @@ const ProductList = () => {
           getProductsByCategoryAndBrand(categoryName, selectedBrand, {
             page: apiPage,
             size: ITEMS_PER_PAGE, // Chỉ load số lượng cần thiết
-            sortBy: filters.sortBy === 'price-asc' ? 'price' : filters.sortBy === 'price-desc' ? 'price' : 'createdAt',
-            sortDir: filters.sortBy === 'price-asc' ? 'asc' : filters.sortBy === 'price-desc' ? 'desc' : 'desc'
+            sortBy: debouncedFilters.sortBy === 'price-asc' ? 'price' : debouncedFilters.sortBy === 'price-desc' ? 'price' : 'createdAt',
+            sortDir: debouncedFilters.sortBy === 'price-asc' ? 'asc' : debouncedFilters.sortBy === 'price-desc' ? 'desc' : 'desc'
           }),
           getProductVariantsByCategoryAndBrand(categoryName, selectedBrand, {
             page: apiPage,
             size: ITEMS_PER_PAGE, // Chỉ load số lượng cần thiết
-            sortBy: filters.sortBy === 'price-asc' ? 'price' : filters.sortBy === 'price-desc' ? 'price' : 'createdAt',
-            sortDir: filters.sortBy === 'price-asc' ? 'asc' : filters.sortBy === 'price-desc' ? 'desc' : 'desc'
+            sortBy: debouncedFilters.sortBy === 'price-asc' ? 'price' : debouncedFilters.sortBy === 'price-desc' ? 'price' : 'createdAt',
+            sortDir: debouncedFilters.sortBy === 'price-asc' ? 'asc' : debouncedFilters.sortBy === 'price-desc' ? 'desc' : 'desc'
           })
         ]);
         
@@ -225,7 +237,7 @@ const ProductList = () => {
     };
     
     fetchCategoryBrandProducts();
-  }, [category, filters.brands, currentPage, filters.sortBy, ITEMS_PER_PAGE]);
+  }, [category, debouncedFilters.brands, currentPage, debouncedFilters.sortBy, ITEMS_PER_PAGE]);
   
   // ✅ Sử dụng categoryBrandProducts nếu có (từ API mới), nếu không thì dùng allVariants
   const products = categoryBrandProducts !== null ? categoryBrandProducts : allVariants;
@@ -238,34 +250,58 @@ const ProductList = () => {
   };
 
   // ✅ Filter variants (chỉ filter trên dữ liệu đã load - tối ưu hiệu suất)
+  // ✅ DÙNG DEBOUNCED FILTERS để tránh filter quá nhiều lần
   const allFilteredProducts = useMemo(() => {
-    let result = products.slice();
+    // ✅ Early return nếu không có products
+    if (!products || products.length === 0) return [];
     
     // ✅ QUAN TRỌNG: Nếu đang dùng API mới (categoryBrandProducts), KHÔNG filter brand nữa
     // Vì API đã filter rồi. Chỉ filter brand khi dùng allVariants
-    const shouldFilterBrand = categoryBrandProducts === null && filters.brands?.length > 0;
+    const shouldFilterBrand = categoryBrandProducts === null && debouncedFilters.brands?.length > 0;
+    
+    // ✅ SỬA: Khi có brand filter, phải filter trên TẤT CẢ products (không chỉ 36 items đầu)
+    // Vì có thể brand không có trong 36 items đầu → không tìm thấy
+    let result = shouldFilterBrand ? products.slice() : products.slice(0, ITEMS_PER_PAGE * 3);
     
     // Brand filter: suy ra brand từ tên (chỉ khi không dùng API mới)
+    // ✅ SỬA: Match brand chính xác hơn - tìm brand ở đầu tên hoặc sau khoảng trắng
     if (shouldFilterBrand) {
       result = result.filter(p => {
         const name = (p.name || '').toLowerCase();
-        return filters.brands.some(b => name.includes(b.toLowerCase()));
+        return debouncedFilters.brands.some(b => {
+          const brandLower = b.toLowerCase();
+          // Match brand ở đầu tên hoặc sau khoảng trắng/dấu gạch
+          return name.includes(brandLower) && (
+            name.startsWith(brandLower) || 
+            name.includes(` ${brandLower}`) ||
+            name.includes(`-${brandLower}`) ||
+            name.includes(`_${brandLower}`)
+          );
+        });
+      });
+      
+      // ✅ Debug log để kiểm tra
+      console.log('🔍 Brand Filter Debug:', {
+        selectedBrands: debouncedFilters.brands,
+        totalProducts: products.length,
+        filteredCount: result.length,
+        sampleProducts: result.slice(0, 3).map(p => p.name)
       });
     }
     // Price filter (giá là string VNĐ; loại bỏ ký tự)
-    const min = parsePrice(filters.minPrice);
-    const max = parsePrice(filters.maxPrice);
+    const min = parsePrice(debouncedFilters.minPrice);
+    const max = parsePrice(debouncedFilters.maxPrice);
     if (!isNaN(min)) result = result.filter(p => parsePrice(p.price) >= min);
     if (!isNaN(max)) result = result.filter(p => parsePrice(p.price) <= max);
     // Sort (chỉ khi không dùng API mới vì API đã sort rồi)
     if (categoryBrandProducts === null) {
-      if (filters.sortBy === 'price-asc') result.sort((a,b)=>parsePrice(a.price)-parsePrice(b.price));
-      if (filters.sortBy === 'price-desc') result.sort((a,b)=>parsePrice(b.price)-parsePrice(a.price));
-      if (filters.sortBy === 'name') result.sort((a,b)=> (a.name||'').localeCompare(b.name||''));
+      if (debouncedFilters.sortBy === 'price-asc') result.sort((a,b)=>parsePrice(a.price)-parsePrice(b.price));
+      if (debouncedFilters.sortBy === 'price-desc') result.sort((a,b)=>parsePrice(b.price)-parsePrice(a.price));
+      if (debouncedFilters.sortBy === 'name') result.sort((a,b)=> (a.name||'').localeCompare(b.name||''));
     }
 
     return result;
-  }, [products, filters, categoryBrandProducts]);
+  }, [products, debouncedFilters, categoryBrandProducts, ITEMS_PER_PAGE]);
   
   // ✅ Tính toán phân trang từ server response
   // QUAN TRỌNG: Dùng totalElements từ API để tính totalPages (server-side pagination)
@@ -357,8 +393,8 @@ const ProductList = () => {
     }
   };
 
-  // ✅ Hàm xử lý khi filters thay đổi
-  const handleFiltersChange = (newFilters) => {
+  // ✅ Hàm xử lý khi filters thay đổi (dùng useCallback để tối ưu)
+  const handleFiltersChange = useCallback((newFilters) => {
     // ✅ CHO PHÉP THAY ĐỔI CATEGORY từ dropdown filter
     // Nếu category từ newFilters khác với URL category → Navigate sang trang đó
     if (newFilters.category && newFilters.category !== category) {
@@ -377,7 +413,7 @@ const ProductList = () => {
     if (filtersChanged) {
       setCurrentPage(1); // Reset về trang 1 CHỈ KHI filters thực sự thay đổi
     }
-  };
+  }, [category, filters, navigate]);
 
   // ✅ Hàm xử lý pagination - Server-side pagination (tối ưu: giữ data cũ khi load)
   const handlePageChange = useCallback((newPage) => {
@@ -481,14 +517,108 @@ const ProductList = () => {
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
         <div className="flex gap-8 items-start">
-          <div className="w-80 hidden md:block flex-shrink-0 pt-1">
+          <div className="w-80 hidden md:block flex-shrink-0 pt-1 space-y-4">
             <SearchFilters 
               onFiltersChange={handleFiltersChange} 
               initialFilters={initialFilters}
               currentProducts={allVariants}
               categoryBrands={categoryBrands}
               loadingCategoryBrands={loadingCategoryBrands}
+              hideBrandFilter={category === 'all' || !category} // ✅ Ẩn filter brand khi category = 'all'
             />
+            
+            {/* ✅ Banner tĩnh đầu tiên - Chỉ hiển thị khi category = 'all' */}
+            {(category === 'all' || !category) && (
+              <StaticPromoBanner 
+                title="LG C3 OLED TV"
+                subtitle="Màn hình OLED 4K, Dolby Atmos"
+                badge="📺 Smart TV"
+                discount="Đến 15 Triệu"
+                price="32.990.000"
+                image="https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=400&q=80"
+                gradient="from-red-600 via-orange-500 to-yellow-600"
+                buttonColor="bg-white hover:bg-red-50"
+                textColor="text-red-600"
+              />
+            )}
+            
+            {/* ✅ 3 Banner riêng biệt - Chỉ hiển thị khi category = 'all' */}
+            {(category === 'all' || !category) && (
+              <div className="space-y-4">
+                <StaticPromoBanner 
+                  title="iPhone 15 Pro Max"
+                  subtitle="Chip A17 Pro mạnh mẽ"
+                  badge="🔥 Mới nhất"
+                  discount="Đến 10 Triệu"
+                  price="24.990.000"
+                  image="https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=400&q=80"
+                  gradient="from-gray-900 via-gray-800 to-black"
+                  buttonColor="bg-blue-600 hover:bg-blue-700"
+                  textColor="text-white"
+                />
+                <StaticPromoBanner 
+                  title="MacBook Air M3"
+                  subtitle="Hiệu năng vượt trội"
+                  badge="💻 Laptop"
+                  discount="Đến 8 Triệu"
+                  price="28.990.000"
+                  image="https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=400&q=80"
+                  gradient="from-blue-600 via-blue-500 to-purple-600"
+                  buttonColor="bg-white hover:bg-blue-50"
+                  textColor="text-blue-600"
+                />
+                <StaticPromoBanner 
+                  title="Sony WH-1000XM5"
+                  subtitle="Chống ồn chủ động"
+                  badge="🎧 Tai nghe"
+                  discount="Đến 3 Triệu"
+                  price="6.990.000"
+                  image="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&q=80"
+                  gradient="from-purple-600 via-purple-500 to-pink-600"
+                  buttonColor="bg-white hover:bg-purple-50"
+                  textColor="text-purple-600"
+                />
+              </div>
+            )}
+
+            {/* ✅ 3 Banner cho các danh mục khác (không phải 'all') - Banner 2, 3, 4 */}
+            {category && category !== 'all' && (
+              <div className="space-y-4">
+                <StaticPromoBanner 
+                  title="iPhone 15 Pro Max"
+                  subtitle="Chip A17 Pro mạnh mẽ"
+                  badge="🔥 Mới nhất"
+                  discount="Đến 10 Triệu"
+                  price="24.990.000"
+                  image="https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=400&q=80"
+                  gradient="from-gray-900 via-gray-800 to-black"
+                  buttonColor="bg-blue-600 hover:bg-blue-700"
+                  textColor="text-white"
+                />
+                <StaticPromoBanner 
+                  title="MacBook Air M3"
+                  subtitle="Hiệu năng vượt trội"
+                  badge="💻 Laptop"
+                  discount="Đến 8 Triệu"
+                  price="28.990.000"
+                  image="https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=400&q=80"
+                  gradient="from-blue-600 via-blue-500 to-purple-600"
+                  buttonColor="bg-white hover:bg-blue-50"
+                  textColor="text-blue-600"
+                />
+                <StaticPromoBanner 
+                  title="Sony WH-1000XM5"
+                  subtitle="Chống ồn chủ động"
+                  badge="🎧 Tai nghe"
+                  discount="Đến 3 Triệu"
+                  price="6.990.000"
+                  image="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&q=80"
+                  gradient="from-purple-600 via-purple-500 to-pink-600"
+                  buttonColor="bg-white hover:bg-purple-50"
+                  textColor="text-purple-600"
+                />
+              </div>
+            )}
           </div>
           <div className="flex-1">
             
@@ -514,6 +644,7 @@ const ProductList = () => {
             )}
             
             {/* ✅ Chỉ hiển thị ProductSection khi có sản phẩm hoặc không loading */}
+            {/* ✅ TẮT ANIMATION KHI ĐANG FILTER để tăng performance */}
             {(!isLoading || filteredProducts.length > 0) && (
               <ProductSection
                 title={categoryName}
@@ -522,6 +653,7 @@ const ProductList = () => {
                 showViewAll={false}
                 backgroundColor="bg-white"
                 compact
+                disableAnimations={isLoading || categoryBrandLoading} // ✅ Tắt animation khi filter
               />
             )}
             
@@ -588,8 +720,8 @@ const ProductList = () => {
               </div>
             )}
             
-            {/* ✅ Thông báo khi không có sản phẩm */}
-            {allFilteredProducts.length === 0 && !loading && (
+            {/* ✅ Thông báo khi không có sản phẩm - CHỈ HIỂN THỊ KHI KHÔNG ĐANG LOAD */}
+            {allFilteredProducts.length === 0 && !isLoading && !loading && !categoryBrandLoading && (
               <div className="text-center mt-12 mb-12">
                 <div className="inline-flex items-center gap-3 px-8 py-4 bg-yellow-50 text-yellow-700 rounded-2xl border-2 border-yellow-300 shadow-lg">
                   <svg className="w-7 h-7 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
@@ -603,6 +735,68 @@ const ProductList = () => {
         </div>
       </div>
     </MainLayout>
+  );
+};
+
+// ✅ Component Banner tĩnh (không có animation, không có carousel)
+const StaticPromoBanner = ({ title, subtitle, badge, discount, price, image, gradient, buttonColor, textColor }) => {
+  const navigate = useNavigate();
+
+  return (
+    <div 
+      className={`bg-gradient-to-br ${gradient} rounded-lg p-3 text-white shadow-lg relative overflow-hidden cursor-pointer hover:shadow-xl transition-shadow`}
+      onClick={() => navigate('/products/all')}
+    >
+      {/* Ảnh sản phẩm - Thu nhỏ và đặt ở góc phải */}
+      {image && (
+        <div className="absolute top-0 right-0 w-20 h-20 opacity-20 pointer-events-none">
+          <img 
+            src={image} 
+            alt={title}
+            className="w-full h-full object-contain"
+            loading="lazy"
+          />
+        </div>
+      )}
+
+      {/* Badge */}
+      <div className="flex items-center mb-1.5 relative z-10">
+        <span className="bg-white/20 backdrop-blur-sm px-1.5 py-0.5 rounded-full text-[10px] font-semibold">
+          {badge}
+        </span>
+      </div>
+
+      {/* Title */}
+      <h3 className="font-bold text-sm mb-0.5 leading-tight relative z-10 pr-20">{title}</h3>
+      
+      {/* Subtitle */}
+      <p className="text-[10px] opacity-90 mb-2 line-clamp-2 leading-tight relative z-10 pr-20">
+        {subtitle}
+      </p>
+
+      {/* Info - Compact */}
+      <div className="space-y-1 mb-2 relative z-10">
+        <div className="text-[9px]">
+          <span className="opacity-80">Ưu đãi </span>
+          <span className="font-bold text-[10px]">{discount}</span>
+        </div>
+        <div className="text-[9px]">
+          <span className="opacity-80">Giá từ </span>
+          <span className="font-bold text-[10px]">{price}₫</span>
+        </div>
+      </div>
+
+      {/* Button */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          navigate('/products/all');
+        }}
+        className={`${buttonColor} ${textColor} px-2 py-1 rounded-md font-semibold text-[10px] w-full transition-colors relative z-10`}
+      >
+        Mua ngay →
+      </button>
+    </div>
   );
 };
 

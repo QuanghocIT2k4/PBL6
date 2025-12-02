@@ -54,10 +54,6 @@ const SEO = ({
       <meta name="author" content={siteName} />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <meta httpEquiv="Content-Language" content="vi" />
-      
-      {/* Performance - Preconnect to external domains */}
-      <link rel="preconnect" href="https://e-commerce-raq1.onrender.com" />
-      <link rel="dns-prefetch" href="https://e-commerce-raq1.onrender.com" />
     </Helmet>
   );
 };

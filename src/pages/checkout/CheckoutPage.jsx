@@ -10,6 +10,7 @@ import PromotionList from '../../components/promotions/PromotionList';
 import { calculateDiscount } from '../../services/admin/promotionService';
 import { createPaymentUrl } from '../../services/buyer/paymentService';
 import { getProductVariantById } from '../../services/common/productService';
+import SEO from '../../components/seo/SEO';
 
 const CheckoutPage = () => {
   const { getSelectedItems, getSelectedTotalItems, getSelectedTotalPrice, formatPrice, removeSelectedItems } = useCart();
@@ -351,6 +352,12 @@ const CheckoutPage = () => {
 
   return (
     <MainLayout>
+      <SEO 
+        title="Thanh toán | E-Comm"
+        description="Hoàn tất đơn hàng của bạn. Chọn địa chỉ giao hàng, phương thức thanh toán và áp dụng mã giảm giá."
+        keywords="thanh toán, checkout, đặt hàng, giao hàng"
+        url="https://pbl-6-eight.vercel.app/checkout"
+      />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white p-6 rounded-lg border shadow-sm">

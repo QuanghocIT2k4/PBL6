@@ -6,6 +6,7 @@ import ConversationList from '../../components/chat/ConversationList';
 import MessageList from '../../components/chat/MessageList';
 import MessageInput from '../../components/chat/MessageInput';
 import { getConversationDisplayName, getConversationDisplayAvatar } from '../../services/chat/chatService';
+import SEO from '../../components/seo/SEO';
 
 /**
  * ChatPage - Main chat interface
@@ -52,6 +53,12 @@ const ChatPage = () => {
 
   return (
     <MainLayout>
+      <SEO 
+        title="Tin nhắn | E-Comm"
+        description="Chat và liên hệ với cửa hàng, nhận hỗ trợ và tư vấn về sản phẩm."
+        keywords="chat, tin nhắn, liên hệ, hỗ trợ khách hàng"
+        url="https://pbl-6-eight.vercel.app/chat"
+      />
       <div className="bg-gray-50 py-6">
         {/* Page Header */}
         <div className="max-w-7xl mx-auto px-4 mb-6">

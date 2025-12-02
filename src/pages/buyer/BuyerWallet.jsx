@@ -14,6 +14,7 @@ import {
   formatDateTime,
   validateWithdrawalAmount,
 } from '../../services/buyer/buyerWalletService';
+import SEO from '../../components/seo/SEO';
 
 /**
  * BuyerWallet Page
@@ -198,15 +199,27 @@ const BuyerWallet = () => {
   if (loading) {
     return (
       <MainLayout>
+        <SEO 
+          title="Ví của tôi | E-Comm"
+          description="Quản lý ví điện tử, xem số dư, lịch sử giao dịch và rút tiền về ngân hàng."
+          keywords="ví điện tử, số dư, rút tiền, lịch sử giao dịch"
+          url="https://pbl-6-eight.vercel.app/wallet"
+        />
         <div className="flex items-center justify-center min-h-screen">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
         </div>
       </MainLayout>
     );
   }
-  
+
   return (
     <MainLayout>
+      <SEO 
+        title="Ví của tôi | E-Comm"
+        description={`Quản lý ví điện tử của bạn. Số dư khả dụng: ${wallet ? formatCurrency(wallet.availableBalance) : '0 ₫'}. Xem lịch sử giao dịch và rút tiền về ngân hàng.`}
+        keywords="ví điện tử, số dư, rút tiền, lịch sử giao dịch, hoàn tiền"
+        url="https://pbl-6-eight.vercel.app/wallet"
+      />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-6">

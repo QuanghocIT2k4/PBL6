@@ -9,6 +9,7 @@ import AddressSelector from '../../components/checkout/AddressSelector';
 // import OrderHistoryTab from '../../components/profile/OrderHistoryTab';
 // import PreferencesTab from '../../components/profile/PreferencesTab';
 import { useProfile } from '../../hooks/useProfile';
+import SEO from '../../components/seo/SEO';
 
 const ProfilePage = () => {
   const navigate = useNavigate();
@@ -41,6 +42,12 @@ const ProfilePage = () => {
   if (loading) {
     return (
       <MainLayout>
+        <SEO 
+          title="Hồ sơ cá nhân | E-Comm"
+          description="Quản lý thông tin cá nhân, địa chỉ giao hàng và cài đặt tài khoản của bạn."
+          keywords="hồ sơ, thông tin cá nhân, tài khoản, cài đặt"
+          url="https://pbl-6-eight.vercel.app/profile"
+        />
         <div className="max-w-6xl mx-auto px-4 py-8">
           <div className="animate-pulse">
             <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
@@ -214,6 +221,12 @@ const ProfilePage = () => {
 
   return (
     <MainLayout>
+      <SEO 
+        title="Hồ sơ cá nhân | E-Comm"
+        description="Quản lý thông tin cá nhân, địa chỉ giao hàng và cài đặt tài khoản của bạn."
+        keywords="hồ sơ, thông tin cá nhân, tài khoản, cài đặt, địa chỉ giao hàng"
+        url="https://pbl-6-eight.vercel.app/profile"
+      />
       {/* Breadcrumb */}
       <div className="bg-gray-50 py-4">
         <div className="max-w-6xl mx-auto px-4">

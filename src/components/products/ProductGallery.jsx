@@ -52,6 +52,9 @@ const ProductGallery = ({ product, images = [] }) => {
             transition={{ duration: 0.3, ease: "easeInOut" }}
             className="w-full h-full object-cover"
             loading="lazy"
+            width="600"
+            height="600"
+            decoding="async"
             whileHover={{ scale: 1.05 }}
           />
         </AnimatePresence>
@@ -77,6 +80,9 @@ const ProductGallery = ({ product, images = [] }) => {
                 alt={`${product?.name || 'Product'} thumbnail ${index + 1}`}
                 className="w-full h-full object-cover"
                 loading="lazy"
+                width="80"
+                height="80"
+                decoding="async"
                 animate={currentImageIndex === index ? { scale: 1.05 } : { scale: 1 }}
                 transition={{ duration: 0.2 }}
               />

@@ -8,6 +8,7 @@ import { getOrderById, cancelOrder, canCancelOrder, canReviewOrder, getOrderStat
 import { checkExistingReview } from '../../services/buyer/reviewService';
 import { useToast } from '../../context/ToastContext';
 import { confirmCancelOrder } from '../../utils/sweetalert';
+import SEO from '../../components/seo/SEO';
 
 /**
  * Format currency VND
@@ -119,6 +120,12 @@ const OrderDetailPage = () => {
   if (!orderData && !error) {
     return (
       <MainLayout>
+        <SEO 
+          title="Chi tiết đơn hàng | E-Comm"
+          description="Xem chi tiết đơn hàng, theo dõi trạng thái giao hàng và quản lý đơn hàng của bạn."
+          keywords="chi tiết đơn hàng, theo dõi đơn hàng, trạng thái đơn hàng"
+          url={`https://pbl-6-eight.vercel.app/orders/${id}`}
+        />
         <div className="max-w-5xl mx-auto px-4 py-8">
           <div className="animate-pulse space-y-4">
             <div className="h-8 bg-gray-200 rounded w-1/3"></div>
@@ -133,6 +140,12 @@ const OrderDetailPage = () => {
   if (error || !order) {
     return (
       <MainLayout>
+        <SEO 
+          title="Không tìm thấy đơn hàng | E-Comm"
+          description="Đơn hàng không tồn tại hoặc đã bị xóa."
+          keywords="đơn hàng, lỗi đơn hàng"
+          url={`https://pbl-6-eight.vercel.app/orders/${id}`}
+        />
         <div className="max-w-5xl mx-auto px-4 py-16 text-center">
           <div className="text-red-500 text-5xl mb-4">⚠️</div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Không tìm thấy đơn hàng</h2>
@@ -198,6 +211,12 @@ const OrderDetailPage = () => {
 
   return (
     <MainLayout>
+      <SEO 
+        title={`Đơn hàng ${order ? getOrderCode(order.id) : ''} | E-Comm`}
+        description={`Chi tiết đơn hàng ${order ? getOrderCode(order.id) : ''}. Xem trạng thái, thông tin giao hàng và sản phẩm trong đơn hàng.`}
+        keywords={`đơn hàng ${order ? getOrderCode(order.id) : ''}, chi tiết đơn hàng, theo dõi đơn hàng`}
+        url={`https://pbl-6-eight.vercel.app/orders/${id}`}
+      />
       <div className="bg-gray-50 min-h-screen py-6">
         <div className="max-w-5xl mx-auto px-4">
           {/* Breadcrumb */}

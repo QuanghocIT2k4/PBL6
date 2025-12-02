@@ -411,7 +411,11 @@ const HomePage = () => {
                           <motion.img
                             key={currentBannerIndex}
                             src={currentBanner.image}
-                            alt={currentBanner.title}
+                            alt={currentBanner.title || 'Banner quảng cáo'}
+                            width="1200"
+                            height="400"
+                            loading="lazy"
+                            decoding="async"
                             initial={{ opacity: 0, scale: 0.8, rotateY: -15 }}
                             animate={{ opacity: 1, scale: 1, rotateY: 0 }}
                             exit={{ opacity: 0, scale: 0.8, rotateY: 15 }}
@@ -572,7 +576,11 @@ const HomePage = () => {
                   <div className="aspect-square bg-gray-50 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
                     <img
                       src={category.image}
-                      alt={category.name}
+                      alt={category.name || 'Danh mục sản phẩm'}
+                      width="200"
+                      height="200"
+                      loading="lazy"
+                      decoding="async"
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                       onError={(e) => {
                         e.target.src = 'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=200&h=200&fit=crop';

@@ -5,6 +5,7 @@ import MainLayout from '../../layouts/MainLayout';
 import CartItem from '../../components/cart/CartItem';
 import CartSummary from '../../components/cart/CartSummary';
 import Button from '../../components/ui/Button';
+import SEO from '../../components/seo/SEO';
 
 const CartPage = () => {
   const navigate = useNavigate();
@@ -40,6 +41,12 @@ const CartPage = () => {
   if (cartItems.length === 0) {
     return (
       <MainLayout>
+        <SEO 
+          title="Giỏ hàng | E-Comm"
+          description="Xem và quản lý giỏ hàng của bạn. Thêm sản phẩm yêu thích vào giỏ hàng và thanh toán dễ dàng."
+          keywords="giỏ hàng, shopping cart, mua sắm online, thanh toán"
+          url="https://pbl-6-eight.vercel.app/cart"
+        />
         <div className="max-w-4xl mx-auto px-4 py-16">
           <div className="text-center">
             <div className="w-24 h-24 mx-auto mb-4 text-gray-300">
@@ -65,6 +72,12 @@ const CartPage = () => {
 
   return (
     <MainLayout>
+      <SEO 
+        title="Giỏ hàng | E-Comm"
+        description={`Giỏ hàng của bạn có ${distinctItems} sản phẩm. Xem chi tiết và thanh toán ngay.`}
+        keywords="giỏ hàng, shopping cart, mua sắm online, thanh toán, đặt hàng"
+        url="https://pbl-6-eight.vercel.app/cart"
+      />
       {/* Breadcrumb */}
       <div className="bg-gray-50 py-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
