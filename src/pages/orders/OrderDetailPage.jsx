@@ -209,6 +209,119 @@ const OrderDetailPage = () => {
   const canCancel = canCancelOrder(status);
   const canReview = canReviewOrder(status);
 
+  const handlePrintInvoice = () => {
+    if (!order) return;
+
+    const orderCode = getOrderCode(order.id);
+    const addrLines = shippingAddress
+      ? [
+          shippingAddress.recipientName,
+          shippingAddress.phone,
+          [shippingAddress.street, shippingAddress.ward, shippingAddress.district, shippingAddress.province]
+            .filter(Boolean)
+            .join(', '),
+        ].filter(Boolean)
+      : [];
+
+    const itemRows = items
+      .map(
+        (item, idx) => `
+          <tr>
+            <td>${idx + 1}</td>
+            <td>${item.productName || item.name || ''}${item.variantName ? `<div style="color:#555;font-size:12px;">${item.variantName}</div>` : ''}</td>
+            <td style="text-align:center;">${item.quantity}</td>
+            <td style="text-align:right;">${formatCurrency(item.price || 0)}</td>
+            <td style="text-align:right;">${formatCurrency((item.price || 0) * item.quantity)}</td>
+          </tr>
+        `
+      )
+      .join('');
+
+    const win = window.open('', '_blank', 'width=900,height=1200');
+    const html = `
+      <html>
+        <head>
+          <title>Hóa đơn ${orderCode}</title>
+          <style>
+            body { font-family: 'Inter', system-ui, -apple-system, sans-serif; padding: 24px; color: #111; }
+            h1 { margin: 0 0 4px; }
+            h2 { margin: 0 0 8px; font-size: 16px; }
+            .section { margin-bottom: 16px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+            th, td { border: 1px solid #e5e7eb; padding: 10px; font-size: 14px; }
+            th { background: #f8fafc; text-align: left; }
+            .totals { margin-top: 12px; width: 100%; }
+            .totals td { padding: 6px 0; }
+            .text-right { text-align: right; }
+            .muted { color: #6b7280; }
+          </style>
+        </head>
+        <body>
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div>
+              <h1>Hóa đơn</h1>
+              <div class="muted">Mã đơn: ${orderCode}</div>
+              <div class="muted">Ngày: ${formatDate(createdAt)}</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-weight:600;">${displayStoreName}</div>
+              ${store?.email ? `<div class="muted">${store.email}</div>` : ''}
+              ${store?.phone ? `<div class="muted">${store.phone}</div>` : ''}
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>Thông tin giao hàng</h2>
+            <div>${addrLines.join('<br/>') || 'Không có'}</div>
+          </div>
+
+          <div class="section">
+            <h2>Sản phẩm</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Tên sản phẩm</th>
+                  <th style="text-align:center;">SL</th>
+                  <th style="text-align:right;">Đơn giá</th>
+                  <th style="text-align:right;">Thành tiền</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemRows}
+              </tbody>
+            </table>
+          </div>
+
+          <table class="totals">
+            <tr>
+              <td class="text-right muted">Tạm tính:</td>
+              <td class="text-right">${formatCurrency(calculatedTotal)}</td>
+            </tr>
+            <tr>
+              <td class="text-right muted">Phương thức thanh toán:</td>
+              <td class="text-right">${getPaymentMethodLabel(paymentMethod)}</td>
+            </tr>
+          </table>
+
+          <div style="margin-top:24px; font-size:12px;" class="muted">
+            Cảm ơn bạn đã mua sắm!
+          </div>
+          <script>
+            window.onload = () => {
+              window.print();
+              setTimeout(() => window.close(), 300);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+  };
+
   return (
     <MainLayout>
       <SEO 
@@ -243,9 +356,20 @@ const OrderDetailPage = () => {
                   Ngày đặt: {formatDate(createdAt)}
                 </p>
               </div>
-              <span className={`px-4 py-2 rounded-md text-sm font-semibold ${statusBadge.bg} ${statusBadge.text}`}>
-                {statusBadge.icon} {statusBadge.label}
-              </span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handlePrintInvoice}
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md border border-gray-200 shadow-sm transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H9a2 2 0 00-2 2v2m10 0h2a2 2 0 012 2v5a2 2 0 01-2 2H7a2 2 0 01-2-2v-5a2 2 0 012-2h2m8 0H9"/>
+                  </svg>
+                  In hóa đơn
+                </button>
+                <span className={`px-4 py-2 rounded-md text-sm font-semibold ${statusBadge.bg} ${statusBadge.text}`}>
+                  {statusBadge.icon} {statusBadge.label}
+                </span>
+              </div>
             </div>
           </div>
 

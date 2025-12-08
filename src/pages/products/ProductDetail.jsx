@@ -9,7 +9,7 @@ import ReviewList from '../../components/reviews/ReviewList';
 import ReviewForm from '../../components/reviews/ReviewForm';
 import SEO from '../../components/seo/SEO';
 import { ProductSchema, BreadcrumbSchema } from '../../components/seo/StructuredData';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useProductDetail } from '../../hooks/useProductDetail';
 import { useCategories } from '../../hooks/useCategories';
 import { useStoreInfo } from '../../hooks/useStoreInfo';
@@ -18,6 +18,7 @@ const ProductDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { product, relatedProducts, loading, relatedLoading, error } = useProductDetail(id); // ✅ DÙNG SWR
+  const [variants, setVariants] = useState([]);
   const { categories } = useCategories();
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [editingReview, setEditingReview] = useState(null);
@@ -25,6 +26,31 @@ const ProductDetail = () => {
   // ✅ Fetch store info từ product.storeId (thử nhiều field name)
   const productStoreId = product?.storeId || product?.store_id || product?.store?.id;
   const productStoreName = product?.storeName || product?.store_name || product?.store?.name;
+  const productIdFromVariant = product?.productId || product?.product_id || product?.product?.id || product?.product?.productId;
+
+  // Fetch all variants of the product when we know productId
+  useEffect(() => {
+    const loadVariants = async () => {
+      try {
+        if (!productIdFromVariant) {
+          setVariants([]);
+          return;
+        }
+        const { getProductVariants } = await import('../../services/common/productService');
+        const res = await getProductVariants({ productId: productIdFromVariant, page: 0, size: 50 });
+        if (res.success) {
+          const list = res.data?.content || res.data || [];
+          setVariants(list);
+        } else {
+          setVariants([]);
+        }
+      } catch (err) {
+        console.error('Load variants error', err);
+        setVariants([]);
+      }
+    };
+    loadVariants();
+  }, [productIdFromVariant]);
   const { store, loading: storeLoading, error: storeError } = useStoreInfo(productStoreId);
 
   const handleWriteReview = (existingReview = null) => {
@@ -157,7 +183,11 @@ const ProductDetail = () => {
 
           {/* Product Info */}
           <div>
-            <ProductInfo product={product} />
+            <ProductInfo
+              product={product}
+              variantsOverride={variants}
+              initialVariantId={id}
+            />
           </div>
         </div>
 

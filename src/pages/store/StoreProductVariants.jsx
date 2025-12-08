@@ -5,7 +5,7 @@ import StoreLayout from '../../layouts/StoreLayout';
 import { useStoreContext } from '../../context/StoreContext';
 import StoreStatusGuard from '../../components/store/StoreStatusGuard';
 import StorePageHeader from '../../components/store/StorePageHeader';
-import { getProductVariantsByStore, updateVariantPrice, updateVariantStock, deleteProductVariant, updateVariantImages } from '../../services/b2c/b2cProductService';
+import { getProductVariantsByStore, updateVariantPrice, updateVariantStock, deleteProductVariant, updateVariantImages, updateVariantColor } from '../../services/b2c/b2cProductService';
 import { getInventoryAnalytics } from '../../services/b2c/b2cAnalyticsService';
 import { useToast } from '../../hooks/useToast';
 
@@ -13,14 +13,18 @@ const StoreProductVariants = () => {
   const navigate = useNavigate();
   const { currentStore, loading: storeLoading } = useStoreContext();
   const toast = useToast();
-  const [modal, setModal] = useState({ open: false, type: null, variant: null, value: '' });
+  const [modal, setModal] = useState({ open: false, type: null, variant: null, value: '', color: null });
   const [detailModal, setDetailModal] = useState({ open: false, variant: null });
+  const [detailSelectedColor, setDetailSelectedColor] = useState(null);
   const [imageModal, setImageModal] = useState({ open: false, variant: null });
-  const [selectedImages, setSelectedImages] = useState([]);
+  const [existingImages, setExistingImages] = useState([]); // { src, removed: bool }
+  const [newImages, setNewImages] = useState([]); // { file, preview }
+  const [primaryImageIndex, setPrimaryImageIndex] = useState(0);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
-  const pageSize = 20;
+  // Tăng page size để load đủ biến thể (tạm đặt 110)
+  const pageSize = 110;
   const [statusFilter, setStatusFilter] = useState('ALL');
 
   // ✅ Fetch inventory analytics
@@ -157,13 +161,18 @@ const StoreProductVariants = () => {
   // Quick actions
   const openModal = (e, type, variant) => {
     e?.stopPropagation?.();
+    const colors = Array.isArray(variant?.colors) ? variant.colors : [];
+    const selectedColor = colors.length > 0 ? colors[0] : null;
     const initial =
-      type === 'price' ? (variant.price ?? 0) :
-      type === 'stock' ? (variant.stock ?? variant.stockQuantity ?? 0) : '';
-    setModal({ open: true, type, variant, value: String(initial) });
+      type === 'price'
+        ? (selectedColor?.price ?? variant.price ?? 0)
+        : type === 'stock'
+          ? (selectedColor?.stock ?? selectedColor?.quantity ?? variant.stock ?? variant.stockQuantity ?? 0)
+          : '';
+    setModal({ open: true, type, variant, value: String(initial), color: selectedColor });
   };
 
-  const closeModal = () => setModal({ open: false, type: null, variant: null, value: '' });
+  const closeModal = () => setModal({ open: false, type: null, variant: null, value: '', color: null });
 
   // ✅ Image modal handlers
   const openImageModal = (e, variant) => {
@@ -172,33 +181,77 @@ const StoreProductVariants = () => {
       toast?.error?.('Chỉ có thể cập nhật ảnh của biến thể đã được duyệt');
       return;
     }
+    const imgs = (variant.images || variant.imageUrls || []).map((src, idx) => ({
+      src,
+      removed: false,
+      id: `${variant.id || variant._id || 'variant'}-${idx}`,
+    }));
+    setExistingImages(imgs);
+    setNewImages([]);
+    setPrimaryImageIndex(0);
     setImageModal({ open: true, variant });
-    setSelectedImages([]);
   };
 
   const closeImageModal = () => {
     setImageModal({ open: false, variant: null });
-    setSelectedImages([]);
+    // Cleanup previews
+    newImages.forEach(img => img.preview && URL.revokeObjectURL(img.preview));
+    setExistingImages([]);
+    setNewImages([]);
+    setPrimaryImageIndex(0);
   };
 
   const handleImageSelect = (e) => {
     const files = Array.from(e.target.files);
-    if (files.length > 5) {
-      toast?.error?.('Tối đa 5 ảnh');
+    const keptExisting = existingImages.filter(img => !img.removed).length;
+    const currentNewCount = newImages.length;
+    if (keptExisting + currentNewCount + files.length > 5) {
+      toast?.error?.('Tối đa 5 ảnh (bao gồm ảnh hiện có)');
       return;
     }
-    setSelectedImages(files);
+    const mapped = files.map(file => ({
+      file,
+      preview: URL.createObjectURL(file),
+    }));
+    setNewImages(prev => [...prev, ...mapped]);
   };
 
   const submitImageUpdate = async () => {
-    if (!imageModal.variant || selectedImages.length === 0) {
-      toast?.error?.('Vui lòng chọn ít nhất 1 ảnh');
+    if (!imageModal.variant) {
+      toast?.error?.('Không có biến thể');
+      return;
+    }
+
+    const keptExisting = existingImages.filter(img => !img.removed);
+    const combined = [...keptExisting, ...newImages];
+
+    if (combined.length === 0) {
+      toast?.error?.('Vui lòng giữ lại hoặc thêm ít nhất 1 ảnh (tối đa 5)');
+      return;
+    }
+
+    if (combined.length > 5) {
+      toast?.error?.('Tối đa 5 ảnh');
       return;
     }
 
     setUploadingImages(true);
     try {
-      const result = await updateVariantImages(imageModal.variant.id, selectedImages, 0);
+      // Chuẩn bị file upload: tải lại ảnh hiện có để giữ, cộng ảnh mới
+      const existingFiles = await Promise.all(
+        keptExisting.map(async (img, idx) => {
+          const res = await fetch(img.src);
+          const blob = await res.blob();
+          return new File([blob], `existing-${idx}.jpg`, { type: blob.type || 'image/jpeg' });
+        })
+      );
+
+      const newFiles = newImages.map((img, idx) => img.file);
+      const filesToUpload = [...existingFiles, ...newFiles];
+
+      const primaryIdx = Math.min(primaryImageIndex, filesToUpload.length - 1);
+
+      const result = await updateVariantImages(imageModal.variant.id, filesToUpload, primaryIdx);
       if (result.success) {
         toast?.success?.('Cập nhật ảnh thành công');
         closeImageModal();
@@ -207,6 +260,7 @@ const StoreProductVariants = () => {
         toast?.error?.(result.error || 'Không thể cập nhật ảnh');
       }
     } catch (error) {
+      console.error('Lỗi tải lại ảnh cũ hoặc cập nhật ảnh:', error);
       toast?.error?.('Lỗi khi cập nhật ảnh');
     } finally {
       setUploadingImages(false);
@@ -215,13 +269,32 @@ const StoreProductVariants = () => {
 
   const submitModal = async () => {
     if (!modal.variant) return;
+    const hasColors = Array.isArray(modal.variant.colors) && modal.variant.colors.length > 0;
+    const selectedColor = modal.color;
+    const colorId = selectedColor?._id || selectedColor?.id || selectedColor?.colorId;
+    const colorName = selectedColor?.colorName || selectedColor?.name;
+
     if (modal.type === 'price') {
       const newPrice = Number(modal.value);
       if (Number.isNaN(newPrice) || newPrice < 0) {
         toast?.error?.('Giá không hợp lệ');
         return;
       }
-      const res = await updateVariantPrice(modal.variant.id, newPrice);
+      let res;
+      if (hasColors && selectedColor) {
+        if (!colorId) {
+          toast?.error?.('Không xác định được màu cần cập nhật');
+          return;
+        }
+        const payload = {
+          colorName,
+          price: newPrice,
+          stock: selectedColor?.stock ?? selectedColor?.quantity ?? 0,
+        };
+        res = await updateVariantColor(modal.variant.id, colorId, payload);
+      } else {
+        res = await updateVariantPrice(modal.variant.id, newPrice);
+      }
       if (res.success) {
         toast?.success?.('Cập nhật giá thành công');
         closeModal();
@@ -235,7 +308,21 @@ const StoreProductVariants = () => {
         toast?.error?.('Tồn kho không hợp lệ');
         return;
       }
-      const res = await updateVariantStock(modal.variant.id, newStock);
+      let res;
+      if (hasColors && selectedColor) {
+        if (!colorId) {
+          toast?.error?.('Không xác định được màu cần cập nhật');
+          return;
+        }
+        const payload = {
+          colorName,
+          price: selectedColor?.price ?? 0,
+          stock: newStock,
+        };
+        res = await updateVariantColor(modal.variant.id, colorId, payload);
+      } else {
+        res = await updateVariantStock(modal.variant.id, newStock);
+      }
       if (res.success) {
         toast?.success?.('Cập nhật tồn kho thành công');
         closeModal();
@@ -678,6 +765,47 @@ const StoreProductVariants = () => {
                   </div>
                 ) : (
                   <div>
+                    {/* Chọn màu nếu có */}
+                    {Array.isArray(modal.variant?.colors) && modal.variant.colors.length > 0 && (
+                      <div className="mb-4">
+                        <p className="text-xs font-semibold text-blue-700 mb-2">Chọn màu cần cập nhật</p>
+                        <div className="flex flex-wrap gap-2">
+                          {modal.variant.colors.map((c) => {
+                            const colorKey = c._id ?? c.id ?? c.colorId ?? c.colorName ?? c.name;
+                            const selectedKey = modal.color?._id ?? modal.color?.id ?? modal.color?.colorId ?? modal.color?.colorName ?? modal.color?.name;
+                            const isSelected = Boolean(selectedKey && selectedKey === colorKey);
+                            return (
+                              <button
+                                key={colorKey}
+                                onClick={() => {
+                                  const nextValue = modal.type === 'price'
+                                    ? (c.price ?? modal.variant.price ?? 0)
+                                    : (c.stock ?? c.quantity ?? modal.variant.stock ?? modal.variant.stockQuantity ?? 0);
+                                  setModal(prev => ({ ...prev, color: c, value: String(nextValue) }));
+                                }}
+                                className={`px-3 py-2 rounded-lg border text-sm flex items-center gap-2 transition-all ${
+                                  isSelected
+                                    ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm'
+                                    : 'border-black bg-white text-gray-900 hover:border-blue-300 hover:text-blue-700'
+                                }`}
+                              >
+                                {c.image ? (
+                                  <img src={c.image} alt={c.colorName} className="w-8 h-8 rounded object-cover border border-blue-100" />
+                                ) : (
+                                  <span className="w-8 h-8 rounded bg-gray-200 inline-block" />
+                                )}
+                                <div className="text-left">
+                                  <div className="font-semibold leading-tight">{c.colorName || c.name || 'Không rõ màu'}</div>
+                                  {c.price != null && (
+                                    <div className="text-[11px] text-gray-600">{formatPrice(c.price)}</div>
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                     {modal.type === 'price' ? (
                       <>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Giá bán</label>
@@ -695,7 +823,11 @@ const StoreProductVariants = () => {
                         </div>
                         <div className="mt-3 flex items-center justify-between text-sm">
                           <span className="text-gray-600">Giá hiện tại:</span>
-                          <span className="font-bold text-purple-600">{formatPrice(modal.variant?.price || 0)}</span>
+                          <span className="font-bold text-purple-600">
+                            {formatPrice(
+                              (modal.color?.price ?? modal.variant?.price ?? 0)
+                            )}
+                          </span>
                         </div>
                       </>
                     ) : (
@@ -714,7 +846,9 @@ const StoreProductVariants = () => {
                         </div>
                         <div className="mt-3 flex items-center justify-between text-sm">
                           <span className="text-gray-600">Kho hiện tại:</span>
-                          <span className="font-bold text-green-600">{modal.variant?.stock ?? modal.variant?.stockQuantity ?? 0}</span>
+                          <span className="font-bold text-green-600">
+                            {modal.color?.stock ?? modal.color?.quantity ?? modal.variant?.stock ?? modal.variant?.stockQuantity ?? 0}
+                          </span>
                         </div>
                       </>
                     )}
@@ -742,7 +876,7 @@ const StoreProductVariants = () => {
 
         {/* Detail Modal */}
         {detailModal.open && detailModal.variant && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setDetailModal({ open: false, variant: null })}>
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => { setDetailModal({ open: false, variant: null }); setDetailSelectedColor(null); }}>
             <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
               {/* Header */}
               <div className="sticky top-0 bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 text-white px-6 py-5 flex items-center justify-between z-10">
@@ -837,6 +971,60 @@ const StoreProductVariants = () => {
                             </div>
                           </div>
                         )}
+                        {Array.isArray(detailModal.variant.colors) && detailModal.variant.colors.length > 0 && (
+                          <div>
+                            <p className="text-xs text-blue-700 font-medium mb-2">Màu sắc</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {detailModal.variant.colors.map((c) => {
+                                const colorKey = c._id ?? c.id ?? c.colorName ?? c.name;
+                                const selectedKey =
+                                  detailSelectedColor?._id ??
+                                  detailSelectedColor?.id ??
+                                  detailSelectedColor?.colorName ??
+                                  detailSelectedColor?.name ??
+                                  detailModal.variant.colors?.[0]?._id ??
+                                  detailModal.variant.colors?.[0]?.id ??
+                                  detailModal.variant.colors?.[0]?.colorName ??
+                                  detailModal.variant.colors?.[0]?.name;
+                                const isSelected = Boolean(selectedKey && selectedKey === colorKey);
+
+                                return (
+                                  <div
+                                    key={colorKey}
+                                    className={`flex flex-col sm:flex-row items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors ${
+                                      isSelected
+                                        ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm'
+                                        : 'border-black bg-white text-gray-900 hover:border-blue-300 hover:text-blue-700'
+                                    } border`}
+                                    onClick={() => setDetailSelectedColor(c)}
+                                  >
+                                    {c.image ? (
+                                      <img
+                                        src={c.image}
+                                        alt={c.colorName}
+                                        className="w-12 h-12 rounded-lg object-cover border border-blue-100"
+                                      />
+                                    ) : (
+                                      <div className="w-12 h-12 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 text-sm">
+                                        🎨
+                                      </div>
+                                    )}
+                                    <div className="flex-1 text-center sm:text-left">
+                                      <p className="text-sm font-semibold text-gray-900">
+                                        {c.colorName || c.name || 'Không rõ màu'}
+                                      </p>
+                                      {c.price ? (
+                                        <p className="text-xs text-gray-600">
+                                          {formatPrice(c.price)}
+                                        </p>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -848,7 +1036,7 @@ const StoreProductVariants = () => {
                           <h3 className="text-sm font-bold text-green-900">Giá bán</h3>
                         </div>
                         <p className="text-2xl font-black text-green-600">
-                          {formatPrice(detailModal.variant.price)}
+                          {formatPrice((detailSelectedColor?.price) ?? detailModal.variant.price)}
                         </p>
                       </div>
 
@@ -858,13 +1046,13 @@ const StoreProductVariants = () => {
                           <h3 className="text-sm font-bold text-yellow-900">Tồn kho</h3>
                         </div>
                         <p className={`text-2xl font-black ${
-                          (detailModal.variant.stock ?? detailModal.variant.stockQuantity ?? 0) <= 0 
+                          ((detailSelectedColor?.stock ?? detailModal.variant.stock ?? detailModal.variant.stockQuantity ?? 0) <= 0) 
                             ? 'text-red-600' 
-                            : (detailModal.variant.stock ?? detailModal.variant.stockQuantity ?? 0) < 10 
+                            : ((detailSelectedColor?.stock ?? detailModal.variant.stock ?? detailModal.variant.stockQuantity ?? 0) < 10) 
                             ? 'text-yellow-600' 
                             : 'text-green-600'
                         }`}>
-                          {detailModal.variant.stock ?? detailModal.variant.stockQuantity ?? 0}
+                          {detailSelectedColor?.stock ?? detailModal.variant.stock ?? detailModal.variant.stockQuantity ?? 0}
                         </p>
                       </div>
                     </div>
@@ -925,21 +1113,52 @@ const StoreProductVariants = () => {
                     Biến thể: <strong>{imageModal.variant.productName || imageModal.variant.name}</strong>
                   </p>
                   
-                  {/* Ảnh hiện tại */}
-                  {imageModal.variant.images && imageModal.variant.images.length > 0 && (
-                    <div className="mb-4">
-                      <p className="text-sm text-gray-500 mb-2">Ảnh hiện tại:</p>
-                      <div className="flex gap-2 flex-wrap">
-                        {imageModal.variant.images.map((img, idx) => (
-                          <img key={idx} src={img} alt={`Ảnh ${idx + 1}`} className="w-16 h-16 object-cover rounded-lg border" />
-                        ))}
-                      </div>
+                  {/* Ảnh hiện tại + ảnh mới (chọn ảnh chính, xóa) */}
+                  <div className="mb-4">
+                    <p className="text-sm text-gray-500 mb-2">
+                      Ảnh đang có (tối đa 5). Bấm để đặt ảnh chính, hoặc ✕ để xóa.
+                    </p>
+                    <div className="flex gap-2 flex-wrap">
+                      {[...existingImages.filter(img => !img.removed).map(img => ({ ...img, isNew: false })), ...newImages.map(img => ({ ...img, isNew: true }))].map((img, idx) => (
+                        <div
+                          key={img.id || img.preview || idx}
+                          className={`relative w-16 h-16 rounded-lg overflow-hidden border ${idx === primaryImageIndex ? 'ring-2 ring-blue-500 ring-offset-2' : 'border-gray-200'}`}
+                        >
+                          <img
+                            src={img.preview || img.src}
+                            alt={`Ảnh ${idx + 1}`}
+                            className="w-full h-full object-cover cursor-pointer"
+                            onClick={() => setPrimaryImageIndex(idx)}
+                          />
+                          {idx === primaryImageIndex && (
+                            <div className="absolute top-1 left-1 bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded">Chính</div>
+                          )}
+                          <button
+                            onClick={() => {
+                              if (img.isNew) {
+                                setNewImages(prev => prev.filter((_, i) => i !== newImages.findIndex(n => n.preview === img.preview)));
+                              } else {
+                                setExistingImages(prev => prev.map(item => item.id === img.id ? { ...item, removed: true } : item));
+                              }
+                              setPrimaryImageIndex((prev) => {
+                                if (prev === idx) return 0;
+                                if (prev > idx) return prev - 1;
+                                return prev;
+                              });
+                            }}
+                            className="absolute top-1 right-1 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center text-xs hover:bg-black/80"
+                            title="Xóa ảnh này"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  )}
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Chọn ảnh mới (tối đa 5 ảnh)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Chọn ảnh mới (tối đa 5 ảnh tổng cộng)</label>
                   <input
                     type="file"
                     accept="image/*"
@@ -948,15 +1167,15 @@ const StoreProductVariants = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   />
                   
-                  {/* Preview ảnh đã chọn */}
-                  {selectedImages.length > 0 && (
+                  {/* Preview ảnh mới */}
+                  {newImages.length > 0 && (
                     <div className="mt-3">
-                      <p className="text-sm text-gray-500 mb-2">Ảnh đã chọn ({selectedImages.length}):</p>
+                      <p className="text-sm text-gray-500 mb-2">Ảnh mới thêm ({newImages.length}):</p>
                       <div className="flex gap-2 flex-wrap">
-                        {selectedImages.map((file, idx) => (
+                        {newImages.map((img, idx) => (
                           <img 
                             key={idx} 
-                            src={URL.createObjectURL(file)} 
+                            src={img.preview} 
                             alt={`Preview ${idx + 1}`} 
                             className="w-16 h-16 object-cover rounded-lg border border-purple-300" 
                           />
@@ -975,9 +1194,9 @@ const StoreProductVariants = () => {
                   </button>
                   <button
                     onClick={submitImageUpdate}
-                    disabled={uploadingImages || selectedImages.length === 0}
+                      disabled={uploadingImages || (existingImages.filter(i => !i.removed).length + newImages.length === 0)}
                     className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
-                      uploadingImages || selectedImages.length === 0
+                      uploadingImages || (existingImages.filter(i => !i.removed).length + newImages.length === 0)
                         ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                         : 'bg-purple-600 hover:bg-purple-700 text-white'
                     }`}

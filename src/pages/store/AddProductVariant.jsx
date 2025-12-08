@@ -37,7 +37,7 @@ const AddProductVariant = () => {
   // Step 2: Images
   const [images, setImages] = useState([]);
   const [imagePreviews, setImagePreviews] = useState([]);
-  const [primaryImageIndex, setPrimaryImageIndex] = useState(0);
+  const [primaryImageIndex, setPrimaryImageIndex] = useState(0); // Ảnh chính cho biến thể
 
   // Step 3: Colors (Optional)
   const [hasColors, setHasColors] = useState(false);
@@ -123,8 +123,13 @@ const AddProductVariant = () => {
   const removeImage = (index) => {
     setImages(images.filter((_, i) => i !== index));
     setImagePreviews(imagePreviews.filter((_, i) => i !== index));
-    if (primaryImageIndex >= images.length - 1) {
-      setPrimaryImageIndex(Math.max(0, images.length - 2));
+    // Nếu xóa ảnh đang là ảnh chính thì lùi về ảnh trước đó
+    if (primaryImageIndex === index) {
+      setPrimaryImageIndex((prev) => Math.max(0, prev - 1));
+    } else if (primaryImageIndex > index) {
+      setPrimaryImageIndex((prev) => prev - 1);
+    } else {
+      setPrimaryImageIndex((prev) => Math.min(prev, Math.max(0, imagePreviews.length - 2)));
     }
   };
 

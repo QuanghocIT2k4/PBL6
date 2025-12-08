@@ -183,6 +183,9 @@ const generateVariantsForProduct = (product) => {
   return variants;
 };
 
+// Một số thuộc tính chỉ để hiển thị (không tạo variant mới)
+const NON_VARIANT_ATTRS = ['color'];
+
 // Simulate network delay
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -238,11 +241,18 @@ export const useVariants = (product) => {
     return template?.attributes[attributeKey] || [];
   };
 
+  const getColorValues = () => getAttributeValues('color');
+
   // ✅ Helper: Find hoặc generate variant by attributes
   const findVariantByAttributes = (selectedAttributes) => {
+    // Bỏ qua các thuộc tính chỉ hiển thị (color) khi xác định variant
+    const variantAttrs = Object.entries(selectedAttributes || {}).filter(
+      ([key]) => !NON_VARIANT_ATTRS.includes(key)
+    );
+
     // Thử tìm variant đã generate
     let variant = variants.find(variant => {
-      return Object.entries(selectedAttributes).every(
+      return variantAttrs.every(
         ([key, value]) => variant.attributes[key] === value
       );
     });
@@ -256,7 +266,7 @@ export const useVariants = (product) => {
         // Tính giá dựa trên price modifiers
         let variantPrice = parseFloat(product.price?.toString().replace(/[^\d]/g, '') || 0);
         
-        Object.entries(selectedAttributes).forEach(([key, val]) => {
+        variantAttrs.forEach(([key, val]) => {
           if (template.priceModifiers?.[key]?.[val]) {
             variantPrice += template.priceModifiers[key][val];
           }
@@ -265,7 +275,7 @@ export const useVariants = (product) => {
         variant = {
           id: `${product.id}-${Object.values(selectedAttributes).join('-')}`,
           productId: product.id,
-          attributes: selectedAttributes,
+          attributes: { ...selectedAttributes },
           price: variantPrice,
           stock: Math.floor(Math.random() * 30) + 5,
           sku: `${product.id}-CUSTOM`
@@ -282,6 +292,7 @@ export const useVariants = (product) => {
     error,
     getAttributeKeys,
     getAttributeValues,
+    getColorValues,
     findVariantByAttributes
   };
 };

@@ -182,23 +182,47 @@ export const useProductVariants = (category, options = {}) => {
     pageSize: data?.page?.size || data?.size || size,
   };
 
-  // ✅ Transform variants để tương thích với ProductSection component
-  const transformedVariants = variants.map((variant) => ({
-    // ✅ Spread ...variant TRƯỚC để giữ nguyên TẤT CẢ fields từ API
-    ...variant,
-    // ✅ Override/thêm các field cần thiết cho UI
-    id: variant.id,
-    name: variant.name,
-    images: variant.images || (variant.primaryImage ? [variant.primaryImage] : []),
-    image: variant.primaryImage || variant.images?.[0] || null,
-    price: variant.price || 0,
-    stock: variant.stock || 0,
-    variantId: variant.id,
+  // ✅ Transform variants để tương thích với UI, giữ cả productId
+  const transformedVariants = variants.map((variant) => {
+    const productId =
+      variant.productId ||
+      variant.product_id ||
+      variant.product?.id ||
+      variant.product?.productId ||
+      variant.product?.product_id;
+
+    return {
+      ...variant,
+      id: variant.id,
+      variantId: variant.id,
+      productId,
+      name: variant.name,
+      images: variant.images || (variant.primaryImage ? [variant.primaryImage] : []),
+      image: variant.primaryImage || variant.images?.[0] || null,
+      price: variant.price || 0,
+      stock: variant.stock || 0,
+    };
+  });
+
+  // ✅ Group theo productId và chọn variant rẻ nhất để hiển thị ngoài listing
+  const groupedByProduct = {};
+  transformedVariants.forEach((v) => {
+    const key = v.productId || v.id; // fallback id nếu thiếu productId
+    if (!groupedByProduct[key] || (v.price || 0) < (groupedByProduct[key].price || 0)) {
+      groupedByProduct[key] = v;
+    }
+  });
+
+  const displayVariants = Object.values(groupedByProduct).map((v) => ({
+    ...v,
+    // Dùng productId làm id cho routing tới trang sản phẩm
+    id: v.productId || v.id,
   }));
 
   return {
-    variants: transformedVariants,
-    products: transformedVariants, // Alias để tương thích với code cũ (dùng như products)
+    variants: transformedVariants,        // đầy đủ (từng variant)
+    products: displayVariants,            // dùng cho listing (1 product = 1 variant rẻ nhất)
+    displayVariants,                      // alias rõ nghĩa
     loading: isLoading,
     error: error?.message,
     pagination,

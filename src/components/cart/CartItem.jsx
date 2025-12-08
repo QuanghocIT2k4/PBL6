@@ -49,11 +49,30 @@ const CartItem = ({ item }) => {
   };
 
   // ✅ Handle trường hợp product hoặc price undefined
-  const itemPrice = item.product?.price 
+  // Giá hiển thị: ưu tiên giá màu đã chọn trong options (nếu có color/price)
+  const resolveColorPrice = () => {
+    if (!item?.product?.colors || !Array.isArray(item.product.colors)) return null;
+    const colorKey = item.options?.color || item.options?.colorName || item.options?.color_id || item.options?.colorId;
+    if (!colorKey) return null;
+    const found = item.product.colors.find(
+      (c) =>
+        c?._id === colorKey ||
+        c?.id === colorKey ||
+        c?.colorId === colorKey ||
+        c?.colorName === colorKey ||
+        c?.name === colorKey
+    );
+    if (found?.price != null) return Number(found.price);
+    return null;
+  };
+
+  const colorPrice = resolveColorPrice();
+  const basePrice = item.product?.price 
     ? (typeof item.product.price === 'number' 
         ? item.product.price 
-        : parseInt(item.product.price.replace(/\./g, '')) || 0)
-    : 0; // Fallback nếu không có price
+        : parseInt(String(item.product.price).replace(/\./g, '')) || 0)
+    : 0;
+  const itemPrice = colorPrice != null ? colorPrice : basePrice;
   const totalPrice = itemPrice * item.quantity;
 
   return (
@@ -113,20 +132,19 @@ const CartItem = ({ item }) => {
           {item.product.name}
         </button>
         
-        {/* ✅ DYNAMIC OPTIONS - Tự động hiển thị tất cả attributes */}
-        {item.options && Object.keys(item.options).length > 0 && (
-          <div className="text-sm text-gray-500 mt-1">
-            {Object.entries(item.options)
-              .filter(([key, value]) => value && value !== 'default')
-              .map(([key, value], index, array) => (
-                <span key={key}>
-                  {getAttributeLabel(key)}: {value}
-                  {index < array.length - 1 && <span> • </span>}
-                </span>
-              ))
-            }
-          </div>
-        )}
+        {/* Chỉ hiển thị màu (và storage nếu có) */}
+        <div className="text-sm text-gray-600 mt-1 flex flex-wrap gap-2">
+          {item.options?.color && (
+            <span className="px-2 py-1 rounded bg-gray-100 border text-gray-800">
+              Màu: {item.options.color}
+            </span>
+          )}
+          {item.options?.storage && (
+            <span className="px-2 py-1 rounded bg-gray-100 border text-gray-800">
+              Bộ nhớ: {item.options.storage}
+            </span>
+          )}
+        </div>
 
         <div className="flex items-center justify-between mt-2">
           {/* Price */}

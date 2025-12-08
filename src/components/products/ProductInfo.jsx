@@ -5,49 +5,152 @@ import { useVariants } from '../../hooks/useVariants';
 import { getAttributeLabel } from '../../utils/attributeLabels';
 import Button from '../ui/Button';
 
-const ProductInfo = ({ product }) => {
+const ProductInfo = ({ product, variantsOverride = [], initialVariantId }) => {
   const navigate = useNavigate();
   const { addToCart, isInCart, getProductQuantityInCart } = useCart();
   
-  // ✅ SỬ DỤNG DYNAMIC VARIANTS
-  const { variants, loading: variantsLoading, getAttributeKeys, getAttributeValues, findVariantByAttributes } = useVariants(product);
+  // ✅ SỬ DỤNG DYNAMIC VARIANTS (fallback) HOẶC VARIANTS TỪ BE
+  const {
+    variants: generatedVariants,
+    loading: variantsLoadingGenerated,
+    getAttributeKeys: getAttributeKeysGenerated,
+    getAttributeValues: getAttributeValuesGenerated,
+  } = useVariants(product);
+
+  const variants = variantsOverride.length > 0 ? variantsOverride : generatedVariants;
+  const variantsLoading = variantsOverride.length > 0 ? false : variantsLoadingGenerated;
   
   const [quantity, setQuantity] = useState(1);
   const [selectedAttributes, setSelectedAttributes] = useState({});
+  const [selectedColor, setSelectedColor] = useState(null);
   const [isAdding, setIsAdding] = useState(false);
   const [isBuying, setIsBuying] = useState(false);
   const addingRef = useRef(false);
 
-  // ✅ LẤY ATTRIBUTE KEYS TỪ CATEGORY
-  const attributeKeys = getAttributeKeys();
+  // ✅ Helper: collect values for an attribute from variantsOverride
+  const collectValuesFromVariants = (list, key) => {
+    const set = new Set();
+    list.forEach(v => {
+      const val = v.attributes?.[key];
+      if (val) set.add(val);
+    });
+    return Array.from(set);
+  };
+
+  // ✅ Helper: get attribute values (ưu tiên data thật)
+  const getAttributeValues = (attributeKey) => {
+    if (variantsOverride.length > 0) {
+      return collectValuesFromVariants(variantsOverride, attributeKey);
+    }
+    return getAttributeValuesGenerated(attributeKey);
+  };
+
+  // ✅ LẤY ATTRIBUTE KEYS TỪ DATA THẬT (variantsOverride) HOẶC TEMPLATE
+  const attributeKeys = useMemo(() => {
+    if (variantsOverride.length > 0) {
+      const keys = new Set();
+      variantsOverride.forEach(v => {
+        Object.keys(v.attributes || {}).forEach(k => keys.add(k));
+      });
+      return Array.from(keys);
+    }
+    return getAttributeKeysGenerated();
+  }, [variantsOverride, getAttributeKeysGenerated]);
+
+  // ✅ Chỉ coi là thuộc tính phân loại khi có hơn 1 giá trị trong các variant
+  const variationKeys = useMemo(() => {
+    let keys = attributeKeys.filter(key => collectValuesFromVariants(variants, key).length > 1);
+
+    // ⚡ Ưu tiên phones: luôn hiển thị lựa chọn dung lượng nếu có
+    const categoryKey = product?.categoryKey || product?.category?.toLowerCase();
+    if (categoryKey && categoryKey.includes('phone')) {
+      const storageValues = collectValuesFromVariants(variants, 'storage');
+      if (storageValues.length > 1 && !keys.includes('storage')) {
+        keys = ['storage', ...keys];
+      }
+
+      // ⚡ Nếu có color, cũng hiển thị (đổi ảnh) cho điện thoại
+      const colorValues = collectValuesFromVariants(variants, 'color');
+      if (colorValues.length > 1 && !keys.includes('color')) {
+        keys = [...keys, 'color'];
+      }
+    }
+    return keys;
+  }, [attributeKeys, variants, product]);
 
   // ✅ KHỞI TẠO SELECTED ATTRIBUTES
   useEffect(() => {
-    if (attributeKeys.length > 0 && Object.keys(selectedAttributes).length === 0) {
-      const initialAttrs = {};
-      attributeKeys.forEach(key => {
-        const values = getAttributeValues(key);
-        if (values.length > 0) {
-          initialAttrs[key] = values[0];
-        }
-      });
-      setSelectedAttributes(initialAttrs);
+    if (variationKeys.length === 0) return;
+
+    if (Object.keys(selectedAttributes).length > 0) return;
+
+    // Nếu có initialVariantId, ưu tiên variant đó
+    let initialVariant =
+      variants.find(v => String(v.id) === String(initialVariantId)) ||
+      variants.find(v => String(v.variantId) === String(initialVariantId));
+
+    // Nếu không có, chọn rẻ nhất
+    if (!initialVariant && variants.length > 0) {
+      initialVariant = [...variants].sort((a, b) => (a.price || 0) - (b.price || 0))[0];
     }
-  }, [attributeKeys, selectedAttributes, getAttributeValues]);
+
+    const initialAttrs = initialVariant?.attributes
+      ? { ...initialVariant.attributes }
+      : {};
+
+    // fallback: lấy giá trị đầu của từng attribute nếu thiếu
+    variationKeys.forEach(key => {
+      if (initialAttrs[key]) return;
+      const values = getAttributeValues(key);
+      if (values.length > 0) {
+        initialAttrs[key] = values[0];
+      }
+    });
+
+    setSelectedAttributes(initialAttrs);
+    // Reset color when init
+    const colors = (initialVariant?.colors && initialVariant.colors.length > 0) ? initialVariant.colors : [];
+    if (colors.length > 0) {
+      setSelectedColor(colors[0]);
+    }
+  }, [attributeKeys, variants, selectedAttributes, initialVariantId, variantsOverride, getAttributeValuesGenerated]);
 
   // ✅ CURRENT OPTIONS CHO CART
   const currentOptions = useMemo(() => selectedAttributes, [selectedAttributes]);
 
   // ✅ TÌM VARIANT HIỆN TẠI
   const currentVariant = useMemo(() => {
-    return findVariantByAttributes(selectedAttributes);
-  }, [selectedAttributes, findVariantByAttributes]);
+    if (variants.length === 0) return null;
+    // Match chỉ các variation keys
+    const found = variants.find(v =>
+      variationKeys.every(
+        (k) => (v.attributes || {})[k] === (selectedAttributes || {})[k]
+      )
+    );
+    if (found) return found;
+    // fallback: rẻ nhất
+    return [...variants].sort((a, b) => (a.price || 0) - (b.price || 0))[0];
+  }, [selectedAttributes, variants, variationKeys]);
 
   const productInCart = isInCart(product?.id, currentOptions);
   const totalQuantityInCart = getProductQuantityInCart(product?.id, currentOptions);
 
-  // ✅ GIÁ HIỂN THỊ
-  const displayPrice = currentVariant?.price || product?.price;
+  // ✅ GIÁ HIỂN THỊ (ưu tiên giá theo màu nếu có)
+  const displayPrice = (selectedColor?.price) || currentVariant?.price || product?.price;
+
+  // ✅ COLOR OPTIONS (từ variant.colors)
+  const colorOptions = currentVariant?.colors || [];
+
+  useEffect(() => {
+    // Khi đổi variant, set lại màu đầu tiên nếu có
+    if (colorOptions.length > 0) {
+      // giữ màu đang chọn nếu vẫn tồn tại trong variant mới
+      const exists = selectedColor && colorOptions.find(c => c.colorName === selectedColor.colorName);
+      setSelectedColor(exists || colorOptions[0]);
+    } else {
+      setSelectedColor(null);
+    }
+  }, [currentVariant?.id, colorOptions.length]);
 
   // ✅ SỬA LẠI - SỬ DỤNG USEMEMO ĐỂ TRÁNH RE-CREATE FUNCTION
   const handleAddToCart = useMemo(() => {
@@ -84,6 +187,17 @@ const ProductInfo = ({ product }) => {
           
           // Reset quantity về 1 sau khi thêm thành công
           setQuantity(1);
+        } else if (result.requiresLogin) {
+          const notification = document.createElement('div');
+          notification.className = 'fixed top-4 right-4 bg-yellow-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300';
+          notification.textContent = result.error || 'Vui lòng đăng nhập để thêm vào giỏ hàng';
+          document.body.appendChild(notification);
+          setTimeout(() => {
+            notification.classList.add('opacity-0', 'translate-x-full');
+            setTimeout(() => {
+              if (notification.parentNode) notification.parentNode.removeChild(notification);
+            }, 300);
+          }, 2500);
         }
       } finally {
         setIsAdding(false);
@@ -128,6 +242,17 @@ const ProductInfo = ({ product }) => {
         }, 1000);
         
         setQuantity(1);
+      } else if (result.requiresLogin) {
+        const notification = document.createElement('div');
+        notification.className = 'fixed top-4 right-4 bg-yellow-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300';
+        notification.textContent = result.error || 'Vui lòng đăng nhập để mua ngay';
+        document.body.appendChild(notification);
+        setTimeout(() => {
+          notification.classList.add('opacity-0', 'translate-x-full');
+          setTimeout(() => {
+            if (notification.parentNode) notification.parentNode.removeChild(notification);
+          }, 300);
+        }, 2500);
       }
     } finally {
       setIsBuying(false);
@@ -139,7 +264,9 @@ const ProductInfo = ({ product }) => {
       {/* Product Title & Badge */}
       <div className="animate-in fade-in duration-700">
         <div className="flex items-center space-x-2 mb-2">
-          <h1 className="text-2xl font-bold text-gray-900 transition-all duration-300 ease-in-out hover:text-blue-600">{product?.name}</h1>
+          <h1 className="text-2xl font-bold text-gray-900 transition-all duration-300 ease-in-out hover:text-blue-600">
+            {currentVariant?.name || product?.name}
+          </h1>
           {product?.badge && (
             <span className={`px-2 py-1 rounded text-xs font-medium text-white transition-all duration-300 ease-in-out transform hover:scale-110 ${
               product.badge === 'Hot' ? 'bg-red-500 hover:bg-red-600' :
@@ -161,14 +288,17 @@ const ProductInfo = ({ product }) => {
             {displayPrice?.toLocaleString('vi-VN')}đ
           </span>
         </div>
+        {selectedColor && (
+          <p className="text-sm text-gray-600">Màu: <span className="font-semibold text-gray-800">{selectedColor.colorName}</span></p>
+        )}
       </div>
 
       {/* ✅ DYNAMIC ATTRIBUTES - Tự động theo category */}
       {variantsLoading ? (
         <div className="text-gray-500 text-sm">Đang tải tùy chọn...</div>
-      ) : attributeKeys.length > 0 ? (
+      ) : variationKeys.length > 0 ? (
         <>
-          {attributeKeys.map((attrKey, index) => {
+          {variationKeys.map((attrKey, index) => {
             const values = getAttributeValues(attrKey);
             if (values.length === 0) return null;
 
@@ -197,6 +327,45 @@ const ProductInfo = ({ product }) => {
               </div>
             );
           })}
+
+        {/* Color options từ colors array (hiển thị tên + hình, không hiện giá; click đổi giá) */}
+        {colorOptions.length > 1 && (
+          <div>
+            <h3 className="text-sm font-medium text-gray-900 mb-2">Màu sắc:</h3>
+            <div className="flex flex-wrap gap-2">
+              {colorOptions.map((c) => {
+                const colorKey = c._id ?? c.id ?? c.colorName ?? c.name;
+                const selectedKey = selectedColor?._id ?? selectedColor?.id ?? selectedColor?.colorName ?? selectedColor?.name;
+                const isSelected = Boolean(selectedKey && selectedKey === colorKey);
+
+                return (
+                  <button
+                    key={c._id || c.id || c.colorName}
+                    onClick={() => setSelectedColor(c)}
+                    className={`px-4 py-2 rounded-lg border text-sm flex items-center gap-3 transition-all focus:outline-none focus:ring-0 ${
+                      isSelected
+                        ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm'
+                        : 'border-black bg-white text-gray-900 hover:border-blue-300 hover:text-blue-700'
+                    }`}
+                    title={c.colorName}
+                  >
+                    {c.image ? (
+                      <img src={c.image} alt={c.colorName} className="w-10 h-10 rounded object-cover" />
+                    ) : (
+                      <span className="w-10 h-10 rounded bg-gray-200 inline-block" />
+                    )}
+                    <div className="flex flex-col items-start leading-tight">
+                      <span className="font-semibold text-gray-900">{c.colorName || c.name || 'Không rõ màu'}</span>
+                      <span className="text-xs text-gray-600 font-medium">
+                        {(c.price ?? displayPrice)?.toLocaleString('vi-VN')}đ
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         </>
       ) : (
         <div className="text-gray-500 text-sm italic">Sản phẩm này không có tùy chọn</div>

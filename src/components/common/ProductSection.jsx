@@ -17,6 +17,21 @@ const ProductSection = memo(({
 }) => {
   const [addingToCart] = useState(new Set());
 
+  // ✅ Tính giá hiển thị: lấy giá thấp nhất trong màu (nếu có), fallback price
+  const getDisplayPrice = (product) => {
+    const prices = [];
+    if (product?.price != null) prices.push(Number(product.price));
+    if (Array.isArray(product?.colors)) {
+      product.colors.forEach(c => {
+        if (c?.price != null) prices.push(Number(c.price));
+      });
+    }
+    // Bỏ giá không hợp lệ/âm
+    const valid = prices.filter(p => Number.isFinite(p) && p > 0);
+    if (valid.length === 0) return null;
+    return Math.min(...valid);
+  };
+
   // Chỉ điều hướng tới trang chi tiết
   const handleViewDetail = (e, product) => {
     e.stopPropagation();
@@ -159,16 +174,22 @@ const ProductSection = memo(({
                   
                   {/* Giá sản phẩm */}
                   <div className="flex flex-col space-y-1">
-                    {/* ✅ SỬA: Hiển thị giá hoặc "Liên hệ" nếu không có */}
-                    {product.price && product.price > 0 ? (
-                      <span className="text-sm font-bold text-red-600">
-                        {product.price.toLocaleString('vi-VN')}đ
-                      </span>
-                    ) : (
-                      <span className="text-sm font-medium text-gray-500">
-                        Liên hệ
-                      </span>
-                    )}
+                    {/* ✅ Hiển thị giá thấp nhất trong màu (nếu có) */}
+                    {(() => {
+                      const price = getDisplayPrice(product);
+                      if (price && price > 0) {
+                        return (
+                          <span className="text-sm font-bold text-red-600">
+                            {price.toLocaleString('vi-VN')}đ
+                          </span>
+                        );
+                      }
+                      return (
+                        <span className="text-sm font-medium text-gray-500">
+                          Liên hệ
+                        </span>
+                      );
+                    })()}
                   </div>
                   
                   {/* Button xem chi tiết */}
@@ -269,15 +290,21 @@ const ProductSection = memo(({
                     )}
                     
                     <div className="flex flex-col space-y-1">
-                      {product.price && product.price > 0 ? (
-                        <span className="text-sm font-bold text-red-600">
-                          {product.price.toLocaleString('vi-VN')}đ
-                        </span>
-                      ) : (
-                        <span className="text-sm font-medium text-gray-500">
-                          Liên hệ
-                        </span>
-                      )}
+                      {(() => {
+                        const price = getDisplayPrice(product);
+                        if (price && price > 0) {
+                          return (
+                            <span className="text-sm font-bold text-red-600">
+                              {price.toLocaleString('vi-VN')}đ
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="text-sm font-medium text-gray-500">
+                            Liên hệ
+                          </span>
+                        );
+                      })()}
                     </div>
                     
                     <div className="mt-2">

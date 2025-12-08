@@ -204,46 +204,29 @@ export const CartProvider = ({ children }) => {
     setLoading(true);
     
     try {
-      // ✅ GỌI API BACKEND
       const token = localStorage.getItem('token');
-      if (token) {
-        const result = await cartService.addToCart({
-          productVariantId: product.id,
-          quantity: quantity
-        });
-        
-        if (!result.success) {
-          // Vẫn tiếp tục lưu localStorage nếu API lỗi
-        }
-      } else {
+      if (!token) {
+        setLoading(false);
+        return { success: false, error: 'Vui lòng đăng nhập để thêm vào giỏ hàng', requiresLogin: true };
       }
+
+      // ✅ GỌI API BACKEND
+      const result = await cartService.addToCart({
+        productVariantId: product.id,
+        quantity: quantity
+      });
+      
+      if (!result.success) {
+        setLoading(false);
+        return { success: false, error: result.error || 'Không thể thêm vào giỏ hàng' };
+      }
+      // Đồng bộ lại giỏ hàng từ backend để lấy cartItemId thật
+      await fetchCart();
     } catch (apiError) {
-      // Vẫn tiếp tục lưu localStorage nếu API lỗi
+      setLoading(false);
+      return { success: false, error: apiError?.message || 'Không thể thêm vào giỏ hàng' };
     }
     
-    // ✅ CẬP NHẬT LOCALSTORAGE (fallback cho guest users)
-    setCartItems(prevItems => {
-      const existingItemIndex = prevItems.findIndex(item => item.id === baseId);
-      
-      if (existingItemIndex >= 0) {
-        // Cộng dồn số lượng
-        const updatedItems = [...prevItems];
-        updatedItems[existingItemIndex].quantity += quantity;
-        return updatedItems;
-      } else {
-        // Thêm mới
-        const cartItem = {
-          id: baseId,
-          product,
-          quantity,
-          options,
-          addedAt: new Date().toISOString(),
-          selected: true
-        };
-        return [...prevItems, cartItem];
-      }
-    });
-
     setLoading(false);
 
     return { success: true, message: `Đã thêm ${quantity} ${product.name} vào giỏ hàng` };
@@ -297,11 +280,21 @@ export const CartProvider = ({ children }) => {
         const result = await cartService.removeCartItemById(itemId);
         
         if (result.success) {
-          // ✅ FETCH LẠI CART TỪ BACKEND ĐỂ ĐỒNG BỘ
-          await fetchCart();
+          // ✅ Optimistic remove ngay lập tức
+          setCartItems(prevItems => prevItems.filter(item => item.id !== itemId));
+          // ✅ FETCH LẠI CART TỪ BACKEND ĐỂ ĐỒNG BỘ (phòng sai lệch)
+          fetchCart();
         } else {
-          console.error('Failed to remove cart item:', result.error);
-          // Không update local state nếu API fail
+          console.error('Failed to remove cart item by id:', result.error);
+          // Fallback: thử xóa theo productVariantId nếu có
+          const target = cartItems.find(i => i.id === itemId);
+          if (target?.productVariantId) {
+            const fb = await cartService.removeFromCart(target.productVariantId);
+            if (fb.success) {
+              setCartItems(prevItems => prevItems.filter(item => item.id !== itemId));
+              fetchCart();
+            }
+          }
           return;
         }
       } catch (apiError) {

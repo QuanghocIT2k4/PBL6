@@ -19,10 +19,17 @@ const StoreDashboard = () => {
     { revalidateOnFocus: false }
   );
 
-  // ✅ Fetch recent orders từ API
+  // ✅ Fetch recent orders từ API (bắt buộc truyền storeId)
   const { data: ordersData, error: ordersError, isLoading: ordersLoading } = useSWR(
     currentStore?.id ? ['recent-orders', currentStore.id] : null,
-    () => getStoreOrders({ page: 0, size: 5, sortBy: 'createdAt', sortDir: 'desc' }),
+    () =>
+      getStoreOrders({
+        storeId: currentStore.id,
+        page: 0,
+        size: 5,
+        sortBy: 'createdAt',
+        sortDir: 'desc',
+      }),
     { revalidateOnFocus: false }
   );
 

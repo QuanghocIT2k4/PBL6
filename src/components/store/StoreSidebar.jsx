@@ -113,23 +113,6 @@ const StoreSidebar = () => {
               </span>
             </p>
           )}
-          <p className="flex items-center gap-1">
-            <span className="w-4 h-4 flex items-center justify-center leading-none">📧</span>
-            <span>{currentStore.email}</span>
-          </p>
-          <p className="flex items-center gap-1">
-            <span className="w-4 h-4 flex items-center justify-center leading-none">📱</span>
-            <span>{currentStore.phone}</span>
-          </p>
-          <p className="flex items-center gap-1">
-            <span className="w-4 h-4 flex items-center justify-center leading-none">⭐</span>
-            <span>
-              {currentStore.stats?.averageRating > 0 
-                ? `${currentStore.stats.averageRating}/5 (${currentStore.stats.totalReviews} khách hàng)`
-                : 'Chưa có đánh giá'
-              }
-            </span>
-          </p>
         </div>
 
         {/* Store Status */}
@@ -137,29 +120,6 @@ const StoreSidebar = () => {
           <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(currentStore.status)}`}>
             {getStatusText(currentStore.status)}
           </span>
-        </div>
-      </div>
-
-      {/* Quick Stats */}
-      <div className="px-4 py-4 border-b border-gray-600">
-        <h4 className="text-gray-300 text-xs font-medium mb-3">THỐNG KÊ NHANH</h4>
-        <div className="grid grid-cols-2 gap-2 text-xs">
-          <div className="bg-gray-600 rounded p-2">
-            <div className="text-green-400 font-bold">{currentStore.stats?.totalProducts || 0}</div>
-            <div className="text-gray-300">Sản phẩm</div>
-          </div>
-          <div className="bg-gray-600 rounded p-2">
-            <div className="text-blue-400 font-bold">{currentStore.stats?.totalOrders || 0}</div>
-            <div className="text-gray-300">Đơn hàng</div>
-          </div>
-          <div className="bg-gray-600 rounded p-2">
-            <div className="text-yellow-400 font-bold">{currentStore.stats?.averageRating > 0 ? `${currentStore.stats.averageRating}/5` : '0/5'}</div>
-            <div className="text-gray-300">Đánh giá</div>
-          </div>
-          <div className="bg-gray-600 rounded p-2">
-            <div className="text-purple-400 font-bold">{currentStore.stats?.totalReviews || 0}</div>
-            <div className="text-gray-300">Đánh giá</div>
-          </div>
         </div>
       </div>
 
