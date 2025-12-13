@@ -233,8 +233,8 @@ const AdminUsers = () => {
                               const userRoles = user.roles || (user.role ? [user.role] : []);
                               
                               if (userRoles.length > 0) {
-                                // ✅ Ưu tiên hiển thị: ADMIN > USER
-                                const priorityOrder = ['ADMIN', 'USER'];
+                                // ✅ Ưu tiên hiển thị: ADMIN > SHIPPER > USER
+                                const priorityOrder = ['ADMIN', 'SHIPPER', 'USER'];
                                 const sortedRoles = [...userRoles].sort((a, b) => {
                                   const indexA = priorityOrder.indexOf(a);
                                   const indexB = priorityOrder.indexOf(b);
@@ -248,10 +248,13 @@ const AdminUsers = () => {
                                   <span
                                     className={`px-3 py-1 rounded-full text-xs font-bold ${
                                       primaryRole === 'ADMIN' ? 'bg-red-100 text-red-800' :
+                                      primaryRole === 'SHIPPER' ? 'bg-teal-100 text-teal-800' :
                                       'bg-blue-100 text-blue-800'
                                     }`}
                                   >
-                                    {primaryRole === 'ADMIN' ? '👑 Admin' : '👤 User'}
+                                    {primaryRole === 'ADMIN' ? '👑 Admin' : 
+                                     primaryRole === 'SHIPPER' ? '🚚 Shipper' : 
+                                     '👤 User'}
                                   </span>
                                 );
                               } else {

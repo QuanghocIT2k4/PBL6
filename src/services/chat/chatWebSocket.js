@@ -31,7 +31,7 @@ class ChatWebSocketService {
       return;
     }
 
-    const wsUrl = 'https://e-commerce-raq1.onrender.com/ws/chat';
+    const wsUrl = 'https://technova-d3gferhtgdaaaedh.eastasia-01.azurewebsites.net/ws/chat';
     
     try {
       this.socket = new SockJS(wsUrl);

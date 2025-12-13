@@ -92,6 +92,30 @@ export const getProductVariantsByStore = async (storeId, params = {}) => {
 };
 
 /**
+ * 0.2 ĐẾM VARIANT THEO TRẠNG THÁI (API mới)
+ * GET /api/v1/b2c/product-variants/store/{storeId}/count-by-status
+ */
+export const countProductVariantsByStatus = async (storeId) => {
+  try {
+    if (!storeId) {
+      return { success: false, error: 'storeId is required' };
+    }
+
+    const response = await api.get(`/api/v1/b2c/product-variants/store/${storeId}/count-by-status`);
+    return {
+      success: true,
+      data: response.data.data || response.data,
+    };
+  } catch (error) {
+    console.error('❌ [B2C] Error counting variants by status:', error);
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Không thể đếm biến thể theo trạng thái',
+    };
+  }
+};
+
+/**
  * 1. TẠO PRODUCT (SẢN PHẨM CHA)
  * POST /api/v1/b2c/products
  */

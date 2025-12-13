@@ -1,0 +1,51 @@
+================================================================================
+SO SÁNH SWAGGER 13/12/2024 vs 11/12/2024
+================================================================================
+
+### ✅ API PATHS MỚI ĐƯỢC THÊM (13/12)
+  + /api/v1/admin/shipper
+  + /api/v1/admin/shipper/shipper/{shipperId}
+  + /api/v1/admin/shipper/statistics
+  + /api/v1/admin/shipper/{shipperId}
+  + /api/v1/admin/shipper/{shipperId}/activate
+  + /api/v1/admin/shipper/{shipperId}/reset-password
+  + /api/v1/shipper/history
+  + /api/v1/shipper/order/{orderId}/pickup
+  + /api/v1/shipper/shipments/picking-up
+  + /api/v1/shipper/shipments/{orderId}
+  + /api/v1/shipper/shipments/{shipmentId}/complete
+  + /api/v1/shipper/shipments/{shipmentId}/fail
+  + /api/v1/shipper/shipments/{shipmentId}/start-shipping
+
+### ❌ API PATHS BỊ XÓA (so với 11/12)
+  (không có)
+
+### ✅ TAGS MỚI ĐƯỢC THÊM
+  + Admin - Shipper Management
+  + Shipper Management
+
+### ❌ TAGS BỊ XÓA
+  (không có)
+
+### 🌐 SERVERS
+13/12 Servers:
+  - http://localhost:8080 (Local Development server)
+  - https://e-commerce-raq1.onrender.com (Production server)
+  - {protocol}://{host}:{port} (Configurable server)
+
+11/12 Servers:
+  - http://localhost:8080 (Local Development server)
+  - https://technova-d3gferhtgdaaaedh.eastasia-01.azurewebsites.net (Production server)
+  - {protocol}://{host}:{port} (Configurable server)
+
+================================================================================
+TÓM TẮT:
+  - Tổng số paths (13/12): 206
+  - Tổng số paths (11/12): 193
+  - Paths mới thêm: 13
+  - Paths bị xóa: 0
+  - Tổng số tags (13/12): 36
+  - Tổng số tags (11/12): 34
+  - Tags mới thêm: 2
+  - Tags bị xóa: 0
+================================================================================

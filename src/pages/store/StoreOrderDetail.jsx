@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import StoreLayout from '../../layouts/StoreLayout';
 import StoreStatusGuard from '../../components/store/StoreStatusGuard';
 import StorePageHeader from '../../components/store/StorePageHeader';
@@ -16,17 +16,149 @@ import {
   deliverOrder, 
   cancelStoreOrder 
 } from '../../services/b2c/b2cOrderService';
+import { getShipmentByOrderId, updateShipmentStatus } from '../../services/b2c/shipmentService';
 
 const StoreOrderDetail = () => {
   const { orderId } = useParams();
   const navigate = useNavigate();
   const { currentStore } = useStoreContext();
   const { success: showSuccess, error: showError } = useToast();
+  const { mutate: globalMutate } = useSWRConfig();
   const [actionLoading, setActionLoading] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showShipModal, setShowShipModal] = useState(false);
   const [showDeliverModal, setShowDeliverModal] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
+
+  // ✅ Helper functions - Định nghĩa trước khi sử dụng
+  const formatPrice = (price) => {
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND'
+    }).format(price || 0);
+  };
+
+  const getShipping = (orderObj) =>
+    orderObj?.shippingAddress ||
+    orderObj?.shippingInfo ||
+    orderObj?.deliveryAddress ||
+    orderObj?.deliveryInfo ||
+    orderObj?.address ||
+    orderObj?.shipment?.shippingAddress ||
+    orderObj?.shipment?.receiverAddress ||
+    orderObj?.shipping ||
+    orderObj?.receiverAddress ||
+    orderObj?.addressInfo ||
+    null;
+
+  const getCustomerName = (orderObj) => {
+    if (!orderObj) return 'N/A';
+    
+    const s = getShipping(orderObj) || {};
+    
+    // ✅ Ưu tiên 1: Tìm trong shipping address (suggestedName từ address array)
+    const shippingName = s.suggestedName || s.recipientName || s.fullName || s.name || s.receiverName;
+    if (shippingName) return shippingName;
+    
+    // ✅ Ưu tiên 2: Tìm trong order object
+    if (orderObj.customerName) return orderObj.customerName;
+    if (orderObj.buyerName) return orderObj.buyerName;
+    
+    // ✅ Ưu tiên 3: Tìm trong nested buyer object (từ User model)
+    if (orderObj.buyer) {
+      // fullName từ User model (như trong database)
+      if (orderObj.buyer.fullName) return orderObj.buyer.fullName;
+      // name field
+      if (orderObj.buyer.name) return orderObj.buyer.name;
+      // username hoặc email làm fallback
+      if (orderObj.buyer.username) return orderObj.buyer.username;
+      if (orderObj.buyer.email) return orderObj.buyer.email;
+    }
+    
+    // ✅ Ưu tiên 4: Tìm trong nested user object
+    if (orderObj.user) {
+      if (orderObj.user.fullName) return orderObj.user.fullName;
+      if (orderObj.user.name) return orderObj.user.name;
+      if (orderObj.user.username) return orderObj.user.username;
+      if (orderObj.user.email) return orderObj.user.email;
+    }
+    
+    // ✅ Ưu tiên 5: Tìm trong shipment
+    if (orderObj.shipment?.receiverName) return orderObj.shipment.receiverName;
+    
+    return 'N/A';
+  };
+
+  const getCustomerPhone = (orderObj) => {
+    if (!orderObj) return 'N/A';
+    
+    const s = getShipping(orderObj) || {};
+    
+    // ✅ Ưu tiên 1: Tìm trong shipping address (phone từ address array)
+    const shippingPhone = s.phone || s.receiverPhone || s.contactPhone || s.mobile || s.phoneNumber;
+    if (shippingPhone) return shippingPhone;
+    
+    // ✅ Ưu tiên 2: Tìm trong order object
+    if (orderObj.customerPhone) return orderObj.customerPhone;
+    if (orderObj.buyerPhone) return orderObj.buyerPhone;
+    
+    // ✅ Ưu tiên 3: Tìm trong nested buyer object (từ User model)
+    if (orderObj.buyer) {
+      // phone từ User model (như trong database) - top level
+      if (orderObj.buyer.phone) return orderObj.buyer.phone;
+      if (orderObj.buyer.phoneNumber) return orderObj.buyer.phoneNumber;
+      
+      // ✅ Ưu tiên 3b: Tìm trong buyer.address array nếu có (từ User model)
+      if (orderObj.buyer.address && Array.isArray(orderObj.buyer.address)) {
+        // Tìm address default trước
+        const defaultAddress = orderObj.buyer.address.find(addr => addr.isDefault === true);
+        if (defaultAddress?.phone) return defaultAddress.phone;
+        
+        // Nếu không có default, lấy address đầu tiên có phone
+        const addressWithPhone = orderObj.buyer.address.find(addr => addr.phone);
+        if (addressWithPhone?.phone) return addressWithPhone.phone;
+      }
+    }
+    
+    // ✅ Ưu tiên 4: Tìm trong order.address array nếu có (address được chọn khi checkout)
+    if (orderObj.address && Array.isArray(orderObj.address)) {
+      const orderAddressWithPhone = orderObj.address.find(addr => addr.phone);
+      if (orderAddressWithPhone?.phone) return orderAddressWithPhone.phone;
+    }
+    
+    // ✅ Ưu tiên 5: Tìm trong nested user object
+    if (orderObj.user) {
+      if (orderObj.user.phone) return orderObj.user.phone;
+      if (orderObj.user.phoneNumber) return orderObj.user.phoneNumber;
+      
+      // Tìm trong user.address array
+      if (orderObj.user.address && Array.isArray(orderObj.user.address)) {
+        const defaultUserAddress = orderObj.user.address.find(addr => addr.isDefault === true);
+        if (defaultUserAddress?.phone) return defaultUserAddress.phone;
+        
+        const userAddressWithPhone = orderObj.user.address.find(addr => addr.phone);
+        if (userAddressWithPhone?.phone) return userAddressWithPhone.phone;
+      }
+    }
+    
+    // ✅ Ưu tiên 6: Tìm trong shipment
+    if (orderObj.shipment?.receiverPhone) return orderObj.shipment.receiverPhone;
+    
+    return 'N/A';
+  };
+
+  const formatAddress = (orderObj) => {
+    const s = getShipping(orderObj);
+    if (!s) return 'N/A';
+    const parts = [
+      s.homeAddress || s.detail || s.street || s.addressLine1 || s.address,
+      s.ward,
+      s.district,
+      s.city || s.cityProvince,
+      s.province,
+    ].filter(Boolean);
+    return parts.join(', ') || 'N/A';
+  };
 
   // ✅ Fetch order detail từ API
   const { data: orderData, error, isLoading, mutate } = useSWR(
@@ -36,13 +168,36 @@ const StoreOrderDetail = () => {
   );
 
   const order = orderData?.success ? orderData.data : null;
-
-  const formatPrice = (price) => {
-    return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND'
-    }).format(price || 0);
-  };
+  if (order) {
+    console.log('[StoreOrderDetail] Raw order data:', order);
+    console.log('[StoreOrderDetail] Shipping address:', getShipping(order));
+    console.log('[StoreOrderDetail] Buyer object (full):', JSON.stringify(order?.buyer, null, 2));
+    console.log('[StoreOrderDetail] User object (full):', JSON.stringify(order?.user, null, 2));
+    console.log('[StoreOrderDetail] All order keys:', Object.keys(order));
+    console.log('[StoreOrderDetail] Customer name fields:', {
+      shipping: getShipping(order),
+      customerName: order?.customerName,
+      buyerName: order?.buyerName,
+      buyer: order?.buyer,
+      'buyer.name': order?.buyer?.name,
+      'buyer.fullName': order?.buyer?.fullName,
+      'buyer.username': order?.buyer?.username,
+      user: order?.user,
+      'user.fullName': order?.user?.fullName,
+      'user.name': order?.user?.name
+    });
+    console.log('[StoreOrderDetail] Customer phone fields:', {
+      shipping: getShipping(order),
+      customerPhone: order?.customerPhone,
+      buyerPhone: order?.buyerPhone,
+      buyer: order?.buyer,
+      'buyer.phone': order?.buyer?.phone,
+      'buyer.phoneNumber': order?.buyer?.phoneNumber,
+      user: order?.user,
+      'user.phone': order?.user?.phone,
+      'user.phoneNumber': order?.user?.phoneNumber
+    });
+  }
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleString('vi-VN', {
@@ -85,6 +240,102 @@ const StoreOrderDetail = () => {
         showSuccess(result.message);
         // ✅ Force refresh order detail
         await mutate(undefined, { revalidate: true });
+        
+        // ✅ Tự động set status = PICKING_UP cho shipment mới tạo (với retry logic)
+        const tryUpdateShipmentStatus = async (retryCount = 0, maxRetries = 5) => {
+          try {
+            // Đợi tăng dần: 1s, 2s, 3s, 4s, 5s
+            const waitTime = (retryCount + 1) * 1000;
+            if (retryCount > 0) {
+              console.log(`⏳ [StoreOrderDetail] Waiting ${waitTime}ms before retry ${retryCount}/${maxRetries}...`);
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+            }
+            
+            console.log(`🔍 [StoreOrderDetail] Checking shipment for order: ${orderId} (attempt ${retryCount + 1}/${maxRetries})`);
+            const shipmentResult = await getShipmentByOrderId(orderId);
+            
+            if (shipmentResult.success && shipmentResult.data) {
+              const shipment = shipmentResult.data;
+              const shipmentId = shipment.id || shipment._id;
+              const currentStatus = shipment.status;
+              
+              console.log('✅ [StoreOrderDetail] Found shipment:', { shipmentId, currentStatus });
+              
+              // ✅ Nếu status chưa phải PICKING_UP, tự động update
+              if (currentStatus !== 'PICKING_UP') {
+                console.log('🔄 [StoreOrderDetail] Updating shipment status to PICKING_UP...');
+                const updateResult = await updateShipmentStatus(shipmentId, 'PICKING_UP');
+                
+                if (updateResult.success) {
+                  console.log('✅ [StoreOrderDetail] Shipment status updated to PICKING_UP successfully!');
+                  showSuccess('Đã cập nhật trạng thái vận đơn thành "Đang lấy hàng"');
+                  return true;
+                } else {
+                  console.warn('⚠️ [StoreOrderDetail] Failed to update shipment status:', updateResult.error);
+                  return false;
+                }
+              } else {
+                console.log('✅ [StoreOrderDetail] Shipment already has PICKING_UP status');
+                return true;
+              }
+            } else {
+              // Shipment chưa tồn tại, retry nếu còn lượt
+              if (retryCount < maxRetries - 1) {
+                console.warn(`⚠️ [StoreOrderDetail] Shipment not found, will retry... (${retryCount + 1}/${maxRetries})`);
+                return await tryUpdateShipmentStatus(retryCount + 1, maxRetries);
+              } else {
+                console.warn('⚠️ [StoreOrderDetail] Shipment not found after all retries.');
+                return false;
+              }
+            }
+          } catch (err) {
+            console.error(`❌ [StoreOrderDetail] Error on attempt ${retryCount + 1}:`, err.message);
+            
+            if (retryCount < maxRetries - 1) {
+              return await tryUpdateShipmentStatus(retryCount + 1, maxRetries);
+            } else {
+              console.error('❌ [StoreOrderDetail] All retry attempts failed');
+              return false;
+            }
+          }
+        };
+        
+        // Bắt đầu retry logic (không await để không block UI)
+        tryUpdateShipmentStatus().catch(err => {
+          console.error('❌ [StoreOrderDetail] Fatal error in shipment update logic:', err);
+        });
+        
+        // ✅ Invalidate shipments và shipper cache để tự động refresh
+        globalMutate(
+          (key) => {
+            if (Array.isArray(key)) {
+              const keyName = key[0];
+              return (
+                keyName === 'store-shipments' || // ✅ Invalidate shipments để StoreShipments tự refresh
+                keyName === 'store-shipments-stats' || // ✅ Invalidate stats để stats được cập nhật
+                keyName === 'shipper-picking-up' || // ✅ Invalidate shipper để ShipperDashboard tự refresh
+                keyName === 'shipper-history'
+              );
+            }
+            return false;
+          },
+          undefined,
+          { revalidate: true }
+        );
+        
+        // ✅ Retry refresh shipments sau 2 giây (để đảm bảo backend đã tạo shipment)
+        setTimeout(() => {
+          globalMutate(
+            (key) => {
+              if (Array.isArray(key) && (key[0] === 'store-shipments' || key[0] === 'store-shipments-stats')) {
+                return true;
+              }
+              return false;
+            },
+            undefined,
+            { revalidate: true }
+          );
+        }, 2000);
       } else {
         showError(result.error);
       }
@@ -364,37 +615,21 @@ const StoreOrderDetail = () => {
               {/* Customer Info */}
               <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Thông tin khách hàng</h2>
-                {order.shippingAddress ? (
-                  <div className="space-y-2 text-sm">
-                    <div>
-                      <span className="text-gray-600">Họ tên:</span>
-                      <p className="font-medium text-gray-900">
-                        {order.shippingAddress.suggestedName || 
-                         order.shippingAddress.recipientName || 
-                         order.shippingAddress.fullName || 
-                         order.shippingAddress.name || 
-                         'N/A'}
-                      </p>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    <span className="text-gray-600">Họ tên:</span>
+                    <p className="font-medium text-gray-900">{getCustomerName(order)}</p>
                   </div>
-                    <div>
-                      <span className="text-gray-600">Số điện thoại:</span>
-                      <p className="font-medium text-gray-900">{order.shippingAddress.phone || 'N/A'}</p>
+                  <div>
+                    <span className="text-gray-600">Số điện thoại:</span>
+                    <p className="font-medium text-gray-900">{getCustomerPhone(order)}</p>
                   </div>
-                    <div>
-                      <span className="text-gray-600">Địa chỉ:</span>
-                      <p className="font-medium text-gray-900">
-                        {[
-                          order.shippingAddress.homeAddress,
-                          order.shippingAddress.detail,
-                          order.shippingAddress.street
-                        ].find(Boolean) || ''}, {order.shippingAddress.ward || ''}, {order.shippingAddress.district || ''}, {order.shippingAddress.province || ''}
-                      </p>
-                    </div>
+                  <div>
+                    <span className="text-gray-600">Địa chỉ:</span>
+                    <p className="font-medium text-gray-900">{formatAddress(order)}</p>
                   </div>
-                ) : (
-                  <p className="text-gray-500">Không có thông tin</p>
-                )}
                 </div>
+              </div>
 
               {/* Payment Method */}
               <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">

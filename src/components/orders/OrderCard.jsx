@@ -81,18 +81,25 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
   // Get items from detail or fallback to empty
   const items = orderDetail?.items || orderDetail?.orderItems || [];
 
-  // Parse total price
-  const parseTotalPrice = () => {
-    if (totalPrice) {
-      const parsed = parseFloat(totalPrice);
-      if (!isNaN(parsed)) return parsed;
-    }
-    if (totalAmount && !isNaN(totalAmount)) return totalAmount;
-    if (finalTotal && !isNaN(finalTotal)) return finalTotal;
-    return items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  };
-
-  const calculatedTotal = parseTotalPrice();
+  // Totals breakdown (prefer detail data, fallback to order fields)
+  const subtotal = items.reduce(
+    (sum, item) => sum + (parseFloat(item.price || 0) * parseInt(item.quantity || 0)), 0
+  );
+  const shippingFeeValue = parseFloat(
+    orderDetail?.shippingFee ?? order.shippingFee ?? order.shippingCost ?? 0
+  );
+  const serviceFeeValue = parseFloat(
+    orderDetail?.serviceFee ?? order.serviceFee ?? order.platformFee ?? 5000
+  );
+  const discountValue = parseFloat(
+    order.discount ?? orderDetail?.discount ?? order.discountAmount ?? 0
+  );
+  const baseTotal = !isNaN(finalTotal) && finalTotal ? finalTotal
+    : !isNaN(totalAmount) && totalAmount ? totalAmount
+    : !isNaN(totalPrice) && totalPrice ? parseFloat(totalPrice)
+    : NaN;
+  const fallbackTotal = Math.max(0, subtotal + shippingFeeValue + serviceFeeValue - discountValue);
+  const calculatedTotal = Number.isNaN(baseTotal) ? fallbackTotal : Math.max(baseTotal, fallbackTotal);
   const statusBadge = getOrderStatusBadge(status);
   const canCancel = canCancelOrder(status);
   const canReview = canReviewOrder(status);
@@ -232,6 +239,18 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
                         {item.productName}
                       </p>
                     )}
+                    <div className="flex flex-wrap gap-2 text-[11px] text-gray-700 mb-1">
+                      {(item.colorName || item.color || item.options?.color) && (
+                        <span className="px-2 py-1 rounded bg-gray-100 border text-gray-800">
+                          Màu: {item.colorName || item.color || item.options?.color}
+                        </span>
+                      )}
+                      {(item.storage || item.attributes?.storage || item.options?.storage) && (
+                        <span className="px-2 py-1 rounded bg-gray-100 border text-gray-800">
+                          Bộ nhớ: {item.storage || item.attributes?.storage || item.options?.storage}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-3 text-xs text-gray-600">
                       <span>x{item.quantity}</span>
                       <span className="text-orange-600 font-medium">{formatCurrency(item.price)}</span>
@@ -417,14 +436,14 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
               const subtotal = items.reduce((sum, item) => 
                 sum + (parseFloat(item.price || 0) * parseInt(item.quantity || 0)), 0
               );
-              const shippingFee = parseFloat(order.shippingFee || orderDetail?.shippingFee || 30000);
-              const serviceFee = parseFloat(order.serviceFee || orderDetail?.serviceFee || order.platformFee || 0);
+              const shippingFee = parseFloat(order.shippingFee ?? orderDetail?.shippingFee ?? order.shippingCost ?? 0);
+              const serviceFee = parseFloat(orderDetail?.serviceFee ?? order.serviceFee ?? order.platformFee ?? 5000);
               
               // Tìm tất cả các field có thể chứa discount
-              const discount = parseFloat(order.discount || orderDetail?.discount || order.discountAmount || 0);
-              const promotionDiscount = parseFloat(order.promotionDiscount || orderDetail?.promotionDiscount || 0);
-              const voucherDiscount = parseFloat(order.voucherDiscount || orderDetail?.voucherDiscount || 0);
-              const couponDiscount = parseFloat(order.couponDiscount || orderDetail?.couponDiscount || 0);
+              const discount = parseFloat(order.discount ?? orderDetail?.discount ?? order.discountAmount ?? 0);
+              const promotionDiscount = parseFloat(order.promotionDiscount ?? orderDetail?.promotionDiscount ?? 0);
+              const voucherDiscount = parseFloat(order.voucherDiscount ?? orderDetail?.voucherDiscount ?? 0);
+              const couponDiscount = parseFloat(order.couponDiscount ?? orderDetail?.couponDiscount ?? 0);
               
               const total = calculatedTotal;
 

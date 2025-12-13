@@ -76,19 +76,9 @@ api.interceptors.response.use(
     }
     
     // ✅ Handle 401 Unauthorized - auto logout
-    // Chỉ redirect nếu có token (user đã login) và đang ở protected route
     if (error.response?.status === 401) {
       const isLoginPage = window.location.pathname === '/auth';
-      const hasToken = localStorage.getItem('token');
-      const isPublicRoute = ['/', '/products', '/product', '/stores', '/store', '/search'].some(
-        route => window.location.pathname.startsWith(route)
-      );
-      
-      // Chỉ redirect nếu:
-      // 1. Không phải login page
-      // 2. Có token (user đã login nhưng token invalid)
-      // 3. Không phải public route (đang ở protected route)
-      if (!isLoginPage && hasToken && !isPublicRoute) {
+      if (!isLoginPage) {
         console.warn('🔒 Unauthorized - Token expired or invalid');
         localStorage.removeItem('token');
         localStorage.removeItem('user');
@@ -97,7 +87,6 @@ api.interceptors.response.use(
         // Redirect to login page
         window.location.href = '/auth';
       }
-      // Nếu không có token và đang ở public route → Không redirect (cho phép xem trang public)
     }
     
     // ✅ Extract error message

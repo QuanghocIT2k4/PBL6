@@ -5,7 +5,7 @@
  * Helper functions for handling image URLs
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://e-commerce-raq1.onrender.com';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://technova-d3gferhtgdaaaedh.eastasia-01.azurewebsites.net';
 
 /**
  * Convert relative image path to full URL

@@ -136,6 +136,7 @@ export const addToCart = async (cartItem) => {
     const payload = [{
       productVariantId: cartItem.productVariantId,
       quantity: cartItem.quantity,
+      colorId: cartItem.colorId || cartItem.color || null,
     }];
     
     console.log('📤 Sending request to backend:', payload);

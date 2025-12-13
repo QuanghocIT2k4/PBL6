@@ -5,7 +5,7 @@ import StoreLayout from '../../layouts/StoreLayout';
 import { useStoreContext } from '../../context/StoreContext';
 import StoreStatusGuard from '../../components/store/StoreStatusGuard';
 import StorePageHeader from '../../components/store/StorePageHeader';
-import { getProductVariantsByStore, updateVariantPrice, updateVariantStock, deleteProductVariant, updateVariantImages, updateVariantColor } from '../../services/b2c/b2cProductService';
+import { getProductVariantsByStore, updateVariantPrice, updateVariantStock, deleteProductVariant, updateVariantImages, updateVariantColor, countProductVariantsByStatus } from '../../services/b2c/b2cProductService';
 import { getInventoryAnalytics } from '../../services/b2c/b2cAnalyticsService';
 import { useToast } from '../../hooks/useToast';
 
@@ -35,6 +35,15 @@ const StoreProductVariants = () => {
   );
 
   const analytics = inventoryAnalytics?.success ? inventoryAnalytics.data : null;
+
+  // ✅ Fetch variant counts by status (API riêng - không phụ thuộc vào search/filter)
+  const { data: variantCountsData } = useSWR(
+    currentStore?.id ? ['variant-counts-by-status', currentStore.id] : null,
+    () => countProductVariantsByStatus(currentStore.id),
+    { revalidateOnFocus: false }
+  );
+
+  const variantCounts = variantCountsData?.success ? variantCountsData.data : null;
 
   // Helpers
   const formatPrice = (price) => {
@@ -108,9 +117,13 @@ const StoreProductVariants = () => {
   const totalPages = variantsData?.data?.totalPages || 0;
   const totalElements = variantsData?.data?.totalElements || 0;
   
-  const approvedCount = variants.filter(v => deriveApprovalStatus(v) === 'APPROVED').length;
-  const pendingCount = variants.filter(v => deriveApprovalStatus(v) === 'PENDING').length;
-  const outOfStockCount = variants.filter(v => ((v.stock ?? v.stockQuantity ?? 0) <= 0)).length;
+  // ✅ Dùng API count-by-status để lấy số lượng chính xác (không phụ thuộc vào search/filter)
+  // API trả về: { approved: number, pending: number, rejected: number, outOfStock: number, total: number }
+  const approvedCount = variantCounts?.approved || variantCounts?.APPROVED || 0;
+  const pendingCount = variantCounts?.pending || variantCounts?.PENDING || variantCounts?.waiting || 0;
+  const rejectedCount = variantCounts?.rejected || variantCounts?.REJECTED || 0;
+  const outOfStockCount = variantCounts?.outOfStock || variantCounts?.outOfStockCount || 0;
+  const totalVariants = variantCounts?.total || totalElements || 0;
 
   // Badge trạng thái duyệt
   const getApprovalBadge = (status) => {
@@ -369,7 +382,7 @@ const StoreProductVariants = () => {
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-600">Tổng biến thể</p>
-                      <p className="text-xl font-bold text-gray-900">{totalElements || variants.length}</p>
+                      <p className="text-xl font-bold text-gray-900">{totalVariants}</p>
                       <p className="text-xs text-gray-500">Tất cả</p>
                     </div>
                   </div>

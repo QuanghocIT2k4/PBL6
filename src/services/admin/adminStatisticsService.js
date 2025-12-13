@@ -28,18 +28,26 @@ import api from '../common/api';
  */
 export const getOverviewStatistics = async () => {
   try {
-    console.log('📥 Fetching admin overview statistics');
-
     const response = await api.get('/api/v1/admin/statistics/overview');
 
-    console.log('✅ Admin overview statistics:', response.data);
+    // Handle different response structures
+    let data = response.data;
+    
+    // If response has nested data
+    if (data.data) {
+      data = data.data;
+    }
+    
+    // If response has success wrapper
+    if (data.success && data.data) {
+      data = data.data;
+    }
 
     return {
       success: true,
-      data: response.data.data || response.data,
+      data: data,
     };
   } catch (error) {
-    console.error('❌ Error fetching admin overview statistics:', error);
     return {
       success: false,
       error: error.response?.data?.message || 'Không thể tải thống kê tổng quan',
@@ -193,23 +201,71 @@ export const getRevenueByDateRange = async (params = {}) => {
  */
 export const getRevenueChartData = async (period = 'MONTH') => {
   try {
-    console.log('📥 Fetching revenue chart data:', { period });
+    if (!period) {
+      throw new Error('period là bắt buộc (WEEK, MONTH, hoặc YEAR)');
+    }
 
+    console.log('📥 [getRevenueChartData] Fetching với period:', period);
     const response = await api.get('/api/v1/admin/statistics/chart-data', {
       params: { period },
     });
 
-    console.log('✅ Revenue chart data:', response.data);
+    console.log('📥 [getRevenueChartData] Raw response:', response);
+    console.log('📥 [getRevenueChartData] response.data:', response.data);
 
+    // Handle different response structures
+    let chartData = response.data;
+    if (chartData.data) {
+      console.log('📥 [getRevenueChartData] Found nested data.data');
+      chartData = chartData.data;
+    }
+    
+    // Log structure để debug
+    console.log('📥 [getRevenueChartData] chartData structure:', {
+      isArray: Array.isArray(chartData),
+      type: typeof chartData,
+      keys: chartData && typeof chartData === 'object' ? Object.keys(chartData) : 'N/A',
+      value: chartData
+    });
+    
+    // Ensure it's an array
+    if (!Array.isArray(chartData)) {
+      console.log('📥 [getRevenueChartData] chartData is not array, type:', typeof chartData);
+      // If it's an object with array property, extract it
+      if (chartData.chartData && Array.isArray(chartData.chartData)) {
+        console.log('📥 [getRevenueChartData] Found chartData.chartData array');
+        chartData = chartData.chartData;
+      } else if (chartData.items && Array.isArray(chartData.items)) {
+        console.log('📥 [getRevenueChartData] Found chartData.items array');
+        chartData = chartData.items;
+      } else if (chartData.content && Array.isArray(chartData.content)) {
+        console.log('📥 [getRevenueChartData] Found chartData.content array');
+        chartData = chartData.content;
+      } else if (chartData.data && Array.isArray(chartData.data)) {
+        console.log('📥 [getRevenueChartData] Found chartData.data array');
+        chartData = chartData.data;
+      } else if (chartData.values && Array.isArray(chartData.values)) {
+        console.log('📥 [getRevenueChartData] Found chartData.values array');
+        chartData = chartData.values;
+      } else {
+        console.log('📥 [getRevenueChartData] Object keys:', Object.keys(chartData || {}));
+        console.log('📥 [getRevenueChartData] Wrapping single object in array');
+        // If it's a single object, wrap it in array
+        chartData = [chartData];
+      }
+    }
+
+    console.log('✅ [getRevenueChartData] Final chartData:', chartData);
     return {
       success: true,
-      data: response.data.data || response.data,
+      data: chartData,
     };
   } catch (error) {
-    console.error('❌ Error fetching revenue chart data:', error);
+    console.error('❌ [getRevenueChartData] Error:', error);
+    console.error('❌ [getRevenueChartData] Error response:', error.response);
     return {
       success: false,
-      error: error.response?.data?.message || 'Không thể tải dữ liệu biểu đồ',
+      error: error.response?.data?.message || error.message || 'Không thể tải dữ liệu biểu đồ',
     };
   }
 };

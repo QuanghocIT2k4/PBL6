@@ -66,9 +66,13 @@ const LoginForm = ({ onSwitchToSignUp, onSwitchToForgotPassword }) => {
         await new Promise(resolve => setTimeout(resolve, 100));
         const userRoles = result.data.user.roles || [];
         const isAdmin = userRoles.includes('ADMIN') || userRoles.includes('ROLE_ADMIN');
+        const isShipper = userRoles.includes('SHIPPER') || userRoles.includes('ROLE_SHIPPER');
         
         if (isAdmin) {
           window.location.href = '/admin-dashboard';
+        } else if (isShipper) {
+          // Shipper → redirect đến trang shipper
+          window.location.href = '/shipper';
         } else {
           // Kiểm tra user có store không bằng cách gọi API
           checkUserStores(result.data.user);

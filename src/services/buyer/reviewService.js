@@ -95,22 +95,76 @@ export const getProductVariantReviewStats = async (productVariantId) => {
  * @param {string} reviewData.orderId - Order ID
  * @param {number} reviewData.rating - Rating (1-5)
  * @param {string} reviewData.comment - Review comment (optional)
- * @param {string[]} reviewData.images - Image URLs (optional)
+ * @param {File[]} reviewData.imageFiles - Image files (optional) - nếu có thì dùng FormData
+ * @param {string[]} reviewData.images - Image URLs (optional) - chỉ dùng khi không có imageFiles
  * @returns {Promise} Created review
  */
 export const createReview = async (reviewData) => {
   try {
-    const response = await api.post('/api/v1/buyer/reviews', reviewData);
+    console.log('📝 [ReviewService] Creating review with data:', reviewData);
+
+    // Guard tối thiểu
+    if (!reviewData?.rating || reviewData.rating < 1 || reviewData.rating > 5) {
+      return { success: false, error: 'Vui lòng chọn số sao (1-5).' };
+    }
+    if (!reviewData?.productVariantId) {
+      return { success: false, error: 'Thiếu productVariantId.' };
+    }
+    if (!reviewData?.orderId) {
+      return { success: false, error: 'Thiếu orderId.' };
+    }
+    
+    // ✅ API luôn dùng multipart/form-data (theo Swagger) - giống như createProductVariant và createStore
+    const formData = new FormData();
+    
+    // ✅ Backend Spring Boot mong đợi field 'review' là JSON Blob với Content-Type application/json
+    const reviewJson = {
+      rating: reviewData.rating,
+      comment: reviewData.comment || '',
+      ...(reviewData.productVariantId && { productVariantId: reviewData.productVariantId }),
+      ...(reviewData.orderId && { orderId: reviewData.orderId }),
+    };
+    
+    console.log('📝 [ReviewService] Review JSON:', reviewJson);
+    
+    // ✅ Gửi review như Blob với Content-Type application/json (giống createProductVariant và createStore)
+    // Swagger UI hiển thị review là object, nhưng trong multipart/form-data cần gửi như Blob
+    const reviewBlob = new Blob([JSON.stringify(reviewJson)], { type: 'application/json' });
+    formData.append('review', reviewBlob, 'review.json'); // đặt filename để tránh bị hiểu thành octet-stream
+    
+    // ✅ Append images nếu có
+    if (reviewData.imageFiles && reviewData.imageFiles.length > 0) {
+      console.log('📷 [ReviewService] Appending', reviewData.imageFiles.length, 'images');
+      reviewData.imageFiles.forEach((file, index) => {
+        formData.append('images', file);
+        console.log(`📷 [ReviewService] Image ${index + 1}:`, file.name, file.type, file.size);
+      });
+    }
+    
+    // ✅ Debug: Log FormData contents
+    console.log('📦 [ReviewService] FormData entries:');
+    for (let pair of formData.entries()) {
+      console.log('  -', pair[0], ':', pair[1] instanceof File ? `File(${pair[1].name})` : pair[1] instanceof Blob ? `Blob(${pair[1].type})` : pair[1]);
+    }
+    
+    // ✅ Không cần set Content-Type, interceptor sẽ tự xử lý FormData
+    const response = await api.post('/api/v1/buyer/reviews', formData);
+    
     return {
       success: true,
       data: response.data.data,
       message: 'Đánh giá của bạn đã được gửi thành công!',
     };
   } catch (error) {
-    console.error('Error creating review:', error);
+    console.error('❌ Error creating review:', error);
+    console.error('❌ Error response:', error?.response?.data);
+    console.error('❌ Error status:', error?.response?.status);
+    console.error('❌ Error headers:', error?.response?.headers);
+    
     // Extract error message from API response
     const errorMessage = error?.response?.data?.error || 
                          error?.response?.data?.message || 
+                         error?.response?.data?.detail ||
                          error?.message || 
                          'Không thể gửi đánh giá. Vui lòng kiểm tra lại thông tin.';
     return {
@@ -126,12 +180,19 @@ export const createReview = async (reviewData) => {
  * @param {object} reviewData - Updated review data
  * @param {number} reviewData.rating - Rating (1-5)
  * @param {string} reviewData.comment - Review comment
- * @param {string[]} reviewData.images - Image URLs
+ * @param {File[]} reviewData.imageFiles - Image files (optional) - nếu có thì dùng FormData
+ * @param {string[]} reviewData.images - Image URLs (optional) - chỉ dùng khi không có imageFiles
  * @returns {Promise} Updated review
  */
 export const updateReview = async (reviewId, reviewData) => {
   try {
-    const response = await api.put(`/api/v1/buyer/reviews/${reviewId}`, reviewData);
+    let response;
+    
+    // ✅ PUT review dùng application/json (theo Swagger), không phải multipart/form-data
+    // Nếu có ảnh thì cần upload riêng hoặc backend hỗ trợ multipart
+    // Hiện tại chỉ gửi JSON
+    response = await api.put(`/api/v1/buyer/reviews/${reviewId}`, reviewData);
+    
     return {
       success: true,
       data: response.data.data,

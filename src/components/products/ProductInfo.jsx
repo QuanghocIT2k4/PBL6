@@ -166,7 +166,13 @@ const ProductInfo = ({ product, variantsOverride = [], initialVariantId }) => {
       setIsAdding(true);
       try {
         // ✅ CỘNG DỒN SỐ LƯỢNG CHO SẢN PHẨM CÙNG VARIANT  
-        const result = await addToCart(product, quantity, selectedAttributes);
+        const selectedColorId = selectedColor?._id || selectedColor?.id || selectedColor?.colorId;
+        const optionsWithColor = {
+          ...selectedAttributes,
+          color: selectedColor?.colorName || selectedColor?.name,
+          colorId: selectedColorId
+        };
+        const result = await addToCart(product, quantity, optionsWithColor);
         
         if (result.success) {
           // Show success notification
@@ -216,7 +222,13 @@ const ProductInfo = ({ product, variantsOverride = [], initialVariantId }) => {
     setIsBuying(true);
     try {
       // Thêm sản phẩm vào giỏ hàng trước (tạo item riêng cho "Mua ngay")
-      const result = await addToCart(product, quantity, currentOptions);
+      const selectedColorId = selectedColor?._id || selectedColor?.id || selectedColor?.colorId;
+      const optionsWithColor = {
+        ...currentOptions,
+        color: selectedColor?.colorName || selectedColor?.name,
+        colorId: selectedColorId
+      };
+      const result = await addToCart(product, quantity, optionsWithColor);
       
       if (result.success) {
         // Show processing notification

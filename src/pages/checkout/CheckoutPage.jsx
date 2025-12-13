@@ -83,7 +83,8 @@ const CheckoutPage = () => {
   const productTotal = getSelectedTotalPrice();
   const discount = appliedPromotion?.discount || 0;
   const shippingFee = 30000; // Phí vận chuyển cố định 30k
-  const finalTotal = Math.max(0, productTotal - discount + shippingFee);
+  const serviceFee = 5000; // Phụ thu dịch vụ cố định 5k
+  const finalTotal = Math.max(0, productTotal - discount + shippingFee + serviceFee);
   
   // Debug log
   useEffect(() => {
@@ -201,6 +202,7 @@ const CheckoutPage = () => {
       const selectedItems = items.map(it => ({
         productVariantId: it.productVariantId || it.product?.id,
         quantity: it.quantity || 1,
+        colorId: it.options?.colorId || it.options?.color || null,
       }));
       
       // ✅ Build address object
@@ -259,6 +261,7 @@ const CheckoutPage = () => {
         paymentMethod: paymentMethod === 'VNPAY' ? 'BANK_TRANSFER' : paymentMethod.toUpperCase(),
         note: note.trim(),
         address: addressDTO,
+        serviceFee,
         ...(platformPromotions && { platformPromotions }),
         ...(storePromotions && Object.keys(storePromotions).length > 0 && { storePromotions }),
       };
@@ -279,6 +282,7 @@ const CheckoutPage = () => {
       console.log('🏪 [Checkout] Store ID:', storeId);
       console.log('💰 [Checkout] Order total:', productTotal);
       console.log('💸 [Checkout] Discount:', discount);
+      console.log('🧾 [Checkout] Service fee:', serviceFee);
       console.log('💵 [Checkout] Final total:', finalTotal);
       
       const result = await createOrder(orderData);
@@ -545,6 +549,7 @@ const CheckoutPage = () => {
                 </div>
               )}
               <div className="flex justify-between"><span>Phí vận chuyển</span><span>{formatPrice(shippingFee)}đ</span></div>
+              <div className="flex justify-between"><span>Phụ thu dịch vụ</span><span>{formatPrice(serviceFee)}đ</span></div>
               <div className="border-t pt-2 font-semibold text-lg flex justify-between">
                 <span>Tổng cộng</span>
                 <span className="text-red-600">

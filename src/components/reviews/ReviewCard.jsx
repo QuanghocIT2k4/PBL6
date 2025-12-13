@@ -41,6 +41,16 @@ const ReviewCard = ({ review, onEdit, onDelete, isOwner = false }) => {
     product = {},
   } = review;
 
+  // Chuẩn hóa mảng ảnh từ nhiều định dạng trả về khác nhau
+  const normalizedImages =
+    (Array.isArray(images) && images.length > 0 && images) ||
+    (Array.isArray(review.imageUrls) && review.imageUrls.length > 0 && review.imageUrls) ||
+    (Array.isArray(review.reviewImages) && review.reviewImages.length > 0
+      ? review.reviewImages
+          .map((img) => img?.url || img?.imageUrl || img?.image || img)
+          .filter(Boolean)
+      : []);
+
   // Format date
   const timeAgo = formatTimeAgo(createdAt);
   const isEdited = updatedAt && updatedAt !== createdAt;
@@ -151,9 +161,9 @@ const ReviewCard = ({ review, onEdit, onDelete, isOwner = false }) => {
         )}
 
         {/* Images */}
-        {images && images.length > 0 && (
+        {normalizedImages && normalizedImages.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {images.map((image, index) => (
+            {normalizedImages.map((image, index) => (
               <button
                 key={index}
                 onClick={() => setSelectedImage(image)}

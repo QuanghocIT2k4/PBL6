@@ -184,6 +184,55 @@ export const getVariantCountByStockStatus = async (storeId) => {
   }
 };
 
+/**
+ * 6. GET PRODUCTS SOLD CHART DATA 📊
+ * GET /api/v1/b2c/statistics/products/chart-data
+ * 
+ * Xem dữ liệu biểu đồ sản phẩm bán được theo period
+ * (Nếu API chưa có, sẽ thử dùng API tương tự hoặc tính từ orders)
+ */
+export const getProductsSoldChartData = async (storeId, period = 'MONTH') => {
+  try {
+    if (!storeId) {
+      throw new Error('storeId là bắt buộc');
+    }
+
+    console.log('📥 Fetching products sold chart data for store:', storeId, 'period:', period);
+
+    // Thử gọi API mới (nếu có)
+    try {
+      const response = await api.get('/api/v1/b2c/statistics/products/chart-data', {
+        params: { storeId, period },
+      });
+
+      console.log('✅ Products sold chart data:', response.data);
+
+      return {
+        success: true,
+        data: response.data.data || response.data,
+      };
+    } catch (apiError) {
+      // Nếu API chưa có, thử dùng API khác hoặc trả về empty
+      console.warn('⚠️ Products chart API not available, trying alternative...');
+      
+      // Có thể tính từ orders nếu cần
+      // Hoặc trả về empty data để hiển thị "Chưa có dữ liệu"
+      return {
+        success: false,
+        error: 'API chưa được implement',
+        data: null,
+      };
+    }
+  } catch (error) {
+    console.error('❌ Error fetching products sold chart data:', error);
+    return {
+      success: false,
+      error: error.response?.data?.message || error.message || 'Không thể tải dữ liệu biểu đồ sản phẩm bán được',
+      data: null,
+    };
+  }
+};
+
 // ===============================================
 // 🛠️ HELPER FUNCTIONS
 // ===============================================

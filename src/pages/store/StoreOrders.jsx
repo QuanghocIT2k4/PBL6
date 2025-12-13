@@ -6,6 +6,7 @@ import { useStoreContext } from '../../context/StoreContext';
 import StoreStatusGuard from '../../components/store/StoreStatusGuard';
 import StorePageHeader from '../../components/store/StorePageHeader';
 import { getStoreOrders, getStoreOrderById, confirmOrder, shipOrder, deliverOrder } from '../../services/b2c/b2cOrderService';
+import { getShipmentByOrderId, updateShipmentStatus } from '../../services/b2c/shipmentService';
 import { getOrderStatusAnalytics } from '../../services/b2c/b2cAnalyticsService';
 import { useToast } from '../../context/ToastContext';
 import { confirmAction } from '../../utils/sweetalert';
@@ -37,7 +38,7 @@ const StoreOrders = () => {
     try {
       const result = await confirmOrder(orderId, currentStore.id);
       if (result.success) {
-        success(result.message || 'Xác nhận đơn hàng thành công!');
+        success(result.message || 'Xác nhận đơn hàng thành công! Vận đơn sẽ được tạo tự động.');
         
         // ✅ Refresh cả orders và analytics với revalidate
         // Invalidate tất cả queries liên quan đến orders
@@ -46,17 +47,46 @@ const StoreOrders = () => {
           mutateAnalytics(undefined, { revalidate: true }), // Force refresh analytics
         ]);
         
-        // Invalidate tất cả store-orders và order-detail queries bằng cách mutate với matcher
+        console.log('🔄 [StoreOrders] Invalidating shipments cache after confirm order...');
+        
+        // ⚠️ LƯU Ý: Backend KHÔNG tự động tạo shipment khi confirm order
+        // Shipment sẽ được tạo khi shipper pickup hoặc cần backend sửa để tự động tạo
+        // Tạm thời: Chỉ invalidate cache, không retry tìm shipment
+        
+        // ✅ Invalidate tất cả store-orders, order-detail, shipments và shipper queries
         globalMutate(
           (key) => {
             if (Array.isArray(key)) {
-              return key[0] === 'store-orders' || key[0] === 'store-order-detail';
+              const keyName = key[0];
+              return (
+                keyName === 'store-orders' || 
+                keyName === 'store-order-detail' ||
+                keyName === 'store-shipments' || // ✅ Invalidate shipments để StoreShipments tự refresh
+                keyName === 'store-shipments-stats' || // ✅ Invalidate stats để stats được cập nhật
+                keyName === 'shipper-picking-up' || // ✅ Invalidate shipper để ShipperDashboard tự refresh
+                keyName === 'shipper-history'
+              );
             }
             return false;
           },
           undefined,
           { revalidate: true }
         );
+        
+        // ✅ Retry refresh shipments sau 2 giây (để đảm bảo backend đã tạo shipment)
+        setTimeout(() => {
+          console.log('🔄 [StoreOrders] Retry refresh shipments (2s)...');
+          globalMutate(
+            (key) => {
+              if (Array.isArray(key) && (key[0] === 'store-shipments' || key[0] === 'store-shipments-stats')) {
+                return true;
+              }
+              return false;
+            },
+            undefined,
+            { revalidate: true }
+          );
+        }, 2000);
       } else {
         showError(result.error || 'Không thể xác nhận đơn hàng');
       }

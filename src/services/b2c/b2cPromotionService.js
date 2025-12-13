@@ -225,12 +225,37 @@ export const deletePromotion = async (promotionId) => {
   }
 };
 
+/**
+ * 11. ĐẾM KHUYẾN MÃI THEO TRẠNG THÁI (API mới)
+ * GET /api/v1/b2c/promotions/store/{storeId}/count-by-status
+ */
+export const countPromotionsByStatus = async (storeId) => {
+  try {
+    if (!storeId) {
+      return { success: false, error: 'storeId is required' };
+    }
+
+    const response = await api.get(`/api/v1/b2c/promotions/store/${storeId}/count-by-status`);
+    return {
+      success: true,
+      data: response.data.data || response.data,
+    };
+  } catch (error) {
+    console.error('❌ Count promotions by status error:', error);
+    return {
+      success: false,
+      error: error.response?.data?.message || error.message || 'Không thể đếm khuyến mãi theo trạng thái',
+    };
+  }
+};
+
 export default {
   getStorePromotions,
   getActivePromotions,
   getInactivePromotions,
   getExpiredPromotions,
   getDeletedPromotions,
+  countPromotionsByStatus,
   createPromotion,
   updatePromotion,
   activatePromotion,

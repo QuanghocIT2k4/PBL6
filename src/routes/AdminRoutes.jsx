@@ -10,6 +10,7 @@ import AdminVariants from '../pages/admin/AdminVariants';
 import AdminPromotions from '../pages/admin/AdminPromotions';
 import AdminWithdrawals from '../pages/admin/AdminWithdrawals';
 import AdminRevenue from '../pages/admin/AdminRevenue';
+import AdminShippers from '../pages/admin/AdminShippers';
 
 const AdminRoutes = () => {
   return (
@@ -25,6 +26,7 @@ const AdminRoutes = () => {
           <Route path="/withdrawals" element={<AdminWithdrawals />} />
           <Route path="/statistics" element={<AdminRevenue />} />
           <Route path="/revenue" element={<AdminRevenue />} /> {/* Backward compatibility */}
+          <Route path="/shippers" element={<AdminShippers />} />
         </Routes>
       </AdminLayout>
     </AdminAuthGuard>

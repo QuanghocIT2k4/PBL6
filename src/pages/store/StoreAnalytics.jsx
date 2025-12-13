@@ -32,6 +32,20 @@ const StoreAnalytics = () => {
   const [timeRange, setTimeRange] = useState('30days');
   const [analyticsData, setAnalyticsData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadingWeekChart, setLoadingWeekChart] = useState(false);
+  const [loadingCharts, setLoadingCharts] = useState(true);
+  const [chartModeMonth, setChartModeMonth] = useState('revenue'); // revenue | orders
+  const [chartModeWeek, setChartModeWeek] = useState('revenue'); // revenue | orders
+
+  // Helper: Add timeout to API calls
+  const withTimeout = (promise, timeoutMs = 10000) => {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), timeoutMs)
+      )
+    ]);
+  };
 
   // Fetch analytics data using new Shop Statistics APIs
   useEffect(() => {
@@ -42,122 +56,156 @@ const StoreAnalytics = () => {
       try {
         console.log('📊 Fetching analytics using new Shop Statistics APIs for store:', currentStore.id);
         
-        // ✅ NEW: Use Shop Statistics APIs (5 endpoints)
-        const [
-          overviewResult,
-          revenueChartResult,
-          orderCountResult,
-          ordersChartResult,
-          variantCountResult
-        ] = await Promise.all([
+        const normalizeRevenueChart = (raw) => {
+          if (Array.isArray(raw)) return raw;
+          if (!raw || typeof raw !== 'object') return [];
+          if (Array.isArray(raw.revenues) && Array.isArray(raw.labels)) {
+            return raw.labels.map((label, idx) => {
+              const v = raw.revenues[idx] ?? 0;
+              return { label, value: v, totalRevenue: v, revenue: v, total: v };
+            });
+          }
+          if (Array.isArray(raw.data)) return raw.data;
+          return [];
+        };
+
+        const normalizeOrdersChart = (raw) => {
+          if (Array.isArray(raw)) return raw;
+          if (!raw || typeof raw !== 'object') return [];
+          // ✅ API trả về orderCounts (theo Swagger)
+          const vals = raw.orderCounts || raw.orders || raw.counts || raw.values;
+          if (Array.isArray(vals) && Array.isArray(raw.labels)) {
+            return raw.labels.map((label, idx) => {
+              const v = vals[idx] ?? 0;
+              return { label, value: v, orders: v, count: v, total: v, orderCounts: v };
+            });
+          }
+          if (Array.isArray(raw.data)) return raw.data;
+          return [];
+        };
+
+        // ✅ Load overview stats first (no timeout to avoid mất dữ liệu)
+        const [overviewResult, orderCountResult, variantCountResult] = await Promise.all([
           getOverviewStatistics(currentStore.id),
-          getRevenueChartData(currentStore.id, 'MONTH'),
           getOrderCountByStatus(currentStore.id),
-          getOrdersChartData(currentStore.id, 'MONTH'),
           getVariantCountByStockStatus(currentStore.id),
         ]);
-        
-        // Process API responses - ensure arrays for charts
+
+        // Set initial data immediately (progressive loading)
         const overview = overviewResult.success ? overviewResult.data : {};
-        const revenueChart = revenueChartResult.success ? 
-          (Array.isArray(revenueChartResult.data) ? revenueChartResult.data : []) : [];
         const orderCount = orderCountResult.success ? orderCountResult.data : {};
-        const ordersChart = ordersChartResult.success ? 
-          (Array.isArray(ordersChartResult.data) ? ordersChartResult.data : []) : [];
         const variantCount = variantCountResult.success ? variantCountResult.data : {};
-        
-        console.log('🔍 [DEBUG] Processed data:', {
-          overview,
-          revenueChart,
-          orderCount,
-          ordersChart,
-          variantCount
-        });
-        
-        // Calculate totals from individual APIs since overview is empty
-        const totalOrders = Object.values(orderCount).reduce((sum, count) => sum + (count || 0), 0);
+        // ✅ API trả về totalOrders trực tiếp, nếu không có thì tính tổng
+        const totalOrders = orderCount.totalOrders || Object.values(orderCount).reduce((sum, count) => {
+          // Skip các key không phải số (như totalOrders, nếu có)
+          if (typeof count === 'number') return sum + count;
+          return sum;
+        }, 0);
         const totalVariants = Object.values(variantCount).reduce((sum, count) => sum + (count || 0), 0);
-        
-        // Build analytics data from API responses
+
+        // Set initial data without charts (show immediately)
         setAnalyticsData({
-          // Overview stats - calculated from other APIs
-          revenue: { 
-            total: overview.totalRevenue || 0, // Still 0 until backend fixes overview API
-            growth: overview.revenueGrowth || 0, 
-            chart: revenueChart || [] 
-          },
-          orders: { 
-            total: totalOrders, // ✅ Calculated from orderCount API
-            growth: overview.orderGrowth || 0, 
-            chart: ordersChart || [] 
-          },
-          
-          // Order status from API
+          revenue: { total: overview.totalRevenue || 0, growth: overview.revenueGrowth || 0, chartMonth: [], chartWeek: [] },
+          orders: { total: totalOrders || orderCount.totalOrders || 0, growth: overview.orderGrowth || 0, chartMonth: [], chartWeek: [] },
+          // ✅ Order status - API trả về camelCase với suffix "Orders"
           orderStatus: {
-            pending: orderCount.PENDING || 0,
-            confirmed: orderCount.CONFIRMED || 0,
-            shipping: orderCount.SHIPPING || 0,
-            delivered: orderCount.DELIVERED || 0,
-            cancelled: orderCount.CANCELLED || 0,
+            pending: orderCount.pendingOrders || orderCount.PENDING || orderCount.NEW || orderCount.CREATED || 0,
+            processing: orderCount.confirmedOrders || orderCount.CONFIRMED || orderCount.PROCESSING || orderCount.IN_PROGRESS || 0, // "Đang xử lý" = confirmedOrders
+            shipped: orderCount.shippingOrders || orderCount.SHIPPING || orderCount.IN_DELIVERY || orderCount.DELIVERING || 0, // "Đang giao"
+            delivered: orderCount.deliveredOrders || orderCount.DELIVERED || orderCount.COMPLETED || orderCount.DONE || 0,
+            cancelled: orderCount.cancelledOrders || orderCount.CANCELLED || orderCount.CANCELED || orderCount.REJECTED || 0,
           },
-          
-          // Variant/Product stats - calculated from variant count API
           products: {
-            total: totalVariants, // ✅ Calculated from variantCount API
+            total: totalVariants,
             active: variantCount.IN_STOCK || 0,
             inactive: (variantCount.LOW_STOCK || 0) + (variantCount.OUT_OF_STOCK || 0),
-            topSelling: overview.topProducts || [],
           },
-          
-          // Inventory from variant count API
           inventory: {
-            total: totalVariants, // ✅ Calculated total
+            total: totalVariants,
             inStock: variantCount.IN_STOCK || 0,
             lowStock: variantCount.LOW_STOCK || 0,
             outOfStock: variantCount.OUT_OF_STOCK || 0,
           },
-          
-          // Default values for other metrics (not in new APIs)
-          customers: { total: overview.totalCustomers || 0, new: 0, returning: 0, chart: [] },
-          topCustomers: overview.topCustomers || [],
-          customerGrowth: { growth: 0, chart: [] },
-          reviews: { total: overview.totalReviews || 0, average: overview.averageRating || 0, chart: [] },
-          ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
-          salesTrend: { chart: revenueChart || [] },
-          salesByCategory: overview.salesByCategory || [],
-          performance: { 
-            conversionRate: overview.conversionRate || 0, 
-            avgOrderValue: overview.avgOrderValue || 0, 
-            customerLifetimeValue: overview.customerLifetimeValue || 0 
+          // ✅ Tính toán các metrics từ dữ liệu hiện có
+          metrics: {
+            cancellationRate: totalOrders > 0 ? ((orderCount.cancelledOrders || orderCount.CANCELLED || 0) / totalOrders * 100).toFixed(1) : '0.0',
+            successRate: totalOrders > 0 ? ((orderCount.deliveredOrders || orderCount.DELIVERED || 0) / totalOrders * 100).toFixed(1) : '0.0',
+            avgOrderValue: totalOrders > 0 ? (overview.totalRevenue || 0) / totalOrders : 0,
+            todayRevenue: overview.todayRevenue || 0,
+            newOrdersToday: overview.newOrdersToday || 0,
           },
         });
+        setLoading(false); // ✅ Show UI immediately
+
+        // Step 2: Load charts (may be slow - don't block UI)
+        setLoadingCharts(true);
+        const [
+          revenueChartMonthResult,
+          ordersChartMonthResult,
+        ] = await Promise.all([
+          getRevenueChartData(currentStore.id, 'MONTH'),
+          getOrdersChartData(currentStore.id, 'MONTH'),
+        ]);
+        
+        // Process chart data
+        const revenueChartMonth = revenueChartMonthResult.success
+          ? normalizeRevenueChart(revenueChartMonthResult.data)
+          : [];
+        const ordersChartMonth = ordersChartMonthResult.success
+          ? normalizeOrdersChart(ordersChartMonthResult.data)
+          : [];
+        
+        // Calculate revenue total from chart
+        const revenueTotal = (overview.totalRevenue ?? 0) ||
+          revenueChartMonth.reduce(
+            (sum, item) => sum + (item.totalRevenue ?? item.revenue ?? item.total ?? 0),
+            0
+          );
+
+        // ✅ Update analytics data with charts (progressive loading)
+        setAnalyticsData(prev => ({
+          ...prev,
+          revenue: {
+            ...prev.revenue,
+            total: revenueTotal,
+            chartMonth: revenueChartMonth,
+          },
+          orders: {
+            ...prev.orders,
+            chartMonth: ordersChartMonth,
+          },
+        }));
+        
+        setLoadingCharts(false);
         
         console.log('✅ Analytics loaded from Shop Statistics APIs:', {
           overview: overviewResult.success,
-          revenueChart: revenueChartResult.success,
+          revenueChartMonth: revenueChartMonthResult.success,
           orderCount: orderCountResult.success,
-          ordersChart: ordersChartResult.success,
+          ordersChartMonth: ordersChartMonthResult.success,
           variantCount: variantCountResult.success,
         });
         
       } catch (error) {
         console.error('❌ Error fetching analytics:', error);
-        // Set empty data on error
-        setAnalyticsData({
-          revenue: { total: 0, growth: 0, chart: [] },
-          orders: { total: 0, growth: 0, chart: [] },
-          orderStatus: { pending: 0, confirmed: 0, shipping: 0, delivered: 0, cancelled: 0 },
-          products: { total: 0, active: 0, inactive: 0, topSelling: [] },
-          customers: { total: 0, new: 0, returning: 0, chart: [] },
-          topCustomers: [],
-          customerGrowth: { growth: 0, chart: [] },
-          reviews: { total: 0, average: 0, chart: [] },
-          ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+        setLoadingCharts(false);
+        // Set empty data on error (but keep what we already loaded)
+        if (!analyticsData) {
+          setAnalyticsData({
+            revenue: { total: 0, growth: 0, chartMonth: [], chartWeek: [] },
+            orders: { total: 0, growth: 0, chartMonth: [], chartWeek: [] },
+            orderStatus: { pending: 0, confirmed: 0, shipping: 0, delivered: 0, cancelled: 0 },
+            products: { total: 0, active: 0, inactive: 0 },
           inventory: { total: 0, lowStock: 0, outOfStock: 0 },
-          salesTrend: { chart: [] },
-          salesByCategory: [],
-          performance: { conversionRate: 0, avgOrderValue: 0, customerLifetimeValue: 0 },
-        });
+          metrics: {
+            cancellationRate: '0.0',
+            successRate: '0.0',
+            avgOrderValue: 0,
+            todayRevenue: 0,
+            newOrdersToday: 0,
+          },
+          });
+        }
       } finally {
         setLoading(false);
       }
@@ -165,6 +213,90 @@ const StoreAnalytics = () => {
 
     fetchAnalytics();
   }, [currentStore?.id, timeRange]);
+
+  // Lazy load WEEK charts after MONTH charts are loaded
+  useEffect(() => {
+    const loadWeekCharts = async () => {
+      if (!currentStore?.id || !analyticsData || loadingWeekChart) return;
+      
+      // Check if WEEK charts are already loaded
+      if (analyticsData.revenue?.chartWeek?.length > 0 || analyticsData.orders?.chartWeek?.length > 0) {
+        return; // Already loaded
+      }
+
+      setLoadingWeekChart(true);
+      try {
+        const normalizeRevenueChart = (raw) => {
+          if (Array.isArray(raw)) return raw;
+          if (!raw || typeof raw !== 'object') return [];
+          if (Array.isArray(raw.revenues) && Array.isArray(raw.labels)) {
+            return raw.labels.map((label, idx) => {
+              const v = raw.revenues[idx] ?? 0;
+              return { label, value: v, totalRevenue: v, revenue: v, total: v };
+            });
+          }
+          if (Array.isArray(raw.data)) return raw.data;
+          return [];
+        };
+
+        const normalizeOrdersChart = (raw) => {
+          if (Array.isArray(raw)) return raw;
+          if (!raw || typeof raw !== 'object') return [];
+          // ✅ API trả về orderCounts (theo Swagger)
+          const vals = raw.orderCounts || raw.orders || raw.counts || raw.values;
+          if (Array.isArray(vals) && Array.isArray(raw.labels)) {
+            return raw.labels.map((label, idx) => {
+              const v = vals[idx] ?? 0;
+              return { label, value: v, orders: v, count: v, total: v, orderCounts: v };
+            });
+          }
+          if (Array.isArray(raw.data)) return raw.data;
+          return [];
+        };
+
+        const [revenueChartWeekResult, ordersChartWeekResult] = await Promise.all([
+          getRevenueChartData(currentStore.id, 'WEEK'),
+          getOrdersChartData(currentStore.id, 'WEEK'),
+        ]);
+
+        const revenueChartWeek = revenueChartWeekResult.success
+          ? normalizeRevenueChart(revenueChartWeekResult.data)
+          : [];
+        const ordersChartWeek = ordersChartWeekResult.success
+          ? normalizeOrdersChart(ordersChartWeekResult.data)
+          : [];
+
+        // Update analytics data with WEEK charts
+        setAnalyticsData(prev => ({
+          ...prev,
+          revenue: {
+            ...prev.revenue,
+            chartWeek: revenueChartWeek,
+          },
+          orders: {
+            ...prev.orders,
+            chartWeek: ordersChartWeek,
+          },
+        }));
+
+        console.log('✅ WEEK charts loaded:', {
+          revenueChartWeek: revenueChartWeekResult.success,
+          ordersChartWeek: ordersChartWeekResult.success,
+        });
+      } catch (error) {
+        console.error('❌ Error loading WEEK charts:', error);
+      } finally {
+        setLoadingWeekChart(false);
+      }
+    };
+
+    // Load WEEK charts after a short delay to not block initial render
+    const timer = setTimeout(() => {
+      loadWeekCharts();
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [currentStore?.id, analyticsData, loadingWeekChart]);
 
   // Use only real data from backend
   const displayData = analyticsData;
@@ -237,7 +369,7 @@ const StoreAnalytics = () => {
                 </div>
                 
                 {/* Stats Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mt-6">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
                   <div className="bg-green-50 rounded-lg p-4 border border-green-100">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
@@ -276,66 +408,193 @@ const StoreAnalytics = () => {
                         </svg>
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-gray-600">Sản phẩm</p>
-                        <p className="text-xl font-bold text-gray-900">{formatNumber(displayData?.products?.total || 0)}</p>
-                        <p className="text-xs text-purple-600">{formatNumber(displayData?.products?.active || 0)} đang bán</p>
+                        <p className="text-sm font-medium text-gray-600">Biến thể (kho)</p>
+                        <p className="text-xl font-bold text-gray-900">
+                          {formatNumber(displayData?.inventory?.total || displayData?.products?.total || 0)}
+                        </p>
+                        <p className="text-xs text-purple-600">
+                          {formatNumber(displayData?.inventory?.inStock || displayData?.products?.active || 0)} đang bán
+                        </p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-orange-50 rounded-lg p-4 border border-orange-100">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                        <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
-                        </svg>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Khách hàng</p>
-                        <p className="text-xl font-bold text-gray-900">{formatNumber(displayData?.customers?.total || 0)}</p>
-                        <p className="text-xs text-orange-600">{formatNumber(displayData?.customers?.new || 0)} mới</p>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Charts */}
+          {/* Charts: Tháng & Tuần với toggle Doanh thu / Đơn hàng */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Revenue Chart */}
+            {/* Chart theo tháng */}
             <div className="bg-white rounded-lg border border-gray-100 p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Doanh thu theo tháng</h3>
-              <div className="h-64 flex items-end justify-between gap-2">
-                {(displayData?.revenue?.chart || []).map((item, index) => (
-                  <div key={index} className="flex flex-col items-center flex-1">
-                    <div
-                      className="w-full bg-gradient-to-t from-green-500 to-green-400 rounded-t"
-                      style={{ height: `${displayData?.revenue?.chart?.length > 0 ? (item.revenue / Math.max(...displayData.revenue.chart.map(c => c.revenue))) * 200 : 0}px` }}
-                    ></div>
-                    <span className="text-xs text-gray-500 mt-2">{item.month}</span>
-                    <span className="text-xs text-gray-700 font-medium">{formatPrice(item.revenue)}</span>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Biểu đồ theo tháng</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setChartModeMonth('revenue')}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                      chartModeMonth === 'revenue'
+                        ? 'bg-green-100 text-green-700 border-green-200'
+                        : 'bg-gray-100 text-gray-600 border-gray-200'
+                    }`}
+                  >
+                    Doanh thu
+                  </button>
+                  <button
+                    onClick={() => setChartModeMonth('orders')}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                      chartModeMonth === 'orders'
+                        ? 'bg-blue-100 text-blue-700 border-blue-200'
+                        : 'bg-gray-100 text-gray-600 border-gray-200'
+                    }`}
+                  >
+                    Đơn hàng
+                  </button>
+                </div>
               </div>
+              {(() => {
+                if (loadingCharts) {
+                  return (
+                    <div className="h-64 flex items-end justify-between gap-2">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="flex flex-col items-center flex-1">
+                          <div className="w-full bg-gray-200 rounded-t animate-pulse" style={{ height: `${[80, 120, 100][i - 1]}px` }}></div>
+                          <div className="h-4 w-12 bg-gray-200 rounded mt-2 animate-pulse"></div>
+                          <div className="h-4 w-16 bg-gray-200 rounded mt-1 animate-pulse"></div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                }
+                const data =
+                  chartModeMonth === 'revenue'
+                    ? displayData?.revenue?.chartMonth || []
+                    : displayData?.orders?.chartMonth || [];
+                const maxVal = Math.max(
+                  ...data.map((d) => {
+                    if (chartModeMonth === 'revenue') return d.totalRevenue ?? d.revenue ?? d.total ?? 0;
+                    return d.orderCounts ?? d.orders ?? d.count ?? d.total ?? 0;
+                  }),
+                  1
+                );
+                if (!data.length) return <p className="text-sm text-gray-500">Chưa có dữ liệu</p>;
+                return (
+                  <div className="h-64 flex items-end justify-between gap-2">
+                    {data.map((item, index) => {
+                      const value =
+                        chartModeMonth === 'revenue'
+                          ? item.totalRevenue ?? item.revenue ?? item.total ?? 0
+                          : item.orderCounts ?? item.orders ?? item.count ?? item.total ?? 0;
+                      const label = item.label || item.month || item.period || item.date || `P${index + 1}`;
+                      const height = (value / maxVal) * 200;
+                      return (
+                        <div key={index} className="flex flex-col items-center flex-1">
+                          <div
+                            className={`w-full rounded-t ${chartModeMonth === 'revenue'
+                              ? 'bg-gradient-to-t from-green-500 to-green-400'
+                              : 'bg-gradient-to-t from-blue-500 to-blue-400'}`}
+                            style={{ height: `${height}px` }}
+                            title={`${label}: ${chartModeMonth === 'revenue' ? formatPrice(value) : formatNumber(value)}`}
+                          ></div>
+                          <span className="text-xs text-gray-500 mt-2 truncate w-full text-center" title={label}>
+                            {label}
+                          </span>
+                          <span className="text-xs text-gray-700 font-medium">
+                            {chartModeMonth === 'revenue' ? formatPrice(value) : formatNumber(value)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
 
-            {/* Orders Chart */}
+            {/* Chart theo tuần */}
             <div className="bg-white rounded-lg border border-gray-100 p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Đơn hàng theo tháng</h3>
-              <div className="h-64 flex items-end justify-between gap-2">
-                {(displayData?.orders?.chart || []).map((item, index) => (
-                  <div key={index} className="flex flex-col items-center flex-1">
-                    <div
-                      className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t"
-                      style={{ height: `${displayData?.orders?.chart?.length > 0 ? (item.orders / Math.max(...displayData.orders.chart.map(c => c.orders))) * 200 : 0}px` }}
-                    ></div>
-                    <span className="text-xs text-gray-500 mt-2">{item.month}</span>
-                    <span className="text-xs text-gray-700 font-medium">{formatNumber(item.orders)}</span>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Biểu đồ theo tuần</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setChartModeWeek('revenue')}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                      chartModeWeek === 'revenue'
+                        ? 'bg-green-100 text-green-700 border-green-200'
+                        : 'bg-gray-100 text-gray-600 border-gray-200'
+                    }`}
+                  >
+                    Doanh thu
+                  </button>
+                  <button
+                    onClick={() => setChartModeWeek('orders')}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                      chartModeWeek === 'orders'
+                        ? 'bg-blue-100 text-blue-700 border-blue-200'
+                        : 'bg-gray-100 text-gray-600 border-gray-200'
+                    }`}
+                  >
+                    Đơn hàng
+                  </button>
+                </div>
               </div>
+              {(() => {
+                if (loadingWeekChart) {
+                  return (
+                    <div className="h-64 flex items-center justify-center">
+                      <div className="text-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+                        <p className="text-sm text-gray-500 mt-2">Đang tải dữ liệu...</p>
+                      </div>
+                    </div>
+                  );
+                }
+                const data =
+                  chartModeWeek === 'revenue'
+                    ? displayData?.revenue?.chartWeek || []
+                    : displayData?.orders?.chartWeek || [];
+                const maxVal = Math.max(
+                  ...data.map((d) => {
+                    if (chartModeWeek === 'revenue') return d.totalRevenue ?? d.revenue ?? d.total ?? 0;
+                    return d.orderCounts ?? d.orders ?? d.count ?? d.total ?? 0;
+                  }),
+                  1
+                );
+                if (!data.length) return <p className="text-sm text-gray-500">Chưa có dữ liệu</p>;
+                return (
+                  <div className="h-64 flex items-end justify-between gap-2">
+                    {data.map((item, index) => {
+                      const value =
+                        chartModeWeek === 'revenue'
+                          ? item.totalRevenue ?? item.revenue ?? item.total ?? 0
+                          : item.orderCounts ?? item.orders ?? item.count ?? item.total ?? 0;
+                      const label = item.label || item.week || item.period || item.date || `W${index + 1}`;
+                      const height = (value / maxVal) * 200;
+                      return (
+                        <div key={index} className="flex flex-col items-center flex-1">
+                          <div
+                            className={`w-full rounded-t ${chartModeWeek === 'revenue'
+                              ? 'bg-gradient-to-t from-green-500 to-green-400'
+                              : 'bg-gradient-to-t from-blue-500 to-blue-400'}`}
+                            style={{ height: `${height}px` }}
+                            title={`${label}: ${chartModeWeek === 'revenue' ? formatPrice(value) : formatNumber(value)}`}
+                          ></div>
+                          <span className="text-xs text-gray-500 mt-2 truncate w-full text-center" title={label}>
+                            {label}
+                          </span>
+                          <span className="text-xs text-gray-700 font-medium">
+                            {chartModeWeek === 'revenue' ? formatPrice(value) : formatNumber(value)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
@@ -422,115 +681,61 @@ const StoreAnalytics = () => {
             </div>
           </div>
 
-          {/* Reviews & Performance */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Reviews */}
+          {/* Key Metrics - Tính toán từ dữ liệu hiện có */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Tỷ lệ thành công */}
             <div className="bg-white rounded-lg border border-gray-100 p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">⭐ Đánh giá</h3>
-              <div className="flex items-center gap-6 mb-6">
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-yellow-500">{displayData?.reviews?.average?.toFixed(1) || '0.0'}</div>
-                  <div className="text-sm text-gray-500 mt-1">{formatNumber(displayData?.reviews?.total || 0)} đánh giá</div>
-                </div>
-                <div className="flex-1 space-y-2">
-                  {[5, 4, 3, 2, 1].map(star => {
-                    const count = displayData?.ratingDistribution?.[star] || 0;
-                    const total = Object.values(displayData?.ratingDistribution || {}).reduce((a, b) => a + b, 0);
-                    const percentage = total > 0 ? (count / total) * 100 : 0;
-                    return (
-                      <div key={star} className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600 w-12">{star} ⭐</span>
-                        <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                          <div className="h-full bg-yellow-400" style={{ width: `${percentage}%` }}></div>
-                        </div>
-                        <span className="text-sm text-gray-600 w-12 text-right">{count}</span>
-                      </div>
-                    );
-                  })}
-                </div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-600">✅ Tỷ lệ thành công</span>
+                <span className="text-2xl font-bold text-green-600">{displayData?.metrics?.successRate || '0.0'}%</span>
+              </div>
+              <p className="text-xs text-gray-500">Đơn hàng đã giao thành công</p>
+              <div className="mt-3 h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div className="h-full bg-green-500" style={{ width: `${displayData?.metrics?.successRate || 0}%` }}></div>
               </div>
             </div>
 
-            {/* Performance Metrics */}
+            {/* Tỷ lệ hủy đơn */}
             <div className="bg-white rounded-lg border border-gray-100 p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">🎯 Hiệu suất</h3>
-              <div className="space-y-4">
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-600">Tỷ lệ chuyển đổi</span>
-                    <span className="text-2xl font-bold text-blue-600">{displayData?.performance?.conversionRate?.toFixed(1) || '0.0'}%</span>
-                  </div>
-                  <div className="mt-2 h-2 bg-blue-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-500" style={{ width: `${displayData?.performance?.conversionRate || 0}%` }}></div>
-                  </div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-600">❌ Tỷ lệ hủy đơn</span>
+                <span className="text-2xl font-bold text-red-600">{displayData?.metrics?.cancellationRate || '0.0'}%</span>
+              </div>
+              <p className="text-xs text-gray-500">Đơn hàng bị hủy</p>
+              <div className="mt-3 h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div className="h-full bg-red-500" style={{ width: `${displayData?.metrics?.cancellationRate || 0}%` }}></div>
+              </div>
+            </div>
+
+            {/* Giá trị đơn hàng trung bình */}
+            <div className="bg-white rounded-lg border border-gray-100 p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-600">💰 Giá trị đơn TB</span>
+                <span className="text-xl font-bold text-blue-600">{formatPrice(displayData?.metrics?.avgOrderValue || 0)}</span>
+              </div>
+              <p className="text-xs text-gray-500">Trung bình mỗi đơn hàng</p>
+            </div>
+
+            {/* Doanh thu hôm nay (nếu có) */}
+            {(displayData?.metrics?.todayRevenue > 0 || displayData?.metrics?.newOrdersToday > 0) && (
+              <div className="bg-white rounded-lg border border-gray-100 p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-600">📊 Hôm nay</span>
                 </div>
-                <div className="p-4 bg-green-50 rounded-lg">
+                <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-600">Giá trị đơn TB</span>
-                    <span className="text-xl font-bold text-green-600">{formatPrice(displayData?.performance?.avgOrderValue || 0)}</span>
+                    <span className="text-xs text-gray-500">Doanh thu:</span>
+                    <span className="text-sm font-semibold text-green-600">{formatPrice(displayData?.metrics?.todayRevenue || 0)}</span>
                   </div>
-                </div>
-                <div className="p-4 bg-purple-50 rounded-lg">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-600">CLV khách hàng</span>
-                    <span className="text-xl font-bold text-purple-600">{formatPrice(displayData?.performance?.customerLifetimeValue || 0)}</span>
+                    <span className="text-xs text-gray-500">Đơn mới:</span>
+                    <span className="text-sm font-semibold text-blue-600">{formatNumber(displayData?.metrics?.newOrdersToday || 0)}</span>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
-          {/* Top Customers */}
-          <div className="bg-white rounded-lg border border-gray-100 p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">🏆 Khách hàng hàng đầu</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {(displayData?.topCustomers || []).map((customer, index) => (
-                <div key={index} className="p-4 bg-gradient-to-br from-orange-50 to-yellow-50 rounded-lg border border-orange-200">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 bg-orange-200 rounded-full flex items-center justify-center">
-                      <span className="text-lg font-bold text-orange-600">#{index + 1}</span>
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-gray-900">{customer.name || 'Khách hàng'}</p>
-                      <p className="text-sm text-gray-500">{formatNumber(customer.orders || 0)} đơn hàng</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-orange-600">{formatPrice(customer.totalSpent || 0)}</p>
-                  </div>
-                </div>
-              ))}
-              {(!displayData?.topCustomers || displayData.topCustomers.length === 0) && (
-                <div className="col-span-full text-center py-8 text-gray-500">
-                  Chưa có dữ liệu khách hàng
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Top Selling Products */}
-          <div className="bg-white rounded-lg border border-gray-100 p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Sản phẩm bán chạy</h3>
-            <div className="space-y-4">
-              {(displayData?.products?.topSelling || []).map((product, index) => (
-                <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center gap-4">
-                    <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                      <span className="text-sm font-bold text-green-600">#{index + 1}</span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{product.name}</p>
-                      <p className="text-sm text-gray-500">{formatNumber(product.sales)} sản phẩm đã bán</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-gray-900">{formatPrice(product.revenue)}</p>
-                    <p className="text-sm text-gray-500">Doanh thu</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       </StoreLayout>
     </StoreStatusGuard>

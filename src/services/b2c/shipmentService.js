@@ -83,6 +83,30 @@ export const getShipmentsByStoreId = async (storeId, params = {}) => {
 };
 
 /**
+ * 4. ĐẾM SHIPMENT THEO TRẠNG THÁI (API mới)
+ * GET /api/v1/b2c/shipments/store/{storeId}/count-by-status
+ */
+export const countShipmentsByStatus = async (storeId) => {
+  try {
+    if (!storeId) {
+      return { success: false, error: 'storeId is required' };
+    }
+
+    const response = await api.get(`/api/v1/b2c/shipments/store/${storeId}/count-by-status`);
+    return {
+      success: true,
+      data: response.data.data || response.data,
+    };
+  } catch (error) {
+    console.error('❌ Error counting shipments by status:', error);
+    return {
+      success: false,
+      error: error.response?.data?.message || 'Không thể đếm shipment theo trạng thái',
+    };
+  }
+};
+
+/**
  * 3. UPDATE SHIPMENT STATUS (FOR TESTING)
  * PUT /api/v1/b2c/shipments/{shipmentId}/status
  * 
@@ -91,13 +115,34 @@ export const getShipmentsByStoreId = async (storeId, params = {}) => {
  */
 export const updateShipmentStatus = async (shipmentId, newStatus) => {
   try {
-    console.log('🔄 Updating shipment status:', { shipmentId, newStatus });
+    console.log('🔄 [updateShipmentStatus] Updating shipment status:', { shipmentId, newStatus });
 
-    const response = await api.put(`/api/v1/b2c/shipments/${shipmentId}/status`, {
-      status: newStatus,
-    });
+    // ✅ Thử nhiều format khác nhau vì có thể backend expect format khác
+    // Format 1: Gửi string trực tiếp
+    let response;
+    try {
+      response = await api.put(`/api/v1/b2c/shipments/${shipmentId}/status`, `"${newStatus}"`, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+    } catch (err1) {
+      console.warn('⚠️ [updateShipmentStatus] Format 1 failed, trying format 2...', err1.response?.data);
+      // Format 2: Gửi object với field status
+      try {
+        response = await api.put(`/api/v1/b2c/shipments/${shipmentId}/status`, { status: newStatus });
+      } catch (err2) {
+        console.warn('⚠️ [updateShipmentStatus] Format 2 failed, trying format 3...', err2.response?.data);
+        // Format 3: Gửi string không có quotes
+        response = await api.put(`/api/v1/b2c/shipments/${shipmentId}/status`, newStatus, {
+          headers: {
+            'Content-Type': 'text/plain',
+          },
+        });
+      }
+    }
 
-    console.log('✅ Shipment status updated:', response.data);
+    console.log('✅ [updateShipmentStatus] Shipment status updated:', response.data);
 
     return {
       success: true,
@@ -105,10 +150,12 @@ export const updateShipmentStatus = async (shipmentId, newStatus) => {
       message: 'Đã cập nhật trạng thái vận đơn',
     };
   } catch (error) {
-    console.error('❌ Error updating shipment status:', error);
+    console.error('❌ [updateShipmentStatus] Error updating shipment status:', error);
+    console.error('❌ [updateShipmentStatus] Error response:', error.response?.data);
+    console.error('❌ [updateShipmentStatus] Error status:', error.response?.status);
     return {
       success: false,
-      error: error.response?.data?.message || 'Không thể cập nhật trạng thái vận đơn',
+      error: error.response?.data?.message || error.response?.data?.error || error.message || 'Không thể cập nhật trạng thái vận đơn',
     };
   }
 };

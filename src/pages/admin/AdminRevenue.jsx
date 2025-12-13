@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import useSWR from 'swr';
 import AdminLayout from '../../layouts/AdminLayout';
 import AdminPageHeader from '../../components/admin/AdminPageHeader';
+import Chart from '../../components/charts/Chart';
 import { getOrderCode } from '../../utils/displayCodeUtils';
 // ✅ TESTING: Dùng API mới với enhanced logging
 import {
@@ -39,6 +41,18 @@ const AdminRevenue = () => {
   // Sorting
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortDir, setSortDir] = useState('desc');
+
+  // Chart period
+  const [chartPeriod, setChartPeriod] = useState('MONTH');
+  // Chart type: 'netRevenue' | 'serviceFees' | 'discountLosses'
+  const [chartType, setChartType] = useState('netRevenue');
+
+  // Fetch chart data
+  const { data: revenueChartData } = useSWR(
+    ['admin-revenue-chart', chartPeriod],
+    () => getRevenueChartData(chartPeriod),
+    { revalidateOnFocus: false }
+  );
 
   // Load statistics on mount
   useEffect(() => {
@@ -132,6 +146,100 @@ const AdminRevenue = () => {
     return new Date(dateString).toLocaleString('vi-VN');
   };
 
+  // Prepare chart data - xử lý structure từ API
+  let revenueChartFormatted = [];
+  
+  if (revenueChartData?.success && revenueChartData.data) {
+    let chartData = revenueChartData.data;
+    
+    // Case 1: Nếu là array, lấy phần tử đầu tiên (vì service có thể wrap object vào array)
+    if (Array.isArray(chartData) && chartData.length > 0) {
+      // Nếu array có 1 phần tử và phần tử đó là object có netRevenue/serviceFees
+      if (chartData.length === 1 && typeof chartData[0] === 'object') {
+        chartData = chartData[0];
+      } else {
+        // Nếu array có nhiều phần tử, map trực tiếp
+        revenueChartFormatted = chartData.map((item) => {
+          if (item.netRevenue && Array.isArray(item.netRevenue)) {
+            const labels = item.labels || item.netRevenue.map((_, idx) => {
+              if (chartPeriod === 'MONTH') return `Tháng ${idx + 1}`;
+              if (chartPeriod === 'WEEK') return `Tuần ${idx + 1}`;
+              if (chartPeriod === 'YEAR') return `Năm ${idx + 1}`;
+              return `Period ${idx + 1}`;
+            });
+            return item.netRevenue.map((value, idx) => ({
+              label: labels[idx] || `Period ${idx + 1}`,
+              value: value || 0,
+            }));
+          } else if (item.serviceFees && Array.isArray(item.serviceFees)) {
+            const labels = item.labels || item.serviceFees.map((_, idx) => {
+              if (chartPeriod === 'MONTH') return `Tháng ${idx + 1}`;
+              if (chartPeriod === 'WEEK') return `Tuần ${idx + 1}`;
+              if (chartPeriod === 'YEAR') return `Năm ${idx + 1}`;
+              return `Period ${idx + 1}`;
+            });
+            return item.serviceFees.map((value, idx) => ({
+              label: labels[idx] || `Period ${idx + 1}`,
+              value: value || 0,
+            }));
+          } else {
+            return {
+              label: item.label || item.period || item.month || item.date || item.name || item.time || 'N/A',
+              value: item.totalRevenue || item.revenue || item.total || item.amount || item.value || item.count || 0,
+            };
+          }
+        }).flat();
+      }
+    }
+    
+    // Case 2: Nếu là object có arrays (netRevenue, serviceFees, discountLosses)
+    if (!Array.isArray(chartData)) {
+      // Chọn array dựa trên chartType
+      let selectedArray = null;
+      let chartTitle = '';
+      
+      if (chartType === 'netRevenue' && chartData.netRevenue && Array.isArray(chartData.netRevenue)) {
+        selectedArray = chartData.netRevenue;
+        chartTitle = 'Doanh Thu Ròng';
+      } else if (chartType === 'serviceFees' && chartData.serviceFees && Array.isArray(chartData.serviceFees)) {
+        selectedArray = chartData.serviceFees;
+        chartTitle = 'Phí Dịch Vụ';
+      } else if (chartType === 'discountLosses' && chartData.discountLosses && Array.isArray(chartData.discountLosses)) {
+        selectedArray = chartData.discountLosses;
+        chartTitle = 'Tiền Lỗ Giảm Giá';
+      } else if (chartData.netRevenue && Array.isArray(chartData.netRevenue)) {
+        // Fallback: ưu tiên netRevenue
+        selectedArray = chartData.netRevenue;
+        chartTitle = 'Doanh Thu Ròng';
+      } else if (chartData.serviceFees && Array.isArray(chartData.serviceFees)) {
+        // Fallback: serviceFees
+        selectedArray = chartData.serviceFees;
+        chartTitle = 'Phí Dịch Vụ';
+      }
+      
+      if (selectedArray) {
+        const labels = chartData.labels || selectedArray.map((_, idx) => {
+          if (chartPeriod === 'MONTH') return `Tháng ${idx + 1}`;
+          if (chartPeriod === 'WEEK') return `Tuần ${idx + 1}`;
+          if (chartPeriod === 'YEAR') return `Năm ${idx + 1}`;
+          return `Period ${idx + 1}`;
+        });
+        
+        revenueChartFormatted = selectedArray.map((value, idx) => ({
+          label: labels[idx] || `Period ${idx + 1}`,
+          value: value || 0,
+        }));
+      }
+    }
+    // Case 4: Object thông thường (fallback)
+    else if (!Array.isArray(chartData) && revenueChartFormatted.length === 0) {
+      revenueChartFormatted = [{
+        label: chartData.label || chartData.period || chartData.month || chartData.date || chartData.name || chartData.time || 'N/A',
+        value: chartData.totalRevenue || chartData.revenue || chartData.total || chartData.amount || chartData.value || chartData.count || 0,
+      }];
+    }
+  }
+
   // Removed getStatusBadge - now using getRevenueTypeBadge from service
 
   return (
@@ -194,6 +302,94 @@ const AdminRevenue = () => {
             </div>
           </div>
         )}
+
+        {/* Revenue Chart */}
+        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
+          <div className="mb-4">
+            <h3 className="text-xl font-bold text-gray-900">Doanh thu theo thời gian</h3>
+            <p className="text-sm text-gray-500 mt-1">
+              Phân tích doanh thu theo {chartPeriod === 'WEEK' ? 'tuần' : chartPeriod === 'MONTH' ? 'tháng' : 'năm'}
+            </p>
+          </div>
+          
+          {/* Chart Type Selector */}
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setChartType('netRevenue')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                chartType === 'netRevenue'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              📊 Doanh Thu Ròng
+            </button>
+            <button
+              onClick={() => setChartType('serviceFees')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                chartType === 'serviceFees'
+                  ? 'bg-green-500 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              💰 Phí Dịch Vụ
+            </button>
+            <button
+              onClick={() => setChartType('discountLosses')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                chartType === 'discountLosses'
+                  ? 'bg-red-500 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              📉 Tiền Lỗ
+            </button>
+          </div>
+
+          {/* Period Selector */}
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setChartPeriod('WEEK')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                chartPeriod === 'WEEK'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Tuần
+            </button>
+            <button
+              onClick={() => setChartPeriod('MONTH')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                chartPeriod === 'MONTH'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Tháng
+            </button>
+            <button
+              onClick={() => setChartPeriod('YEAR')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                chartPeriod === 'YEAR'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Năm
+            </button>
+          </div>
+          <Chart
+            type="bar"
+            data={revenueChartFormatted}
+            valueKey="value"
+            labelKey="label"
+            formatValue={formatCurrency}
+            color="blue"
+            height="200px"
+            className="border-0 shadow-none p-0"
+          />
+        </div>
 
         {/* Filters */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">

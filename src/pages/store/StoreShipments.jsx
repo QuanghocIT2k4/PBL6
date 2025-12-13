@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import useSWR from 'swr';
 import StoreLayout from '../../layouts/StoreLayout';
 import StoreStatusGuard from '../../components/store/StoreStatusGuard';
 import { useStoreContext } from '../../context/StoreContext';
 import { useToast } from '../../context/ToastContext';
 import {
   getShipmentsByStoreId,
+  countShipmentsByStatus,
   getShipmentStatusBadge,
   formatExpectedDeliveryDate,
   getDeliveryTimeRemaining,
@@ -23,94 +25,101 @@ const StoreShipments = () => {
   const { currentStore, loading: storeLoading } = useStoreContext();
   const { success, error: showError } = useToast();
 
-  const [shipments, setShipments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState('all'); // all, PICKING_UP, SHIPPING, DELIVERED, FAILED
   const [page, setPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
-  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
-  useEffect(() => {
-    if (currentStore?.id) {
-      loadShipments();
-    }
-  }, [currentStore, filter, page]);
-
-  // Auto-refresh logic: Chỉ refresh khi có shipment đang active (PICKING_UP hoặc SHIPPING)
-  useEffect(() => {
-    const hasActiveShipments = shipments.some(
-      (s) => s.status === 'PICKING_UP' || s.status === 'SHIPPING'
-    );
-
-    setAutoRefreshEnabled(hasActiveShipments);
-
-    if (!hasActiveShipments || !currentStore?.id) {
-      return;
-    }
-
-    // Auto-refresh mỗi 60 giây
-    const intervalId = setInterval(() => {
-      loadShipments(true); // true = silent refresh (không hiển thị loading)
-    }, 60000); // 60 seconds
-
-    return () => clearInterval(intervalId);
-  }, [shipments, currentStore]);
-
-  const loadShipments = async (silent = false) => {
-    if (!currentStore?.id) return;
-
-    if (!silent) {
-      setLoading(true);
-    } else {
-      setRefreshing(true);
-    }
-
-    try {
+  // ✅ Dùng SWR để có thể invalidate từ nơi khác (sau khi confirm order)
+  const { data: shipmentsData, error, isLoading, isValidating, mutate } = useSWR(
+    currentStore?.id ? ['store-shipments', currentStore.id, filter, page] : null,
+    () => {
       const statusFilter = filter === 'all' ? null : filter;
-      const result = await getShipmentsByStoreId(currentStore.id, {
+      console.log('📦 [StoreShipments] Fetching shipments...', { storeId: currentStore.id, filter: statusFilter, page });
+      return getShipmentsByStoreId(currentStore.id, {
         page,
         size: 10,
         status: statusFilter,
       });
-
-      if (result.success) {
-        const data = result.data;
-        setShipments(data.content || data.shipments || []);
-        setTotalPages(data.totalPages || 0);
-      } else {
-        showError(result.error);
-      }
-    } catch (err) {
-      console.error('Error loading shipments:', err);
-      if (!silent) {
-        showError('Không thể tải danh sách vận đơn');
-      }
-    } finally {
-      if (!silent) {
-        setLoading(false);
-      } else {
-        setRefreshing(false);
-      }
+    },
+    {
+      revalidateOnFocus: true, // ✅ Refresh khi focus vào tab để thấy shipment mới
+      revalidateOnReconnect: true,
+      dedupingInterval: 2000, // Cache 2s để tránh request quá nhiều
+      onSuccess: (data) => {
+        console.log('✅ [StoreShipments] Shipments loaded:', data);
+        const shipments = data?.data?.content || data?.data?.shipments || [];
+        const count = shipments.length;
+        console.log(`📊 [StoreShipments] Total shipments: ${count}`);
+        
+        // ✅ Log status của từng shipment để debug
+        if (count > 0) {
+          console.log('📋 [StoreShipments] Shipment statuses:');
+          shipments.forEach((shipment, index) => {
+            console.log(`  ${index + 1}. ID: ${shipment.id}, Status: ${shipment.status}, Order: ${shipment.order?.id}`);
+          });
+        }
+      },
     }
-  };
+  );
 
-  const handleManualRefresh = () => {
-    loadShipments();
-    success('Đã làm mới danh sách vận đơn');
-  };
+  const shipments = shipmentsData?.success ? (shipmentsData.data?.content || shipmentsData.data?.shipments || []) : [];
+  const totalPages = shipmentsData?.data?.totalPages || 0;
+  
+  // ✅ Lấy stats chính xác từ API (không phụ thuộc vào filter/pagination)
+  const { data: statsData } = useSWR(
+    currentStore?.id ? ['store-shipments-stats', currentStore.id] : null,
+    () => countShipmentsByStatus(currentStore.id),
+    {
+      revalidateOnFocus: true,
+      dedupingInterval: 5000, // Cache 5s
+    }
+  );
 
-  const handleViewDetails = (shipment) => {
-    navigate(`/store-dashboard/orders`);
-  };
-
-  // Calculate stats
-  const stats = {
+  // ✅ Tính stats từ API hoặc fallback về tính từ shipments hiện tại
+  const stats = statsData?.success ? {
+    total: statsData.data?.total || 0,
+    pickingUp: statsData.data?.PICKING_UP || 0,
+    shipping: statsData.data?.SHIPPING || 0,
+    delivered: statsData.data?.DELIVERED || 0,
+    failed: statsData.data?.FAILED || 0,
+  } : {
+    // Fallback: tính từ shipments hiện tại (nếu API chưa load)
     total: shipments.length,
     pickingUp: shipments.filter((s) => s.status === 'PICKING_UP').length,
     shipping: shipments.filter((s) => s.status === 'SHIPPING').length,
     delivered: shipments.filter((s) => s.status === 'DELIVERED').length,
     failed: shipments.filter((s) => s.status === 'FAILED').length,
+  };
+  
+  // Log khi shipments thay đổi
+  useEffect(() => {
+    console.log('📦 [StoreShipments] Shipments updated:', shipments.length, 'items');
+    console.log('📊 [StoreShipments] Stats:', stats);
+    
+    // ✅ Log chi tiết status của từng shipment
+    if (shipments.length > 0) {
+      console.log('🔍 [StoreShipments] Current shipments status breakdown:');
+      const statusCount = {};
+      shipments.forEach((s) => {
+        const status = s.status || 'UNKNOWN';
+        statusCount[status] = (statusCount[status] || 0) + 1;
+        console.log(`  - Shipment ${s.id}: status="${status}", orderId=${s.order?.id}`);
+      });
+      console.log('📊 [StoreShipments] Status count:', statusCount);
+    }
+  }, [shipments.length, stats, shipments]);
+
+  const handleManualRefresh = () => {
+    mutate(undefined, { revalidate: true });
+    success('Đã làm mới danh sách vận đơn');
+  };
+
+  const handleViewDetails = (shipment) => {
+    // Navigate to order detail page with orderId
+    if (shipment.order?.id) {
+      navigate(`/store-dashboard/orders/${shipment.order.id}`);
+    } else {
+      showError('Không tìm thấy thông tin đơn hàng');
+    }
   };
 
   return (
@@ -122,21 +131,16 @@ const StoreShipments = () => {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Quản lý vận đơn</h1>
               <p className="text-sm text-gray-600 mt-1">
-                {autoRefreshEnabled && (
-                  <span className="inline-flex items-center gap-1 text-green-600">
-                    <span className="animate-pulse">🔄</span>
-                    Tự động cập nhật mỗi 60 giây
-                  </span>
-                )}
+                {/* ❌ TẮT AUTO-REFRESH - Theo yêu cầu tắt tự động vận chuyển */}
               </p>
             </div>
             <button
               onClick={handleManualRefresh}
-              disabled={loading || refreshing}
+              disabled={isLoading || isValidating}
               className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg
-                className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`}
+                className={`w-5 h-5 ${isValidating ? 'animate-spin' : ''}`}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -148,7 +152,7 @@ const StoreShipments = () => {
                   d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                 />
               </svg>
-              {refreshing ? 'Đang làm mới...' : 'Làm mới'}
+              {isValidating ? 'Đang làm mới...' : 'Làm mới'}
             </button>
           </div>
 
@@ -256,7 +260,7 @@ const StoreShipments = () => {
 
           {/* Shipments List */}
           <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            {loading ? (
+            {isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
               </div>
@@ -280,7 +284,13 @@ const StoreShipments = () => {
                         Đơn hàng
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Địa chỉ shop
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Địa chỉ giao hàng
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Shipper
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Phí ship
@@ -315,8 +325,38 @@ const StoreShipments = () => {
                           </td>
                           <td className="px-6 py-4">
                             <div className="text-sm text-gray-900 max-w-xs truncate">
+                              {formatAddress(shipment.shopAddress || shipment.store?.address || 'N/A')}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-900 max-w-xs truncate">
                               {formatAddress(shipment.address)}
                             </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {shipment.carrier ? (
+                              <div className="flex items-center gap-2">
+                                {shipment.carrier.avatar && (
+                                  <img 
+                                    src={shipment.carrier.avatar} 
+                                    alt={shipment.carrier.fullName || shipment.carrier.name} 
+                                    className="w-6 h-6 rounded-full object-cover"
+                                  />
+                                )}
+                                <div>
+                                  <div className="text-sm font-medium text-gray-900">
+                                    {shipment.carrier.fullName || shipment.carrier.name || 'N/A'}
+                                  </div>
+                                  {shipment.carrier.phone && (
+                                    <div className="text-xs text-gray-500">
+                                      {shipment.carrier.phone}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-sm text-gray-400">Chưa có shipper</span>
+                            )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">

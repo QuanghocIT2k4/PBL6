@@ -8,6 +8,7 @@ import { getPendingProducts } from '../../services/admin/adminProductService';
 import { getPendingVariants } from '../../services/admin/adminVariantService';
 import { getAllUsers } from '../../services/admin/adminUserService';
 import { getAllPromotions } from '../../services/admin/adminPromotionService';
+import { getOverviewStatistics, getRevenueStatistics } from '../../services/admin/adminStatisticsService';
 
 const AdminDashboard = () => {
   // Fetch summary data
@@ -41,11 +42,92 @@ const AdminDashboard = () => {
     { revalidateOnFocus: false }
   );
 
-  const pendingStoresCount = pendingStoresData?.data?.totalElements || 0;
-  const pendingProductsCount = pendingProductsData?.data?.totalElements || 0;
-  const pendingVariantsCount = pendingVariantsData?.data?.totalElements || 0;
-  const totalUsersCount = usersData?.data?.totalElements || 0;
-  const totalPromotionsCount = promotionsData?.data?.totalElements || 0;
+  const { data: overviewStats } = useSWR(
+    'admin-overview-statistics',
+    () => getOverviewStatistics(),
+    { revalidateOnFocus: false }
+  );
+
+  const { data: revenueStats } = useSWR(
+    'admin-revenue-statistics',
+    () => getRevenueStatistics(),
+    { revalidateOnFocus: false }
+  );
+
+  // Debug logging
+  React.useEffect(() => {
+    console.log('📊 [AdminDashboard] pendingStoresData:', pendingStoresData);
+    console.log('📊 [AdminDashboard] pendingProductsData:', pendingProductsData);
+    console.log('📊 [AdminDashboard] pendingVariantsData:', pendingVariantsData);
+    console.log('📊 [AdminDashboard] usersData:', usersData);
+    console.log('📊 [AdminDashboard] promotionsData:', promotionsData);
+    console.log('📊 [AdminDashboard] overviewStats:', overviewStats);
+    console.log('📊 [AdminDashboard] revenueStats:', revenueStats);
+  }, [pendingStoresData, pendingProductsData, pendingVariantsData, usersData, promotionsData, overviewStats, revenueStats]);
+
+  // Parse counts từ API - ưu tiên overviewStats nếu có
+  const parseCount = (data, key) => {
+    if (!data) return null;
+    const dataObj = data.data || data;
+    return dataObj[key] || dataObj.totalElements || dataObj.total || dataObj.count || null;
+  };
+
+  // Ưu tiên dùng overviewStats, fallback sang API riêng lẻ
+  const overview = overviewStats?.success ? overviewStats.data : {};
+  
+  // Parse với nhiều key có thể có
+  const pendingStoresCount = 
+    overview.pendingStores || 
+    overview.pendingStoresCount || 
+    overview.totalPendingStores ||
+    parseCount(pendingStoresData, 'totalElements') || 
+    0;
+    
+  const pendingProductsCount = 
+    overview.pendingProducts || 
+    overview.pendingProductsCount || 
+    overview.totalPendingProducts ||
+    parseCount(pendingProductsData, 'totalElements') || 
+    0;
+    
+  const pendingVariantsCount = 
+    overview.pendingVariants || 
+    overview.pendingVariantsCount || 
+    overview.totalPendingVariants ||
+    parseCount(pendingVariantsData, 'totalElements') || 
+    0;
+    
+  const totalUsersCount = 
+    overview.totalUsers || 
+    overview.usersCount || 
+    overview.users ||
+    parseCount(usersData, 'totalElements') || 
+    0;
+    
+  const totalPromotionsCount = 
+    overview.totalPromotions || 
+    overview.promotionsCount || 
+    overview.promotions ||
+    parseCount(promotionsData, 'totalElements') || 
+    0;
+  
+  // Parse revenue data - ưu tiên revenueStats, fallback sang overviewStats
+  // Dùng đúng key như trong AdminRevenue.jsx
+  const revenueData = revenueStats?.success ? revenueStats.data : {};
+  const overviewRevenue = overviewStats?.success ? overviewStats.data : {};
+  
+  // Key đúng: totalServiceFee (không phải totalServiceFees)
+  const totalServiceFee = revenueData.totalServiceFee || revenueData.totalServiceFees || revenueData.serviceFees || overviewRevenue.totalServiceFee || overviewRevenue.totalServiceFees || overviewRevenue.serviceFees || 0;
+  
+  // Key đúng: totalPlatformDiscountLoss (không phải totalDiscountLoss)
+  const totalPlatformDiscountLoss = revenueData.totalPlatformDiscountLoss || revenueData.totalDiscountLoss || revenueData.discountLoss || overviewRevenue.totalPlatformDiscountLoss || overviewRevenue.totalDiscountLoss || overviewRevenue.discountLoss || 0;
+  
+  // Net Revenue = Service Fee - Discount Loss (tính toán như trong AdminRevenue)
+  const netRevenue = revenueData.netRevenue || revenueData.net || (totalServiceFee - totalPlatformDiscountLoss) || overviewRevenue.netRevenue || overviewRevenue.net || 0;
+  
+  // Dùng tên biến giống AdminRevenue để dễ maintain
+  const totalServiceFees = totalServiceFee;
+  const totalDiscountLoss = totalPlatformDiscountLoss;
 
   return (
     <div className="space-y-6">
@@ -200,30 +282,53 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        {/* System Info */}
-        <div className="bg-gradient-to-br from-gray-50 to-slate-50 rounded-xl border-2 border-gray-200 p-8">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-16 h-16 bg-gradient-to-br from-gray-700 to-slate-700 rounded-xl flex items-center justify-center">
-              <span className="text-3xl">⚙️</span>
+        {/* Revenue Statistics */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Service Fees */}
+          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className="bg-white/20 p-3 rounded-xl">
+                <span className="text-2xl">💰</span>
+              </div>
+              <span className="text-sm font-medium opacity-90">Phí Dịch Vụ</span>
             </div>
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">Thông tin hệ thống</h2>
-              <p className="text-gray-600">E-Commerce Platform Admin Panel</p>
+            <div className="text-3xl font-bold mb-2">
+              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalServiceFees)}
+            </div>
+            <div className="text-sm opacity-90">
+              Thu từ shop
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white rounded-xl p-6 border border-gray-200">
-              <p className="text-sm text-gray-600 mb-2">Tổng cửa hàng chờ duyệt</p>
-              <p className="text-3xl font-bold text-yellow-600">{pendingStoresCount}</p>
+          {/* Platform Discount Loss */}
+          <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-2xl p-6 text-white shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className="bg-white/20 p-3 rounded-xl">
+                <span className="text-2xl">📉</span>
+              </div>
+              <span className="text-sm font-medium opacity-90">Tiền Lỗ Giảm Giá</span>
             </div>
-            <div className="bg-white rounded-xl p-6 border border-gray-200">
-              <p className="text-sm text-gray-600 mb-2">Tổng sản phẩm chờ duyệt</p>
-              <p className="text-3xl font-bold text-blue-600">{pendingProductsCount + pendingVariantsCount}</p>
+            <div className="text-3xl font-bold mb-2">
+              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalDiscountLoss)}
             </div>
-            <div className="bg-white rounded-xl p-6 border border-gray-200">
-              <p className="text-sm text-gray-600 mb-2">Tổng người dùng</p>
-              <p className="text-3xl font-bold text-purple-600">{totalUsersCount}</p>
+            <div className="text-sm opacity-90">
+              Sàn chịu
+            </div>
+          </div>
+
+          {/* Net Revenue */}
+          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className="bg-white/20 p-3 rounded-xl">
+                <span className="text-2xl">📊</span>
+              </div>
+              <span className="text-sm font-medium opacity-90">Doanh Thu Ròng</span>
+            </div>
+            <div className="text-3xl font-bold mb-2">
+              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(netRevenue)}
+            </div>
+            <div className="text-sm opacity-90">
+              = Phí DV - Lỗ GG
             </div>
           </div>
         </div>

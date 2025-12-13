@@ -91,13 +91,47 @@ const ShipmentCard = ({ orderId }) => {
             </span>
           </div>
 
-          {/* Address */}
+          {/* Shop Address (Địa chỉ shop - nơi gửi hàng) */}
+          {shipment.shopAddress && (
+            <div className="flex items-start">
+              <span className="text-sm text-gray-500 w-32">Địa chỉ shop:</span>
+              <span className="text-sm text-gray-900">
+                {formatAddress(shipment.shopAddress)}
+              </span>
+            </div>
+          )}
+
+          {/* Delivery Address (Địa chỉ giao hàng) */}
           <div className="flex items-start">
             <span className="text-sm text-gray-500 w-32">Địa chỉ giao:</span>
             <span className="text-sm text-gray-900">
               {formatAddress(shipment.address)}
             </span>
           </div>
+
+          {/* Carrier (Shipper) */}
+          {shipment.carrier && (
+            <div className="flex items-start">
+              <span className="text-sm text-gray-500 w-32">Shipper:</span>
+              <div className="flex items-center gap-2">
+                {shipment.carrier.avatar && (
+                  <img 
+                    src={shipment.carrier.avatar} 
+                    alt={shipment.carrier.fullName || shipment.carrier.name} 
+                    className="w-6 h-6 rounded-full object-cover"
+                  />
+                )}
+                <span className="text-sm text-gray-900 font-medium">
+                  {shipment.carrier.fullName || shipment.carrier.name || shipment.carrier.email || 'N/A'}
+                </span>
+                {shipment.carrier.phone && (
+                  <span className="text-sm text-gray-500">
+                    ({shipment.carrier.phone})
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Shipping Fee */}
           <div className="flex items-start">

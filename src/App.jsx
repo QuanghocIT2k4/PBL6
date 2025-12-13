@@ -31,6 +31,8 @@ const AdminRoutes = lazy(() => import('./routes/AdminRoutes'));
 const BecomeStoreOwner = lazy(() => import('./pages/store/BecomeStoreOwner'));
 const PaymentCallback = lazy(() => import('./pages/payment/PaymentCallback'));
 const ChatPage = lazy(() => import('./pages/chat/ChatPage'));
+const ShipperDashboard = lazy(() => import('./pages/shipper/ShipperDashboard'));
+const ShipperShipmentDetail = lazy(() => import('./pages/shipper/ShipperShipmentDetail'));
 
 // Loading component
 const LoadingSpinner = () => (
@@ -71,6 +73,11 @@ const AppContent = () => {
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/become-store-owner" element={<BecomeStoreOwner />} />
+        
+        {/* Shipper Routes */}
+        <Route path="/shipper" element={<ShipperDashboard />} />
+        <Route path="/shipper/history" element={<ShipperDashboard />} />
+        <Route path="/shipper/shipments/:orderId" element={<ShipperShipmentDetail />} />
         
         {/* Store Management Routes (B2C) */}
         <Route path="/store-dashboard/*" element={<StoreRoutes />} />

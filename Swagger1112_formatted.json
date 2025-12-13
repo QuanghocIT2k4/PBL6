@@ -28,11 +28,11 @@
       "description": "Configurable server",
       "variables": {
         "protocol": {
+          "default": "https",
           "enum": [
             "http",
             "https"
-          ],
-          "default": "https"
+          ]
         },
         "host": {
           "default": "localhost"
@@ -423,7 +423,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseObject"
+                  "type": "object"
                 }
               }
             }
@@ -460,7 +460,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseString"
+                  "type": "object"
                 }
               }
             }
@@ -3157,13 +3157,28 @@
         "operationId": "createReview",
         "requestBody": {
           "content": {
-            "application/json": {
+            "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/ReviewDTO"
+                "required": [
+                  "review"
+                ],
+                "type": "object",
+                "properties": {
+                  "review": {
+                    "$ref": "#/components/schemas/ReviewDTO"
+                  },
+                  "images": {
+                    "type": "array",
+                    "description": "Optional images for the review",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                }
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -3171,7 +3186,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseObject"
+                  "type": "object"
                 }
               }
             }
@@ -3838,6 +3853,11 @@
                       "type": "string",
                       "format": "binary"
                     }
+                  },
+                  "primaryImageIndex": {
+                    "type": "integer",
+                    "description": "Index of the primary image in the images list",
+                    "format": "int32"
                   }
                 }
               }
@@ -5752,7 +5772,7 @@
         "operationId": "findOrCreateConversation",
         "parameters": [
           {
-            "name": "recipientId",
+            "name": "storeId",
             "in": "query",
             "required": true,
             "schema": {
@@ -5760,7 +5780,7 @@
             }
           },
           {
-            "name": "storeId",
+            "name": "recipientId",
             "in": "query",
             "required": true,
             "schema": {
@@ -5940,7 +5960,7 @@
           "Ví Điện Tử Khách Hàng"
         ],
         "summary": "Lấy danh sách yêu cầu rút tiền",
-        "description": "Lấy danh sách các yêu cầu rút tiền của khách hàng (PENDING: chờ duyệt, APPROVED: đã duyệt, REJECTED: bị từ chối, COMPLETED: hoàn thành)",
+        "description": "Lấy danh sách các yêu cầu rút tiền của khách hàng (PENDING: chờ duyệt, REJECTED: bị từ chối, COMPLETED: hoàn thành)",
         "operationId": "getWithdrawalRequests",
         "parameters": [
           {
@@ -6168,7 +6188,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseListReviewResponse"
+                  "type": "object"
                 }
               }
             }
@@ -7488,6 +7508,45 @@
         ]
       }
     },
+    "/api/v1/b2c/shipments/store/{storeId}/count-by-status": {
+      "get": {
+        "tags": [
+          "B2C Shipment Management"
+        ],
+        "summary": "Lấy chi tiết shipment",
+        "description": "Lấy chi tiết thông tin của một shipment cụ thể",
+        "operationId": "getShipmentById",
+        "parameters": [
+          {
+            "name": "storeId",
+            "in": "path",
+            "description": "Store ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/b2c/shipments/order/{orderId}": {
       "get": {
         "tags": [
@@ -7737,6 +7796,44 @@
               "type": "string",
               "default": "desc"
             }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/b2c/promotions/store/{storeId}/count-by-status": {
+      "get": {
+        "tags": [
+          "B2C Promotion Management"
+        ],
+        "summary": "Đếm số lượng khuyến mãi theo trạng thái",
+        "operationId": "countPromotionsByStatus",
+        "parameters": [
+          {
+            "name": "storeId",
+            "in": "path",
+            "description": "ID of the store",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
           }
         ],
         "responses": {
@@ -8011,6 +8108,44 @@
         ]
       }
     },
+    "/api/v1/b2c/product-variants/store/{storeId}/count-by-status": {
+      "get": {
+        "tags": [
+          "B2C Product Variant Management"
+        ],
+        "summary": "Đếm số lượng variant theo trạng thái",
+        "operationId": "countProductVariantsByStatus",
+        "parameters": [
+          {
+            "name": "storeId",
+            "in": "path",
+            "description": "ID of the store",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/b2c/orders": {
       "get": {
         "tags": [
@@ -8053,6 +8188,26 @@
               "default": 10
             },
             "example": 10
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "description": "Sort by field",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "createdAt"
+            }
+          },
+          {
+            "name": "sortDir",
+            "in": "query",
+            "description": "Sort direction: asc or desc",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "desc"
+            }
           },
           {
             "name": "status",
@@ -8106,6 +8261,44 @@
           {
             "name": "storeId",
             "in": "query",
+            "description": "ID of the store",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/b2c/orders/store/{storeId}/count-by-status": {
+      "get": {
+        "tags": [
+          "B2C Order Management"
+        ],
+        "summary": "Đếm số lượng đơn hàng theo trạng thái",
+        "operationId": "countOrdersByStatus",
+        "parameters": [
+          {
+            "name": "storeId",
+            "in": "path",
             "description": "ID of the store",
             "required": true,
             "schema": {
@@ -8643,6 +8836,26 @@
               "default": 10
             },
             "example": 10
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "description": "Sort by field",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "createdAt"
+            }
+          },
+          {
+            "name": "sortDir",
+            "in": "query",
+            "description": "Sort direction: asc or desc",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "desc"
+            }
           }
         ],
         "responses": {
@@ -8723,6 +8936,26 @@
               "default": 10
             },
             "example": 10
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "description": "Sort by field",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "createdAt"
+            }
+          },
+          {
+            "name": "sortDir",
+            "in": "query",
+            "description": "Sort direction: asc or desc",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "desc"
+            }
           }
         ],
         "responses": {
@@ -8821,6 +9054,26 @@
               "default": 10
             },
             "example": 10
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "description": "Sort by field",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "createdAt"
+            }
+          },
+          {
+            "name": "sortDir",
+            "in": "query",
+            "description": "Sort direction: asc or desc",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "desc"
+            }
           }
         ],
         "responses": {
@@ -10038,6 +10291,26 @@
           }
         ]
       }
+    },
+    "/api/v1/admin/redis/clear-all": {
+      "delete": {
+        "tags": [
+          "admin-redis-controller"
+        ],
+        "operationId": "clearAll",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -10110,20 +10383,6 @@
           }
         },
         "description": "Review information including rating, comment, and product variant ID"
-      },
-      "ApiResponseObject": {
-        "type": "object",
-        "properties": {
-          "success": {
-            "type": "boolean"
-          },
-          "data": {
-            "type": "object"
-          },
-          "error": {
-            "type": "string"
-          }
-        }
       },
       "UpdateQuantityDTO": {
         "required": [
@@ -11142,6 +11401,12 @@
           "comment": {
             "type": "string"
           },
+          "imageUrls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "user": {
             "$ref": "#/components/schemas/UserResponse"
           },
@@ -11197,13 +11462,6 @@
             "type": "integer",
             "format": "int32"
           },
-          "pageable": {
-            "$ref": "#/components/schemas/PageableObject"
-          },
-          "numberOfElements": {
-            "type": "integer",
-            "format": "int32"
-          },
           "size": {
             "type": "integer",
             "format": "int32"
@@ -11218,8 +11476,15 @@
             "type": "integer",
             "format": "int32"
           },
+          "numberOfElements": {
+            "type": "integer",
+            "format": "int32"
+          },
           "sort": {
             "$ref": "#/components/schemas/SortObject"
+          },
+          "pageable": {
+            "$ref": "#/components/schemas/PageableObject"
           },
           "first": {
             "type": "boolean"
@@ -11235,39 +11500,39 @@
       "PageableObject": {
         "type": "object",
         "properties": {
-          "unpaged": {
-            "type": "boolean"
-          },
-          "paged": {
-            "type": "boolean"
-          },
-          "pageSize": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "pageNumber": {
-            "type": "integer",
-            "format": "int32"
-          },
           "offset": {
             "type": "integer",
             "format": "int64"
           },
           "sort": {
             "$ref": "#/components/schemas/SortObject"
+          },
+          "paged": {
+            "type": "boolean"
+          },
+          "pageNumber": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "unpaged": {
+            "type": "boolean"
           }
         }
       },
       "SortObject": {
         "type": "object",
         "properties": {
-          "unsorted": {
+          "empty": {
             "type": "boolean"
           },
           "sorted": {
             "type": "boolean"
           },
-          "empty": {
+          "unsorted": {
             "type": "boolean"
           }
         }
@@ -11324,23 +11589,6 @@
           }
         }
       },
-      "ApiResponseListReviewResponse": {
-        "type": "object",
-        "properties": {
-          "success": {
-            "type": "boolean"
-          },
-          "data": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReviewResponse"
-            }
-          },
-          "error": {
-            "type": "string"
-          }
-        }
-      },
       "ApiResponseWalletResponse": {
         "type": "object",
         "properties": {
@@ -11394,20 +11642,6 @@
           },
           "data": {
             "$ref": "#/components/schemas/PageObject"
-          },
-          "error": {
-            "type": "string"
-          }
-        }
-      },
-      "ApiResponseString": {
-        "type": "object",
-        "properties": {
-          "success": {
-            "type": "boolean"
-          },
-          "data": {
-            "type": "string"
           },
           "error": {
             "type": "string"

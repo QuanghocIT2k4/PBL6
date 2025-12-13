@@ -73,19 +73,18 @@ const ReviewForm = ({ productVariantId, orderId, existingReview = null, onSucces
       }
     }
 
-    // TODO: Khi backend có API upload ảnh review, thêm logic upload ở đây
-    // Hiện tại chỉ gửi review không có ảnh
+    // ✅ Gửi ảnh nếu có
     const reviewData = {
       rating: data.rating,
       comment: data.comment.trim(),
-      images: [], // Tạm thời bỏ qua ảnh vì backend chưa có API upload
       ...((!existingReview && productVariantId) && { productVariantId }),
       ...((!existingReview && orderId) && { orderId }),
     };
     
-    // Log thông tin ảnh đã chọn (để debug)
+    // ✅ Nếu có ảnh đã chọn, thêm vào reviewData
     if (uploadedImages.length > 0) {
-      console.log('📷 Ảnh đã chọn (chưa upload):', uploadedImages.map(img => img.name));
+      reviewData.imageFiles = uploadedImages.map(img => img.file);
+      console.log('📷 Gửi ảnh:', uploadedImages.map(img => img.name));
     }
 
     try {
@@ -213,7 +212,7 @@ const ReviewForm = ({ productVariantId, orderId, existingReview = null, onSucces
       {/* Comment Section */}
       <div>
         <label className="block text-sm font-bold text-gray-900 mb-3">
-          Nhận xét của bạn <span className="text-gray-400 text-xs">(Tùy chọn)</span>
+          Nhận xét của bạn
         </label>
         <textarea
           {...register('comment')}
@@ -221,7 +220,7 @@ const ReviewForm = ({ productVariantId, orderId, existingReview = null, onSucces
           className={`w-full px-4 py-3 border-2 rounded-xl focus:ring-2 transition-all resize-none ${
             errors.comment ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
           }`}
-          placeholder="Chia sẻ cảm nhận của bạn về sản phẩm này... (Tùy chọn)"
+          placeholder="Chia sẻ cảm nhận của bạn về sản phẩm này..."
           disabled={isSubmitting}
         />
         {errors.comment && (

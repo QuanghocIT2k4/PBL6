@@ -375,6 +375,30 @@ export const deliverOrder = async (orderId, storeId) => {
   }
 };
 
+/**
+ * 8. ĐẾM ĐƠN HÀNG THEO TRẠNG THÁI (API mới)
+ * GET /api/v1/b2c/order/store/{storeId}/count-by-status
+ */
+export const countOrdersByStatus = async (storeId) => {
+  try {
+    if (!storeId) {
+      return { success: false, error: 'storeId is required' };
+    }
+
+    const response = await api.get(`/api/v1/b2c/order/store/${storeId}/count-by-status`);
+    return {
+      success: true,
+      data: response.data.data || response.data,
+    };
+  } catch (error) {
+    console.error('❌ [countOrdersByStatus] Error:', error);
+    return {
+      success: false,
+      error: error.response?.data?.message || error.message || 'Không thể đếm đơn hàng theo trạng thái',
+    };
+  }
+};
+
 // ❌ DEPRECATED: API cũ đã bị xóa
 // - /api/v1/b2c/orders/statistics → Dùng shopStatisticsService.getOverviewStatistics()
 // - /api/v1/b2c/orders/revenue → Dùng shopStatisticsService.getRevenueChartData()

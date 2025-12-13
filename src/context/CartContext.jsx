@@ -85,7 +85,12 @@ export const CartProvider = ({ children }) => {
                 quantity: item.quantity || 1,
                 selected: true,
                 addedAt: item.createdAt || new Date().toISOString(),
-                options: item.options || {}
+                options: {
+                  color: item.colorName || item.color || item.options?.color || null,
+                  colorId: item.colorId || item.color_id || item.options?.colorId || item.options?.color_id || null,
+                  storage: item.storage || item.attributes?.storage || item.options?.storage || null,
+                  ...item.options
+                }
               };
             }).filter(item => item !== null); // Lọc bỏ items không hợp lệ
             
@@ -213,7 +218,8 @@ export const CartProvider = ({ children }) => {
       // ✅ GỌI API BACKEND
       const result = await cartService.addToCart({
         productVariantId: product.id,
-        quantity: quantity
+        quantity: quantity,
+        colorId: options?.colorId || options?.color || null
       });
       
       if (!result.success) {
@@ -251,7 +257,7 @@ export const CartProvider = ({ children }) => {
         const variantId = item.productVariantId || item.product?.id;
         const result = await cartService.updateCartItem(variantId, {
           quantity: newQuantity,
-          colorId: item.options?.color || null
+          colorId: item.options?.colorId || item.options?.color || null
         });
         
         if (!result.success) {

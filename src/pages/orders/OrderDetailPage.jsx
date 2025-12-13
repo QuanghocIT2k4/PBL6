@@ -193,15 +193,20 @@ const OrderDetailPage = () => {
   // Handle both 'items' and 'orderItems' field names
   const items = itemsFromOrder || orderItemsFromOrder || [];
 
-  // Parse total
+  // Totals breakdown
+  const subtotal = items.reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 0)), 0);
+  const shippingFeeValue = order.shippingFee ?? order.shippingCost ?? 0;
+  const serviceFee = order.serviceFee ?? 5000; // fallback nếu backend chưa trả về
+  const discountValue = order.discount ?? order.discountAmount ?? 0;
+
   const parseTotalPrice = () => {
+    if (finalTotal && !isNaN(finalTotal)) return finalTotal;
+    if (totalAmount && !isNaN(totalAmount)) return totalAmount;
     if (totalPrice) {
       const parsed = parseFloat(totalPrice);
       if (!isNaN(parsed)) return parsed;
     }
-    if (totalAmount && !isNaN(totalAmount)) return totalAmount;
-    if (finalTotal && !isNaN(finalTotal)) return finalTotal;
-    return items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    return Math.max(0, subtotal + shippingFeeValue + serviceFee - discountValue);
   };
 
   const calculatedTotal = parseTotalPrice();
@@ -296,6 +301,24 @@ const OrderDetailPage = () => {
           <table class="totals">
             <tr>
               <td class="text-right muted">Tạm tính:</td>
+              <td class="text-right">${formatCurrency(subtotal)}</td>
+            </tr>
+            <tr>
+              <td class="text-right muted">Phí vận chuyển:</td>
+              <td class="text-right">${formatCurrency(shippingFeeValue)}</td>
+            </tr>
+            <tr>
+              <td class="text-right muted">Phụ thu dịch vụ:</td>
+              <td class="text-right">${formatCurrency(serviceFee)}</td>
+            </tr>
+            ${discountValue ? `
+            <tr>
+              <td class="text-right muted">Giảm giá:</td>
+              <td class="text-right">-${formatCurrency(discountValue)}</td>
+            </tr>
+            ` : ''}
+            <tr>
+              <td class="text-right muted">Tổng cộng:</td>
               <td class="text-right">${formatCurrency(calculatedTotal)}</td>
             </tr>
             <tr>
@@ -485,11 +508,29 @@ const OrderDetailPage = () => {
 
             {/* Total */}
             <div className="border-t border-gray-200 px-5 py-4 bg-gray-50">
-              <div className="flex items-center justify-end gap-2 text-lg">
-                <span className="text-gray-700">Thành tiền:</span>
-                <span className="text-2xl font-bold text-red-600">
-                  {formatCurrency(calculatedTotal)}
-                </span>
+              <div className="space-y-1 text-right text-sm text-gray-700">
+                <div className="flex justify-end gap-2">
+                  <span className="text-gray-600">Tạm tính:</span>
+                  <span className="font-medium">{formatCurrency(subtotal)}</span>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <span className="text-gray-600">Phí vận chuyển:</span>
+                  <span className="font-medium">{formatCurrency(shippingFeeValue)}</span>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <span className="text-gray-600">Phụ thu dịch vụ:</span>
+                  <span className="font-medium">{formatCurrency(serviceFee)}</span>
+                </div>
+                {discountValue > 0 && (
+                  <div className="flex justify-end gap-2 text-green-600">
+                    <span>Giảm giá:</span>
+                    <span className="font-medium">-{formatCurrency(discountValue)}</span>
+                  </div>
+                )}
+                <div className="flex justify-end gap-2 pt-2 border-t border-gray-200 text-lg font-bold text-red-600">
+                  <span className="text-gray-800">Tổng cộng:</span>
+                  <span>{formatCurrency(calculatedTotal)}</span>
+                </div>
               </div>
             </div>
           </div>
