@@ -6,6 +6,7 @@ import { useChat } from '../context/ChatContext';
 import NotificationContainer from '../components/notifications/NotificationContainer';
 import { logout } from '../services/common/authService';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 
 const StoreLayout = ({ children }) => {
   const [showStoreSwitcher, setShowStoreSwitcher] = useState(false);
@@ -16,6 +17,7 @@ const StoreLayout = ({ children }) => {
   const { currentStore, userStores, selectStore, loading } = useStoreContext();
   const { unreadCount } = useChat();
   const { success: showSuccess } = useToast();
+  const { user } = useAuth();
 
   // Close menus when clicking outside
   useEffect(() => {
@@ -43,11 +45,17 @@ const StoreLayout = ({ children }) => {
       const result = await logout();
       if (result.success) {
         showSuccess('Đăng xuất thành công!');
-        navigate('/auth');
+        // ✅ Force reload page để đảm bảo clear hoàn toàn state và cache
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 100);
       }
     } catch (error) {
       console.error('Logout error:', error);
-      navigate('/auth');
+      // ✅ Vẫn force reload dù có lỗi để đảm bảo logout
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 100);
     } finally {
       setLoggingOut(false);
     }
@@ -141,11 +149,12 @@ const StoreLayout = ({ children }) => {
                 )}
               </div>
 
-              {/* Notifications */}
+              {/* Notifications - KHÔNG auto load để tránh chậm trang; chỉ load khi user bấm chuông */}
               {currentStore && (
                 <NotificationContainer 
                   userType="store" 
                   storeId={currentStore.id} 
+                  autoLoad={false}
                 />
               )}
 
@@ -176,10 +185,16 @@ const StoreLayout = ({ children }) => {
                   className="flex items-center space-x-3 hover:bg-white hover:bg-opacity-20 rounded-lg px-3 py-2 transition-colors"
                 >
                   <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                    <span className="text-white font-bold text-sm">Q</span>
+                    <span className="text-white font-bold text-sm">
+                      {(user?.fullName || user?.name || user?.username || user?.email || 'U')
+                        .charAt(0)
+                        .toUpperCase()}
+                    </span>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-medium text-white">Quang Nguyễn</p>
+                    <p className="text-sm font-medium text-white">
+                      {user?.fullName || user?.name || user?.username || user?.email || 'Người dùng'}
+                    </p>
                     <p className="text-xs text-blue-100">Store Manager</p>
                   </div>
                   <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -192,10 +207,16 @@ const StoreLayout = ({ children }) => {
                     <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 border-b border-gray-100">
                       <div className="flex items-center space-x-3">
                         <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center shadow-lg">
-                          <span className="text-white font-bold text-lg">Q</span>
+                          <span className="text-white font-bold text-lg">
+                            {(user?.fullName || user?.name || user?.username || user?.email || 'U')
+                              .charAt(0)
+                              .toUpperCase()}
+                          </span>
                         </div>
                         <div>
-                          <p className="text-base font-semibold text-gray-900">Quang Nguyễn</p>
+                          <p className="text-base font-semibold text-gray-900">
+                            {user?.fullName || user?.name || user?.username || user?.email || 'Người dùng'}
+                          </p>
                           <p className="text-sm text-gray-600">Store Manager</p>
                         </div>
                       </div>

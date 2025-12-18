@@ -13,10 +13,10 @@ import { countPromotionsByStatus } from '../../services/b2c/b2cPromotionService'
 import { countShipmentsByStatus } from '../../services/b2c/shipmentService';
 import { 
   getOverviewStatistics, 
-  getOrdersChartData,
   // getProductsSoldChartData, // TODO: Uncomment khi backend implement API
   getOrderCountByStatus,
   getVariantCountByStockStatus,
+  getBestSellingVariants,
   formatCurrency,
   getOrderStatusBadge,
   getStockStatusBadge
@@ -38,12 +38,12 @@ const StoreDashboard = () => {
     () => getOverviewStatistics(currentStore.id),
     { revalidateOnFocus: false }
   );
+  const [bestSellingPeriod, setBestSellingPeriod] = useState('MONTH');
 
-  const [chartPeriod, setChartPeriod] = useState('MONTH');
-  
-  const { data: ordersChartData, error: ordersChartError } = useSWR(
-    currentStore?.id ? ['orders-chart', currentStore.id, chartPeriod] : null,
-    () => getOrdersChartData(currentStore.id, chartPeriod),
+  // ✅ Fetch best-selling variants
+  const { data: bestSellingData, error: bestSellingError, isLoading: bestSellingLoading } = useSWR(
+    currentStore?.id ? ['best-selling-variants', currentStore.id, bestSellingPeriod] : null,
+    () => getBestSellingVariants(currentStore.id, 10, bestSellingPeriod),
     { revalidateOnFocus: false }
   );
   
@@ -54,17 +54,6 @@ const StoreDashboard = () => {
   //   { revalidateOnFocus: false }
   // );
   
-  // Debug: Log API response
-  React.useEffect(() => {
-    if (ordersChartData) {
-      console.log('📊 [StoreDashboard] ordersChartData:', ordersChartData);
-      console.log('📊 [StoreDashboard] ordersChartData.success:', ordersChartData.success);
-      console.log('📊 [StoreDashboard] ordersChartData.data:', ordersChartData.data);
-    }
-    if (ordersChartError) {
-      console.error('❌ [StoreDashboard] ordersChartError:', ordersChartError);
-    }
-  }, [ordersChartData, ordersChartError]);
 
   // ✅ Fetch recent orders từ API (bắt buộc truyền storeId)
   const { data: ordersData, error: ordersError, isLoading: ordersLoading } = useSWR(
@@ -108,15 +97,14 @@ const StoreDashboard = () => {
 
   const analytics = analyticsData?.success ? analyticsData.data : null;
   const overview = overviewData?.success ? overviewData.data : {};
-  const ordersChart = ordersChartData?.success
-    ? (Array.isArray(ordersChartData.data) ? ordersChartData.data : [])
-    : [];
   const revenueTotal = overview?.totalRevenue ?? 0;
   const recentOrders = ordersData?.success ? (ordersData.data?.content || ordersData.data || []) : [];
   const orderCounts = orderCountData?.success ? orderCountData.data : {};
   const variantStockCounts = variantCountData?.success ? variantCountData.data : {}; // Stock status: IN_STOCK, LOW_STOCK, OUT_OF_STOCK
   const promotionCounts = promotionCountData?.success ? promotionCountData.data : {};
   const shipmentCounts = shipmentCountData?.success ? shipmentCountData.data : {};
+  
+  const bestSellingVariants = bestSellingData?.success ? (Array.isArray(bestSellingData.data) ? bestSellingData.data : []) : [];
 
   // Helper functions - phải định nghĩa trước khi sử dụng
   const sumCounts = (obj = {}) =>
@@ -134,80 +122,6 @@ const StoreDashboard = () => {
     return growth >= 0 ? `+${growth.toFixed(1)}%` : `${growth.toFixed(1)}%`;
   };
 
-  // Format chart data - xử lý structure từ API
-  let ordersChartFormatted = [];
-  if (ordersChartData?.success && ordersChartData.data) {
-    let chartData = ordersChartData.data;
-    
-    console.log('📊 [StoreDashboard] Raw chartData:', chartData);
-    
-    // Nếu là array, lấy phần tử đầu tiên
-    if (Array.isArray(chartData) && chartData.length > 0 && typeof chartData[0] === 'object') {
-      chartData = chartData[0];
-    }
-    
-    // API trả về: {period: 'MONTH', orderCounts: Array, Labels: Array}
-    // Kiểm tra orderCounts (chữ L viết hoa) hoặc orders (chữ thường)
-    const orderCounts = chartData.orderCounts || chartData.orders;
-    const labels = chartData.Labels || chartData.labels;
-    
-    if (orderCounts && Array.isArray(orderCounts)) {
-      // Có labels từ API
-      if (labels && Array.isArray(labels) && labels.length === orderCounts.length) {
-        ordersChartFormatted = orderCounts.map((value, idx) => ({
-          label: labels[idx] || `Period ${idx + 1}`,
-          value: Number(value) || 0,
-        }));
-      } else {
-        // Tự tạo labels nếu không có - chỉ dùng dữ liệu thực tế từ API
-        const generatedLabels = orderCounts.map((_, idx) => {
-          if (chartPeriod === 'MONTH') {
-            const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 
-                              'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
-            return monthNames[idx] || `Tháng ${idx + 1}`;
-          }
-          if (chartPeriod === 'WEEK') {
-            // Dùng format "Tuần XX/YYYY" nếu có thể
-            const currentYear = new Date().getFullYear();
-            const weekNum = idx + 1;
-            return `Tuần ${weekNum}/${currentYear}`;
-          }
-          if (chartPeriod === 'YEAR') {
-            const currentYear = new Date().getFullYear();
-            return `${currentYear - orderCounts.length + idx + 1}`;
-          }
-          return `Period ${idx + 1}`;
-        });
-        ordersChartFormatted = orderCounts.map((value, idx) => ({
-          label: generatedLabels[idx] || `Period ${idx + 1}`,
-          value: Number(value) || 0,
-        }));
-      }
-    } 
-    // Nếu là object có orders array (format cũ)
-    else if (!Array.isArray(chartData) && chartData.orders && Array.isArray(chartData.orders)) {
-      const labels = chartData.labels || chartData.orders.map((_, idx) => {
-        if (chartPeriod === 'MONTH') return `Tháng ${idx + 1}`;
-        if (chartPeriod === 'WEEK') return `Tuần ${idx + 1}`;
-        if (chartPeriod === 'YEAR') return `Năm ${idx + 1}`;
-        return `Period ${idx + 1}`;
-      });
-      ordersChartFormatted = chartData.orders.map((value, idx) => ({
-        label: labels[idx] || `Period ${idx + 1}`,
-        value: value || 0,
-      }));
-    } 
-    // Nếu là array trực tiếp
-    else if (Array.isArray(chartData)) {
-      ordersChartFormatted = chartData.map((item) => ({
-        label: item.label || item.period || item.month || item.date || 'N/A',
-        value: item.totalOrders || item.orders || item.count || item.orderCount || 0,
-      }));
-    }
-    
-    console.log('📊 [StoreDashboard] ordersChartFormatted:', ordersChartFormatted);
-  }
-
   // TODO: Uncomment khi backend implement API /api/v1/b2c/statistics/products/chart-data
   // Format products sold chart data - tương tự orders chart
   // let productsSoldChartFormatted = [];
@@ -216,12 +130,13 @@ const StoreDashboard = () => {
   // }
 
   // Statistics chart data - cho biểu đồ phân bổ
+  // Hiển thị tất cả các loại, kể cả giá trị 0 để biểu đồ đầy đủ
   const statsChartData = [
     { label: 'Đơn hàng', value: sumCounts(orderCounts), color: 'blue' },
     { label: 'Sản phẩm', value: sumCounts(variantStockCounts), color: 'green' },
     { label: 'Khuyến mãi', value: sumCounts(promotionCounts), color: 'orange' },
     { label: 'Vận chuyển', value: sumCounts(shipmentCounts), color: 'purple' },
-  ].filter(item => item.value > 0);
+  ];
 
   const statusLabelMap = {
     orders: {
@@ -674,71 +589,17 @@ const StoreDashboard = () => {
               </div>
               <div>
                 <h2 className="text-xl font-bold text-gray-900">Biểu đồ phân tích</h2>
-                <p className="text-sm text-gray-600">Thống kê chi tiết theo số lượng, thời gian, sản phẩm</p>
+                <p className="text-sm text-gray-600">Thống kê chi tiết theo số lượng, sản phẩm</p>
               </div>
             </div>
 
             <div className="space-y-6">
-              {/* Biểu đồ đơn hàng theo thời gian */}
-              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                <div className="mb-4">
-                  <h3 className="text-xl font-bold text-gray-900 mb-1">Đơn hàng theo thời gian</h3>
-                  <p className="text-sm text-gray-500">Số lượng đơn hàng theo {chartPeriod === 'WEEK' ? 'tuần' : chartPeriod === 'MONTH' ? 'tháng' : 'năm'}</p>
-                </div>
-                <div className="flex gap-2 mb-4">
-                  <button
-                    onClick={() => setChartPeriod('WEEK')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      chartPeriod === 'WEEK'
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    Tuần
-                  </button>
-                  <button
-                    onClick={() => setChartPeriod('MONTH')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      chartPeriod === 'MONTH'
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    Tháng
-                  </button>
-                  <button
-                    onClick={() => setChartPeriod('YEAR')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      chartPeriod === 'YEAR'
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    Năm
-                  </button>
-                </div>
-                <Chart
-                  type="line"
-                  data={ordersChartFormatted}
-                  valueKey="value"
-                  labelKey="label"
-                  formatValue={(val) => val.toLocaleString('vi-VN')}
-                  color="green"
-                  height="200px"
-                  className="border-0 shadow-none p-0"
-                />
-                {sumCounts(orderCounts) > 0 && (
-                  <div className="mt-4 pt-4 border-t border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Tổng đơn hàng:</span>
-                      <span className="text-lg font-bold text-gray-900">{sumCounts(orderCounts)}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
               {/* Biểu đồ theo số lượng */}
-              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+              <div className="bg-white rounded-xl border-2 border-gray-200 p-6 shadow-lg mb-12">
+                <div className="mb-6">
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Thống kê theo số lượng</h3>
+                  <p className="text-sm text-gray-600">Tổng hợp đơn hàng, sản phẩm, khuyến mãi, vận chuyển</p>
+                </div>
                 <Chart
                   type="bar"
                   data={statsChartData}
@@ -746,18 +607,234 @@ const StoreDashboard = () => {
                   labelKey="label"
                   formatValue={(val) => val.toLocaleString('vi-VN')}
                   color="purple"
-                  height="320px"
-                  title="Thống kê theo số lượng"
-                  subtitle="Tổng hợp đơn hàng, sản phẩm, khuyến mãi, vận chuyển"
+                  height="400px"
+                  className="border-0 shadow-none p-0"
                 />
               </div>
             </div>
           </div>
 
+          {/* Sản phẩm bán chạy */}
+          <div className="bg-white rounded-xl border-2 border-gray-200 p-6 shadow-lg">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center shadow-md">
+                  <span className="text-2xl text-white">🏆</span>
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900">Sản phẩm bán chạy</h3>
+                  <p className="text-sm text-gray-600">
+                    Top {bestSellingVariants.length > 0 ? bestSellingVariants.length : 10} sản phẩm bán chạy nhất
+                    {bestSellingPeriod === 'WEEK' ? ' (7 ngày qua)' :
+                     bestSellingPeriod === 'MONTH' ? ' (30 ngày qua)' :
+                     bestSellingPeriod === 'YEAR' ? ' (365 ngày qua)' :
+                     ' (tất cả thời gian)'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setBestSellingPeriod('WEEK')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    bestSellingPeriod === 'WEEK'
+                      ? 'bg-amber-500 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Tuần
+                </button>
+                <button
+                  onClick={() => setBestSellingPeriod('MONTH')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    bestSellingPeriod === 'MONTH'
+                      ? 'bg-amber-500 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Tháng
+                </button>
+                <button
+                  onClick={() => setBestSellingPeriod('YEAR')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    bestSellingPeriod === 'YEAR'
+                      ? 'bg-amber-500 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Năm
+                </button>
+                <button
+                  onClick={() => setBestSellingPeriod('ALL')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    bestSellingPeriod === 'ALL'
+                      ? 'bg-amber-500 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Tất cả
+                </button>
+              </div>
+            </div>
 
+            {bestSellingLoading ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600 mx-auto mb-4"></div>
+                <p className="text-gray-500">Đang tải dữ liệu...</p>
+              </div>
+            ) : bestSellingError || bestSellingData?.success === false ? (
+              <div className="text-center py-12">
+                <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-4xl">⚠️</span>
+                </div>
+                <p className="text-gray-500 mb-2 font-semibold">Không thể tải dữ liệu sản phẩm bán chạy</p>
+                <p className="text-sm text-gray-400 mb-2">
+                  {bestSellingData?.error || bestSellingError?.message || 'Vui lòng thử lại sau'}
+                </p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="mt-2 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 text-sm font-medium"
+                >
+                  Tải lại
+                </button>
+              </div>
+            ) : bestSellingVariants.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-4xl">📦</span>
+                </div>
+                <p className="text-gray-500 mb-4">Chưa có dữ liệu sản phẩm bán chạy</p>
+                <p className="text-sm text-gray-400">Dữ liệu sẽ được cập nhật khi có đơn hàng</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {bestSellingVariants.map((variant, index) => {
+                  const variantId = variant.variantId || variant.id || variant._id || variant.variant?.id;
+                  const productName = variant.productName || variant.name || variant.product?.name || variant.productName || 'Sản phẩm';
+                  const variantName = variant.variantName || variant.sku || variant.variant?.name || variant.name || variant.specification || '';
+                  
+                  // Thử nhiều field names có thể có cho số lượng bán
+                  const totalSold = variant.totalSold 
+                    || variant.quantitySold 
+                    || variant.sold 
+                    || variant.quantity
+                    || variant.totalQuantity
+                    || variant.soldQuantity
+                    || variant.count
+                    || variant.totalCount
+                    || variant.orderCount
+                    || variant.numberOfOrders
+                    || variant.variant?.totalSold
+                    || variant.variant?.quantitySold
+                    || 0;
+                  
+                  // Thử nhiều field names có thể có cho doanh thu
+                  const revenue = variant.revenue 
+                    || variant.totalRevenue 
+                    || variant.amount 
+                    || variant.totalAmount
+                    || variant.salesAmount
+                    || variant.income
+                    || variant.variant?.revenue
+                    || variant.variant?.totalRevenue
+                    || 0;
+                  
+                  // Thử nhiều field names và nested paths cho ảnh sản phẩm
+                  const image = variant.primaryImage
+                    || variant.primaryImageUrl
+                    || (variant.images && Array.isArray(variant.images) && variant.images.length > 0 ? variant.images[0] : null)
+                    || (variant.imageUrls && Array.isArray(variant.imageUrls) && variant.imageUrls.length > 0 ? variant.imageUrls[0] : null)
+                    || variant.image 
+                    || variant.productImage 
+                    || variant.product?.primaryImage
+                    || variant.product?.primaryImageUrl
+                    || (variant.product?.images && Array.isArray(variant.product.images) && variant.product.images.length > 0 ? variant.product.images[0] : null)
+                    || variant.product?.image 
+                    || variant.variant?.primaryImage
+                    || variant.variant?.primaryImageUrl
+                    || (variant.variant?.images && Array.isArray(variant.variant.images) && variant.variant.images.length > 0 ? variant.variant.images[0] : null)
+                    || variant.variant?.image
+                    || variant.thumbnail
+                    || variant.product?.thumbnail
+                    || null;
+                  
+                  return (
+                    <div
+                      key={variantId || index}
+                      className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border-2 border-amber-200 p-4 hover:shadow-lg transition-all"
+                    >
+                      <div className="flex items-start gap-4">
+                        {/* Rank badge */}
+                        <div className="flex-shrink-0">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-md ${
+                            index === 0 ? 'bg-gradient-to-br from-yellow-400 to-amber-500' :
+                            index === 1 ? 'bg-gradient-to-br from-gray-300 to-gray-400' :
+                            index === 2 ? 'bg-gradient-to-br from-orange-300 to-orange-400' :
+                            'bg-gradient-to-br from-amber-400 to-orange-400'
+                          }`}>
+                            {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
+                          </div>
+                        </div>
+
+                        {/* Product image */}
+                        <div className="w-16 h-16 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0 border-2 border-amber-200">
+                          {image ? (
+                            <img
+                              src={image}
+                              alt={productName}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                // Nếu ảnh lỗi, ẩn img và hiển thị placeholder
+                                e.target.style.display = 'none';
+                                const placeholder = e.target.nextElementSibling;
+                                if (placeholder) placeholder.style.display = 'flex';
+                              }}
+                            />
+                          ) : null}
+                          <div 
+                            className={`w-full h-full flex items-center justify-center text-gray-400 text-xl ${image ? 'hidden' : ''}`}
+                            style={{ display: image ? 'none' : 'flex' }}
+                          >
+                            📦
+                          </div>
+                        </div>
+
+                        {/* Product info */}
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-bold text-gray-900 text-sm mb-1 truncate">
+                            {productName}
+                          </h4>
+                          {variantName && (
+                            <p className="text-xs text-gray-600 mb-2 truncate">
+                              {variantName}
+                            </p>
+                          )}
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-gray-600">Đã bán:</span>
+                              <span className="text-sm font-bold text-amber-600">
+                                {totalSold.toLocaleString('vi-VN')} sản phẩm
+                              </span>
+                            </div>
+                            {revenue > 0 && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-gray-600">Doanh thu:</span>
+                                <span className="text-sm font-bold text-green-600">
+                                  {formatPrice(revenue)}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           {/* Thao tác nhanh */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm mt-12">
             <h3 className="text-xl font-bold text-gray-900 mb-6">Thao tác nhanh</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <Link
@@ -847,19 +924,7 @@ const StoreDashboard = () => {
                   const moreCount = Math.max(0, items.length - 1);
                   const customerName = getCustomerName(order);
                   
-                  // Debug: Log order structure để xem có tên ở đâu
-                  if (customerName === 'Khách hàng') {
-                    console.log('⚠️ [StoreDashboard] Order không có tên khách hàng:', {
-                      orderId: order.id,
-                      orderKeys: Object.keys(order),
-                      buyer: order.buyer,
-                      user: order.user,
-                      shippingAddress: order.shippingAddress,
-                      shipment: order.shipment,
-                      customerName: order.customerName,
-                      buyerName: order.buyerName
-                    });
-                  }
+                  // Order không có tên khách hàng
                   
                   return (
                     <div key={order.id} className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all p-4">

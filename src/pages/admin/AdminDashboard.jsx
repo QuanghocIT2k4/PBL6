@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import { Link } from 'react-router-dom';
 import AdminPageHeader from '../../components/admin/AdminPageHeader';
@@ -8,7 +8,13 @@ import { getPendingProducts } from '../../services/admin/adminProductService';
 import { getPendingVariants } from '../../services/admin/adminVariantService';
 import { getAllUsers } from '../../services/admin/adminUserService';
 import { getAllPromotions } from '../../services/admin/adminPromotionService';
-import { getOverviewStatistics, getRevenueStatistics } from '../../services/admin/adminStatisticsService';
+import { 
+  getOverviewStatistics, 
+  getRevenueStatistics,
+  formatCurrency 
+} from '../../services/admin/adminStatisticsService';
+import { getShipperStatistics } from '../../services/admin/adminShipperService';
+import Chart from '../../components/charts/Chart';
 
 const AdminDashboard = () => {
   // Fetch summary data
@@ -42,95 +48,150 @@ const AdminDashboard = () => {
     { revalidateOnFocus: false }
   );
 
+  // Fetch overview statistics
   const { data: overviewStats } = useSWR(
     'admin-overview-statistics',
     () => getOverviewStatistics(),
     { revalidateOnFocus: false }
   );
 
+  // Fetch revenue statistics
   const { data: revenueStats } = useSWR(
     'admin-revenue-statistics',
     () => getRevenueStatistics(),
     { revalidateOnFocus: false }
   );
 
-  // Debug logging
-  React.useEffect(() => {
-    console.log('📊 [AdminDashboard] pendingStoresData:', pendingStoresData);
-    console.log('📊 [AdminDashboard] pendingProductsData:', pendingProductsData);
-    console.log('📊 [AdminDashboard] pendingVariantsData:', pendingVariantsData);
-    console.log('📊 [AdminDashboard] usersData:', usersData);
-    console.log('📊 [AdminDashboard] promotionsData:', promotionsData);
-    console.log('📊 [AdminDashboard] overviewStats:', overviewStats);
-    console.log('📊 [AdminDashboard] revenueStats:', revenueStats);
-  }, [pendingStoresData, pendingProductsData, pendingVariantsData, usersData, promotionsData, overviewStats, revenueStats]);
+  // Fetch shipper statistics
+  const { data: shipperStats } = useSWR(
+    'admin-shipper-statistics',
+    () => getShipperStatistics(),
+    { revalidateOnFocus: false }
+  );
 
-  // Parse counts từ API - ưu tiên overviewStats nếu có
-  const parseCount = (data, key) => {
-    if (!data) return null;
-    const dataObj = data.data || data;
-    return dataObj[key] || dataObj.totalElements || dataObj.total || dataObj.count || null;
+  // Fetch all users to count by role
+  const { data: allUsersData } = useSWR(
+    'admin-all-users-for-stats',
+    () => getAllUsers({ page: 0, size: 1000 }),
+    { revalidateOnFocus: false }
+  );
+
+  // Parse counts with fallback logic
+  const parseCount = (data, keys, fallback = 0) => {
+    if (!data) return fallback;
+    
+    // Check overviewStats first
+    if (overviewStats?.success && overviewStats?.data) {
+      for (const key of keys) {
+        if (overviewStats.data[key] !== undefined && overviewStats.data[key] !== null) {
+          return overviewStats.data[key];
+        }
+      }
+    }
+    
+    // Check individual API responses
+    const response = data?.data || data;
+    for (const key of keys) {
+      if (response?.[key] !== undefined && response?.[key] !== null) {
+        return response[key];
+      }
+    }
+    
+    // Check totalElements as fallback
+    if (response?.totalElements !== undefined) {
+      return response.totalElements;
+    }
+    
+    return fallback;
   };
 
-  // Ưu tiên dùng overviewStats, fallback sang API riêng lẻ
-  const overview = overviewStats?.success ? overviewStats.data : {};
-  
-  // Parse với nhiều key có thể có
-  const pendingStoresCount = 
-    overview.pendingStores || 
-    overview.pendingStoresCount || 
-    overview.totalPendingStores ||
-    parseCount(pendingStoresData, 'totalElements') || 
-    0;
+  const pendingStoresCount = parseCount(
+    pendingStoresData, 
+    ['pendingStores', 'pendingStoresCount', 'totalPendingStores', 'totalElements']
+  );
+  const pendingProductsCount = parseCount(
+    pendingProductsData,
+    ['pendingProducts', 'pendingProductsCount', 'totalPendingProducts', 'totalElements']
+  );
+  const pendingVariantsCount = parseCount(
+    pendingVariantsData,
+    ['pendingVariants', 'pendingVariantsCount', 'totalPendingVariants', 'totalElements']
+  );
+  const totalUsersCount = parseCount(
+    usersData,
+    ['totalUsers', 'usersCount', 'totalUsersCount', 'totalElements']
+  );
+  const totalPromotionsCount = parseCount(
+    promotionsData,
+    ['totalPromotions', 'promotionsCount', 'totalPromotionsCount', 'totalElements']
+  );
+
+  // Parse revenue data
+  const parseRevenueValue = (keys, fallback = 0) => {
+    // Check revenueStats first
+    if (revenueStats?.success && revenueStats?.data) {
+      for (const key of keys) {
+        if (revenueStats.data[key] !== undefined && revenueStats.data[key] !== null) {
+          return revenueStats.data[key];
+        }
+      }
+    }
     
-  const pendingProductsCount = 
-    overview.pendingProducts || 
-    overview.pendingProductsCount || 
-    overview.totalPendingProducts ||
-    parseCount(pendingProductsData, 'totalElements') || 
-    0;
+    // Check overviewStats as fallback
+    if (overviewStats?.success && overviewStats?.data) {
+      for (const key of keys) {
+        if (overviewStats.data[key] !== undefined && overviewStats.data[key] !== null) {
+          return overviewStats.data[key];
+        }
+      }
+    }
     
-  const pendingVariantsCount = 
-    overview.pendingVariants || 
-    overview.pendingVariantsCount || 
-    overview.totalPendingVariants ||
-    parseCount(pendingVariantsData, 'totalElements') || 
-    0;
-    
-  const totalUsersCount = 
-    overview.totalUsers || 
-    overview.usersCount || 
-    overview.users ||
-    parseCount(usersData, 'totalElements') || 
-    0;
-    
-  const totalPromotionsCount = 
-    overview.totalPromotions || 
-    overview.promotionsCount || 
-    overview.promotions ||
-    parseCount(promotionsData, 'totalElements') || 
-    0;
-  
-  // Parse revenue data - ưu tiên revenueStats, fallback sang overviewStats
-  // Dùng đúng key như trong AdminRevenue.jsx
-  const revenueData = revenueStats?.success ? revenueStats.data : {};
-  const overviewRevenue = overviewStats?.success ? overviewStats.data : {};
-  
-  // Key đúng: totalServiceFee (không phải totalServiceFees)
-  const totalServiceFee = revenueData.totalServiceFee || revenueData.totalServiceFees || revenueData.serviceFees || overviewRevenue.totalServiceFee || overviewRevenue.totalServiceFees || overviewRevenue.serviceFees || 0;
-  
-  // Key đúng: totalPlatformDiscountLoss (không phải totalDiscountLoss)
-  const totalPlatformDiscountLoss = revenueData.totalPlatformDiscountLoss || revenueData.totalDiscountLoss || revenueData.discountLoss || overviewRevenue.totalPlatformDiscountLoss || overviewRevenue.totalDiscountLoss || overviewRevenue.discountLoss || 0;
-  
-  // Net Revenue = Service Fee - Discount Loss (tính toán như trong AdminRevenue)
-  const netRevenue = revenueData.netRevenue || revenueData.net || (totalServiceFee - totalPlatformDiscountLoss) || overviewRevenue.netRevenue || overviewRevenue.net || 0;
-  
-  // Dùng tên biến giống AdminRevenue để dễ maintain
-  const totalServiceFees = totalServiceFee;
-  const totalDiscountLoss = totalPlatformDiscountLoss;
+    return fallback;
+  };
+
+  // 💰 Tổng hoa hồng nền tảng (ưu tiên field mới, fallback field cũ để tương thích)
+  const totalServiceFee = parseRevenueValue(
+    ['totalPlatformCommission', 'platformCommission', 'totalServiceFee', 'totalServiceFees', 'serviceFees']
+  );
+  const totalShippingFee = parseRevenueValue(
+    ['totalShippingFee', 'shippingFee', 'totalShippingFees', 'shippingFees']
+  );
+  const totalPlatformDiscountLoss = parseRevenueValue(
+    ['totalPlatformDiscountLoss', 'totalDiscountLoss', 'discountLoss', 'platformDiscountLoss']
+  );
+  const netRevenue = totalServiceFee + totalShippingFee - totalPlatformDiscountLoss;
 
   return (
     <div className="space-y-6">
+      <style>{`
+        .admin-quick-actions {
+          background-color: #ffffff;
+          border-radius: 12px;
+          border: 1px solid #e5e7eb;
+          padding: 24px;
+          box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+        }
+        .admin-quick-actions h2 {
+          font-size: 24px;
+          font-weight: 700;
+          color: #111827;
+          margin-bottom: 24px;
+        }
+        .admin-user-distribution {
+          background-color: #ffffff;
+          border-radius: 12px;
+          border: 1px solid #e5e7eb;
+          padding: 24px;
+          box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+          margin-bottom: 24px;
+        }
+        .admin-user-distribution h3 {
+          font-size: 20px;
+          font-weight: 700;
+          color: #111827;
+          margin-bottom: 16px;
+        }
+      `}</style>
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
           {/* Pending Stores */}
@@ -225,8 +286,8 @@ const AdminDashboard = () => {
         </div>
 
         {/* Quick Actions */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Thao tác nhanh</h2>
+        <div className="admin-quick-actions">
+          <h2>Thao tác nhanh</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link
               to="/admin-dashboard/stores"
@@ -282,21 +343,37 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        {/* Revenue Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Service Fees */}
+        {/* Revenue Statistics Cards - Updated với shipping fees */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Service Fees / Platform Commission */}
           <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white shadow-xl">
             <div className="flex items-center justify-between mb-4">
               <div className="bg-white/20 p-3 rounded-xl">
                 <span className="text-2xl">💰</span>
               </div>
-              <span className="text-sm font-medium opacity-90">Phí Dịch Vụ</span>
+              <span className="text-sm font-medium opacity-90">Hoa Hồng Nền Tảng</span>
             </div>
             <div className="text-3xl font-bold mb-2">
-              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalServiceFees)}
+              {formatCurrency(totalServiceFee)}
             </div>
             <div className="text-sm opacity-90">
               Thu từ shop
+            </div>
+          </div>
+
+          {/* Shipping Fees */}
+          <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 text-white shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className="bg-white/20 p-3 rounded-xl">
+                <span className="text-2xl">🚚</span>
+              </div>
+              <span className="text-sm font-medium opacity-90">Phí Vận Chuyển</span>
+            </div>
+            <div className="text-3xl font-bold mb-2">
+              {formatCurrency(totalShippingFee)}
+            </div>
+            <div className="text-sm opacity-90">
+              Thu từ đơn hàng
             </div>
           </div>
 
@@ -309,7 +386,7 @@ const AdminDashboard = () => {
               <span className="text-sm font-medium opacity-90">Tiền Lỗ Giảm Giá</span>
             </div>
             <div className="text-3xl font-bold mb-2">
-              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalDiscountLoss)}
+              {formatCurrency(totalPlatformDiscountLoss)}
             </div>
             <div className="text-sm opacity-90">
               Sàn chịu
@@ -325,13 +402,60 @@ const AdminDashboard = () => {
               <span className="text-sm font-medium opacity-90">Doanh Thu Ròng</span>
             </div>
             <div className="text-3xl font-bold mb-2">
-              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(netRevenue)}
+              {formatCurrency(netRevenue)}
             </div>
             <div className="text-sm opacity-90">
-              = Phí DV - Lỗ GG
+              = HH + VC - Lỗ GG
             </div>
           </div>
         </div>
+
+        {/* Overview Statistics Charts */}
+        {overviewStats?.success && overviewStats.data && (() => {
+          // Count users by role
+          let adminCount = 0;
+          let userCount = 0;
+          const shipperCount = shipperStats?.data?.totalShippers || shipperStats?.data?.total || 0;
+          
+          if (allUsersData?.success && allUsersData.data) {
+            const users = allUsersData.data.content || allUsersData.data.users || allUsersData.data || [];
+            adminCount = users.filter(u => u.role === 'ADMIN' || u.roles?.includes('ADMIN')).length;
+            userCount = users.filter(u => {
+              const role = u.role || (u.roles && u.roles[0]);
+              return role === 'USER' || role === 'BUYER' || (!role || (role !== 'ADMIN' && role !== 'SHIPPER'));
+            }).length;
+          } else {
+            // Fallback: use overview stats
+            adminCount = overviewStats.data.totalAdmins || overviewStats.data.admins || 0;
+            userCount = (overviewStats.data.totalUsers || totalUsersCount) - adminCount - shipperCount;
+          }
+          
+          return (
+            <div className="admin-user-distribution">
+              <h3>Phân bổ Người dùng</h3>
+              <Chart
+                data={[
+                  { 
+                    label: 'Quản trị viên', 
+                    value: adminCount
+                  },
+                  { 
+                    label: 'Người dùng', 
+                    value: userCount
+                  },
+                  { 
+                    label: 'Shipper', 
+                    value: shipperCount
+                  },
+                ].filter(item => item.value > 0)}
+                type="pie"
+                height="500px"
+                color="purple"
+                showLegend={true}
+              />
+            </div>
+          );
+        })()}
     </div>
   );
 };

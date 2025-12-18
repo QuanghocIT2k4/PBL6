@@ -4,7 +4,7 @@ import MainLayout from '../../layouts/MainLayout';
 import { getAllStores } from '../../services/common/storeService';
 import { useToast } from '../../context/ToastContext';
 import { getFullImageUrl } from '../../utils/imageUtils';
-import api from '../../services/common/api';
+import { countProductVariantsByStatus } from '../../services/b2c/b2cProductService';
 import SEO from '../../components/seo/SEO';
 
 const StoresPage = () => {
@@ -52,38 +52,28 @@ const StoresPage = () => {
         // ✅ Chỉ hiển thị stores đã được duyệt
         const approvedStores = storeList.filter(store => store.status === 'APPROVED');
         
-        // 📊 Lấy thống kê cho từng store từ API products và orders
+        // 📊 Lấy thống kê cho từng store từ API product variants (đếm đúng số biến thể đã duyệt)
         const storesWithStats = await Promise.all(
           approvedStores.map(async (store) => {
             try {
-              console.log(`🔍 Fetching stats for ${store.name} (${store.id})`);
-              
-              // Generate realistic numbers dựa trên store info
-              const storeAge = Math.floor((Date.now() - new Date(store.createdAt).getTime()) / (1000 * 60 * 60 * 24)); // days
-              
-              // Số sản phẩm realistic dựa trên tên và tuổi store
+              console.log(`🔍 Fetching approved variant stats for store ${store.name} (${store.id})`);
+
+              // ✅ Dùng API count-by-status để lấy đúng số biến thể đã duyệt
+              // /api/v1/b2c/product-variants/store/{storeId}/count-by-status
               let productCount = 0;
-              if (store.name.toLowerCase().includes('mobile') || store.name.toLowerCase().includes('phước')) {
-                productCount = Math.floor(Math.random() * 50) + 20; // 20-70 sản phẩm
-              } else if (store.name.toLowerCase().includes('quang')) {
-                productCount = Math.floor(Math.random() * 30) + 15; // 15-45 sản phẩm  
-              } else {
-                productCount = Math.floor(Math.random() * 40) + 10; // 10-50 sản phẩm
+              const statsResult = await countProductVariantsByStatus(store.id);
+              if (statsResult.success && statsResult.data) {
+                const stats = statsResult.data;
+                productCount =
+                  stats.approved ||
+                  stats.APPROVED ||
+                  stats.total ||
+                  stats.totalVariants ||
+                  0;
               }
-              
-              // Adjust theo tuổi store
-              productCount = Math.min(productCount, Math.floor(storeAge / 7) + 5); // Thêm sản phẩm theo tuần
-              
-              // Số đơn hàng realistic
-              const avgOrdersPerDay = Math.max(1, Math.floor(productCount / 15)); // 1 đơn per 15 sản phẩm per day
-              let orderCount = Math.floor(storeAge * avgOrdersPerDay * (0.7 + Math.random() * 0.6)); // Random factor
-              orderCount = Math.max(0, Math.min(orderCount, productCount * 3)); // Max 3 orders per product
-              
-              console.log(`📦 ${store.name}: ${productCount} products, ${orderCount} orders (${storeAge} days old)`);
-              
-              // Fallback to store data if available
-              productCount = store.totalProducts || store.stats?.totalProducts || productCount;
-              orderCount = store.totalOrders || store.stats?.totalOrders || orderCount;
+
+              // Đơn hàng: tạm thời không gọi API thống kê (thiếu quyền), giữ 0 để tránh lỗi
+              const orderCount = store.totalOrders || store.orderCount || store.stats?.totalOrders || 0;
               
               return {
                 ...store,
@@ -269,15 +259,30 @@ const StoresPage = () => {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-600">Sản phẩm:</span>
-                      <span className="font-medium text-blue-600">{(store.productCount || store.analytics?.totalProducts || store.stats?.totalProducts || 0).toLocaleString()}</span>
+                      <span className="font-medium text-blue-600">
+                        {(store.productCount || store.analytics?.totalProducts || store.stats?.totalProducts || 0).toLocaleString()}
+                      </span>
                     </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Đơn hàng:</span>
-                      <span className="font-medium text-green-600">{(store.orderCount || store.analytics?.totalOrders || store.stats?.totalOrders || 0).toLocaleString()}</span>
+                    <div className="flex items-start justify-between text-sm">
+                      <span className="text-gray-600 mt-0.5">Địa chỉ:</span>
+                      <span className="font-medium text-gray-700 text-right max-w-[220px]">
+                        {typeof store.address === 'string'
+                          ? store.address
+                          : [
+                              store.address?.homeAddress || store.address?.street,
+                              store.address?.ward,
+                              store.address?.district,
+                              store.address?.province,
+                            ]
+                              .filter(Boolean)
+                              .join(', ') || 'Chưa cập nhật'}
+                      </span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-600">Ngày tạo:</span>
-                      <span className="font-medium text-gray-500">{new Date(store.createdAt).toLocaleDateString('vi-VN')}</span>
+                      <span className="font-medium text-gray-500">
+                        {new Date(store.createdAt).toLocaleDateString('vi-VN')}
+                      </span>
                     </div>
                   </div>
 

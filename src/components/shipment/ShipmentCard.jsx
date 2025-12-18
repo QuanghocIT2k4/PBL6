@@ -27,8 +27,13 @@ const ShipmentCard = ({ orderId }) => {
 
       if (result.success) {
         setShipment(result.data);
+      } else if (result.notFound) {
+        // ✅ Chưa có shipment là trường hợp bình thường, không phải lỗi
+        setShipment(null);
+        setError(null);
       } else {
-        setError(result.error);
+        // ✅ Chỉ set error khi có lỗi thực sự (không phải notFound)
+        setError(result.error || 'Không thể tải thông tin vận đơn');
       }
     } catch (err) {
       console.error('Error loading shipment:', err);
@@ -48,7 +53,23 @@ const ShipmentCard = ({ orderId }) => {
     );
   }
 
-  if (error || !shipment) {
+  // ✅ Hiển thị error banner chỉ khi có lỗi thực sự (không phải notFound)
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="flex items-center gap-3 text-red-700">
+          <span className="text-xl">⚠️</span>
+          <div>
+            <p className="text-sm font-medium">Không thể tải thông tin vận đơn</p>
+            <p className="text-xs text-red-600 mt-1">{error}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ✅ Chưa có shipment là trường hợp bình thường, hiển thị message thân thiện
+  if (!shipment) {
     return (
       <div className="bg-white rounded-lg shadow-sm p-6">
         <div className="flex items-center gap-3 text-gray-500">
@@ -110,11 +131,11 @@ const ShipmentCard = ({ orderId }) => {
           </div>
 
           {/* Carrier (Shipper) */}
-          {shipment.carrier && (
+          {(shipment.carrier || shipment.shipperName) && (
             <div className="flex items-start">
               <span className="text-sm text-gray-500 w-32">Shipper:</span>
               <div className="flex items-center gap-2">
-                {shipment.carrier.avatar && (
+                {shipment.carrier?.avatar && (
                   <img 
                     src={shipment.carrier.avatar} 
                     alt={shipment.carrier.fullName || shipment.carrier.name} 
@@ -122,9 +143,9 @@ const ShipmentCard = ({ orderId }) => {
                   />
                 )}
                 <span className="text-sm text-gray-900 font-medium">
-                  {shipment.carrier.fullName || shipment.carrier.name || shipment.carrier.email || 'N/A'}
+                  {shipment.carrier?.fullName || shipment.carrier?.name || shipment.shipperName || shipment.carrier?.email || 'N/A'}
                 </span>
-                {shipment.carrier.phone && (
+                {shipment.carrier?.phone && (
                   <span className="text-sm text-gray-500">
                     ({shipment.carrier.phone})
                   </span>
@@ -154,6 +175,38 @@ const ShipmentCard = ({ orderId }) => {
                   year: 'numeric',
                   month: 'long',
                   day: 'numeric',
+                })}
+              </span>
+            </div>
+          )}
+
+          {/* Created At */}
+          {shipment.createdAt && (
+            <div className="flex items-start">
+              <span className="text-sm text-gray-500 w-32">Ngày tạo:</span>
+              <span className="text-sm text-gray-900">
+                {new Date(shipment.createdAt).toLocaleString('vi-VN', {
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
+            </div>
+          )}
+
+          {/* Updated At */}
+          {shipment.updatedAt && (
+            <div className="flex items-start">
+              <span className="text-sm text-gray-500 w-32">Cập nhật lần cuối:</span>
+              <span className="text-sm text-gray-900">
+                {new Date(shipment.updatedAt).toLocaleString('vi-VN', {
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
                 })}
               </span>
             </div>

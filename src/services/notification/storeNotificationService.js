@@ -20,13 +20,9 @@ export const getStoreNotifications = async (storeId, params = {}) => {
   try {
     const { page = 0, size = 20, sortBy = 'createdAt', sortDir = 'desc' } = params;
     
-    console.log('📬 [Store] Fetching notifications:', { storeId, page, size, sortBy, sortDir });
-    
     const response = await api.get(`/api/v1/b2c/stores/${storeId}/notifications`, {
       params: { page, size, sortBy, sortDir },
     });
-    
-    console.log('✅ [Store] Notifications response:', response.data);
     
     if (response.data.success) {
       return {
@@ -54,11 +50,7 @@ export const getStoreNotifications = async (storeId, params = {}) => {
  */
 export const getStoreUnreadCount = async (storeId) => {
   try {
-    console.log('🔢 [Store] Fetching unread count:', storeId);
-    
     const response = await api.get(`/api/v1/b2c/stores/${storeId}/notifications/unread-count`);
-    
-    console.log('✅ [Store] Unread count:', response.data);
     
     if (response.data.success) {
       return {
@@ -86,11 +78,7 @@ export const getStoreUnreadCount = async (storeId) => {
  */
 export const markStoreNotificationAsRead = async (storeId, notificationId) => {
   try {
-    console.log('✅ [Store] Marking notification as read:', { storeId, notificationId });
-    
     const response = await api.put(`/api/v1/b2c/stores/${storeId}/notifications/${notificationId}/read`);
-    
-    console.log('✅ [Store] Marked as read:', response.data);
     
     if (response.data.success) {
       return {
@@ -119,11 +107,7 @@ export const markStoreNotificationAsRead = async (storeId, notificationId) => {
  */
 export const markAllStoreNotificationsAsRead = async (storeId) => {
   try {
-    console.log('✅ [Store] Marking all notifications as read:', storeId);
-    
     const response = await api.put(`/api/v1/b2c/stores/${storeId}/notifications/read-all`);
-    
-    console.log('✅ [Store] Marked all as read:', response.data);
     
     if (response.data.success) {
       return {
@@ -151,11 +135,7 @@ export const markAllStoreNotificationsAsRead = async (storeId) => {
  */
 export const deleteStoreNotification = async (storeId, notificationId) => {
   try {
-    console.log('🗑️ [Store] Deleting notification:', { storeId, notificationId });
-    
     const response = await api.delete(`/api/v1/b2c/stores/${storeId}/notifications/${notificationId}`);
-    
-    console.log('✅ [Store] Deleted notification:', response.data);
     
     if (response.data.success) {
       return {

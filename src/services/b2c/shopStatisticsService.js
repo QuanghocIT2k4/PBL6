@@ -29,15 +29,9 @@ export const getOverviewStatistics = async (storeId) => {
       throw new Error('storeId là bắt buộc');
     }
 
-    console.log('📥 Fetching shop overview statistics for store:', storeId);
-
     const response = await api.get('/api/v1/b2c/statistics/overview', {
       params: { storeId },
     });
-
-    console.log('✅ Shop overview statistics RAW:', response);
-    console.log('✅ Shop overview statistics DATA:', response.data);
-    console.log('✅ Shop overview statistics NESTED:', response.data?.data);
 
     return {
       success: true,
@@ -64,17 +58,15 @@ export const getRevenueChartData = async (storeId, period = 'MONTH') => {
       throw new Error('storeId là bắt buộc');
     }
 
-    console.log('📥 Fetching revenue chart data for store:', storeId, 'period:', period);
-
     const response = await api.get('/api/v1/b2c/statistics/revenue/chart-data', {
       params: { storeId, period },
     });
 
-    console.log('✅ Revenue chart data:', response.data);
+    const data = response.data.data || response.data;
 
     return {
       success: true,
-      data: response.data.data || response.data,
+      data: data,
     };
   } catch (error) {
     console.error('❌ Error fetching revenue chart data:', error);
@@ -97,13 +89,9 @@ export const getOrderCountByStatus = async (storeId) => {
       throw new Error('storeId là bắt buộc');
     }
 
-    console.log('📥 Fetching order count by status for store:', storeId);
-
     const response = await api.get('/api/v1/b2c/statistics/orders/count-by-status', {
       params: { storeId },
     });
-
-    console.log('✅ Order count by status:', response.data);
 
     return {
       success: true,
@@ -130,17 +118,15 @@ export const getOrdersChartData = async (storeId, period = 'MONTH') => {
       throw new Error('storeId là bắt buộc');
     }
 
-    console.log('📥 Fetching orders chart data for store:', storeId, 'period:', period);
-
     const response = await api.get('/api/v1/b2c/statistics/orders/chart-data', {
       params: { storeId, period },
     });
 
-    console.log('✅ Orders chart data:', response.data);
+    const data = response.data.data || response.data;
 
     return {
       success: true,
-      data: response.data.data || response.data,
+      data: data,
     };
   } catch (error) {
     console.error('❌ Error fetching orders chart data:', error);
@@ -163,13 +149,9 @@ export const getVariantCountByStockStatus = async (storeId) => {
       throw new Error('storeId là bắt buộc');
     }
 
-    console.log('📥 Fetching variant count by stock status for store:', storeId);
-
     const response = await api.get('/api/v1/b2c/statistics/variant/count-by-stock-status', {
       params: { storeId },
     });
-
-    console.log('✅ Variant count by stock status:', response.data);
 
     return {
       success: true,
@@ -185,7 +167,111 @@ export const getVariantCountByStockStatus = async (storeId) => {
 };
 
 /**
- * 6. GET PRODUCTS SOLD CHART DATA 📊
+ * 6. GET BEST SELLING VARIANTS 🏆
+ * GET /api/v1/b2c/statistics/variants/best-selling
+ * 
+ * Lấy danh sách các variant bán chạy nhất theo period
+ * 
+ * @param {string} storeId - ID của shop
+ * @param {number} limit - Số lượng variant muốn lấy (mặc định: 10)
+ * @param {string} period - Kỳ thời gian: WEEK, MONTH, YEAR, ALL (mặc định: MONTH)
+ */
+export const getBestSellingVariants = async (storeId, limit = 10, period = 'MONTH') => {
+  try {
+    if (!storeId) {
+      throw new Error('storeId là bắt buộc');
+    }
+
+    const response = await api.get('/api/v1/b2c/statistics/variants/best-selling', {
+      params: { storeId, limit, period },
+    });
+
+    // Xử lý nhiều format response có thể có
+    let data = null;
+    if (response.data) {
+      // Format 1: { success: true, data: [...] }
+      if (response.data.success !== undefined && response.data.data) {
+        const innerData = response.data.data;
+        // Nếu innerData là array, dùng trực tiếp
+        if (Array.isArray(innerData)) {
+          data = innerData;
+        }
+        // Nếu innerData là object có variants, lấy variants
+        else if (innerData.variants && Array.isArray(innerData.variants)) {
+          data = innerData.variants;
+        }
+        // Nếu innerData là object trong array, check từng phần tử
+        else if (Array.isArray(innerData) && innerData.length > 0 && innerData[0].variants) {
+          // Nếu là array of objects, mỗi object có variants, lấy variants từ phần tử đầu
+          data = innerData[0].variants || [];
+        }
+        else {
+          data = innerData;
+        }
+      }
+      // Format 2: { data: [...] } hoặc { data: { variants: [...] } }
+      else if (response.data.data) {
+        if (Array.isArray(response.data.data)) {
+          // Nếu data là array, check phần tử đầu có variants không
+          if (response.data.data.length > 0 && response.data.data[0].variants) {
+            data = response.data.data[0].variants || [];
+          } else {
+            data = response.data.data;
+          }
+        }
+        else if (response.data.data.variants && Array.isArray(response.data.data.variants)) {
+          data = response.data.data.variants;
+        }
+      }
+      // Format 3: response.data là array trực tiếp
+      else if (Array.isArray(response.data)) {
+        // Check nếu phần tử đầu có variants
+        if (response.data.length > 0 && response.data[0].variants && Array.isArray(response.data[0].variants)) {
+          data = response.data[0].variants;
+        } else {
+          data = response.data;
+        }
+      }
+      // Format 4: { variants: [...] } trực tiếp
+      else if (response.data.variants && Array.isArray(response.data.variants)) {
+        data = response.data.variants;
+      }
+      // Format 5: { content: [...] } (pagination format)
+      else if (response.data.content && Array.isArray(response.data.content)) {
+        data = response.data.content;
+      }
+      // Format 6: { items: [...] } hoặc { results: [...] }
+      else if (response.data.items && Array.isArray(response.data.items)) {
+        data = response.data.items;
+      }
+      else if (response.data.results && Array.isArray(response.data.results)) {
+        data = response.data.results;
+      }
+      // Fallback: lấy toàn bộ response.data
+      else {
+        data = response.data;
+      }
+    }
+
+    // Đảm bảo data là array
+    const finalData = Array.isArray(data) ? data : (data ? [data] : []);
+
+    return {
+      success: true,
+      data: finalData,
+    };
+  } catch (error) {
+    console.error('❌ Error fetching best selling variants:', error);
+    return {
+      success: false,
+      error: error.response?.data?.message || error.response?.data?.error || error.message || 'Không thể tải danh sách sản phẩm bán chạy',
+      data: null,
+    };
+  }
+};
+
+/**
+ * 7. GET PRODUCTS SOLD CHART DATA 📊
  * GET /api/v1/b2c/statistics/products/chart-data
  * 
  * Xem dữ liệu biểu đồ sản phẩm bán được theo period
@@ -197,15 +283,11 @@ export const getProductsSoldChartData = async (storeId, period = 'MONTH') => {
       throw new Error('storeId là bắt buộc');
     }
 
-    console.log('📥 Fetching products sold chart data for store:', storeId, 'period:', period);
-
     // Thử gọi API mới (nếu có)
     try {
       const response = await api.get('/api/v1/b2c/statistics/products/chart-data', {
         params: { storeId, period },
       });
-
-      console.log('✅ Products sold chart data:', response.data);
 
       return {
         success: true,
@@ -213,7 +295,6 @@ export const getProductsSoldChartData = async (storeId, period = 'MONTH') => {
       };
     } catch (apiError) {
       // Nếu API chưa có, thử dùng API khác hoặc trả về empty
-      console.warn('⚠️ Products chart API not available, trying alternative...');
       
       // Có thể tính từ orders nếu cần
       // Hoặc trả về empty data để hiển thị "Chưa có dữ liệu"

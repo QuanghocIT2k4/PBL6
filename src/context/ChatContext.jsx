@@ -194,6 +194,8 @@ export const ChatProvider = ({ children }) => {
 
   /**
    * Load conversations list
+   * ⚠️ Chỉ nên gọi trên trang Chat (hoặc trang cần hiển thị danh sách chat),
+   * không auto gọi trên mọi trang để tránh chậm load.
    */
   const loadConversations = useCallback(async (page = 0, size = 20) => {
     setLoading(true);
@@ -218,6 +220,7 @@ export const ChatProvider = ({ children }) => {
 
   /**
    * Load unread count
+   * ⚠️ Có thể gọi khi cần (ví dụ trong Chat page), không auto gọi ở mọi nơi.
    */
   const loadUnreadCount = useCallback(async () => {
     try {
@@ -470,11 +473,16 @@ export const ChatProvider = ({ children }) => {
   // ==================== INITIAL LOAD ====================
 
   useEffect(() => {
-    if (user && user.id) {
+    const path = typeof window !== 'undefined' ? window.location.pathname : '';
+    // Chỉ auto load chat khi đang ở trang chat (buyer) hoặc trang chat của store
+    const shouldLoadChat =
+      path.startsWith('/chat') || path.startsWith('/store-dashboard/chats');
+
+    if (user && user.id && shouldLoadChat) {
       loadConversations();
       loadUnreadCount();
     } else {
-      // ✅ Clear chat data when user logs out
+      // ✅ Không ở trang chat hoặc chưa đăng nhập → không load, chỉ clear state
       setConversations([]);
       setCurrentConversation(null);
       setMessages([]);

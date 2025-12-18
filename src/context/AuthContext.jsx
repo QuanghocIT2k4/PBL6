@@ -13,8 +13,21 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuth = async () => {
     try {
+      // ✅ Kiểm tra token trước khi gọi getCurrentUser
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+      
       const currentUser = await getCurrentUser();
-      setUser(currentUser);
+      // ✅ Chỉ set user nếu có token và user data hợp lệ
+      if (currentUser && token) {
+        setUser(currentUser);
+      } else {
+        setUser(null);
+      }
     } catch (error) {
       console.error('Auth check failed:', error);
       setUser(null);
@@ -30,11 +43,16 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       console.log('🔑 AuthContext: logout() called, calling logoutService()');
+      // ✅ Clear user ngay lập tức trước khi gọi logout service
+      setUser(null);
       await logoutService();
+      // ✅ Đảm bảo user đã được clear
       setUser(null);
       console.log('🔑 AuthContext: logout completed, user set to null');
     } catch (error) {
       console.error('Logout failed:', error);
+      // ✅ Vẫn clear user dù có lỗi
+      setUser(null);
     }
   };
 

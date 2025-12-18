@@ -33,7 +33,7 @@ import {
  * Handles all notification logic and state
  * Integrates with NotificationBell
  */
-const NotificationContainer = ({ userType = 'buyer', storeId = null }) => {
+const NotificationContainer = ({ userType = 'buyer', storeId = null, autoLoad = true }) => {
   const { success, error: showError } = useToast();
   const { isAuthenticated } = useAuth();
   
@@ -133,8 +133,13 @@ const NotificationContainer = ({ userType = 'buyer', storeId = null }) => {
     }
   }, [isAuthenticated]);
 
-  // Load notifications on mount and every 30 seconds - CHỈ KHI ĐÃ ĐĂNG NHẬP
+  // Load notifications on mount và auto-poll mỗi 30s (nếu autoLoad === true)
   useEffect(() => {
+    if (!autoLoad) {
+      // Nếu tắt autoLoad: không tự gọi API ở đây
+      return;
+    }
+
     if (!isAuthenticated) {
       // Clear khi logout
       setNotifications([]);
@@ -151,7 +156,7 @@ const NotificationContainer = ({ userType = 'buyer', storeId = null }) => {
     }, 30000); // 30 seconds
 
     return () => clearInterval(interval);
-  }, [userType, storeId, isAuthenticated, loadNotifications]);
+  }, [userType, storeId, isAuthenticated, loadNotifications, autoLoad]);
 
   const handleMarkAsRead = async (notificationId) => {
     try {
@@ -280,6 +285,8 @@ const NotificationContainer = ({ userType = 'buyer', storeId = null }) => {
       hasMore={isAuthenticated ? hasMore : false}
       loading={loading}
       userType={userType}
+      // Khi autoLoad = false: chỉ fetch khi user mở dropdown lần đầu
+      onOpen={!autoLoad && isAuthenticated ? () => loadNotifications() : undefined}
     />
   );
 };

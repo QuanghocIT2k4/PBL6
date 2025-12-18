@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import useSWR from 'swr';
 import StoreLayout from '../../layouts/StoreLayout';
 import { useStoreContext } from '../../context/StoreContext';
 import StoreStatusGuard from '../../components/store/StoreStatusGuard';
-import { getProductsByStore, getProductVariantsByStore } from '../../services/b2c';
+import { getProductsByStore } from '../../services/b2c';
+import { countProductsByStatus } from '../../services/b2c/b2cProductService';
 import { useToast } from '../../hooks/useToast';
 import { getAllBrandsWithoutPagination } from '../../services/common/brandService';
 
@@ -11,21 +13,28 @@ const StoreProducts = () => {
   const navigate = useNavigate();
   const { currentStore, loading: storeLoading } = useStoreContext();
   const [products, setProducts] = useState([]);
-  const [variants, setVariants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const toast = useToast();
   const [brandMap, setBrandMap] = useState({});
+  
+  // ✅ Lưu stats cũ để tránh "nhảy" khi đang load
+  const [cachedStats, setCachedStats] = useState({
+    total: 0,
+    approved: 0,
+    pending: 0,
+    rejected: 0,
+  });
 
-  // Fetch products and variants
+  // ✅ CHỈ load products và brands, KHÔNG load variants (chưa cần thiết)
   const fetchProducts = async () => {
     try {
       setLoading(true);
       
-      const [productsResult, variantsResult, brandsResult] = await Promise.all([
+      // ✅ Bỏ variants ra khỏi Promise.all để tăng tốc độ load
+      const [productsResult, brandsResult] = await Promise.all([
         getProductsByStore(currentStore.id, { page: 0, size: 200, sortBy: 'createdAt', sortDir: 'desc' }),
-        getProductVariantsByStore(currentStore.id, { page: 0, size: 200, sortBy: 'createdAt', sortDir: 'desc' }),
         getAllBrandsWithoutPagination()
       ]);
 
@@ -43,22 +52,6 @@ const StoreProducts = () => {
         console.error('Failed to fetch products:', productsResult.error);
         setProducts([]);
       }
-      
-      // Handle variants
-      if (variantsResult.success) {
-        const data = variantsResult.data;
-        if (Array.isArray(data)) {
-          setVariants(data);
-        } else if (data?.content) {
-          const arr = Array.isArray(data.content) ? data.content : [];
-          setVariants(arr);
-        } else {
-          setVariants([]);
-        }
-      } else {
-        console.error('Failed to fetch variants:', variantsResult.error);
-        setVariants([]);
-      }
 
       // Handle brands map (id -> name)
       if (brandsResult?.success && Array.isArray(brandsResult.data)) {
@@ -74,50 +67,50 @@ const StoreProducts = () => {
     } catch (error) {
       console.error('Error in fetchProducts:', error);
       setProducts([]);
-      setVariants([]);
     } finally {
       setLoading(false);
     }
   };
+
+  // ✅ Fetch product count by status - Dùng API count-by-status như yêu cầu (tương tự orders)
+  // API này TRÁNH trường hợp khi search hay filter status khác thì bộ đếm cũng bị thay đổi theo
+  const { data: statsData, mutate: mutateStats } = useSWR(
+    currentStore?.id ? ['store-products-stats', currentStore.id] : null,
+    () => {
+      return countProductsByStatus(currentStore.id);
+    },
+    { 
+      revalidateOnFocus: false, // ✅ Không load lại khi focus
+      revalidateOnReconnect: false, // ✅ Không load lại khi reconnect
+      revalidateIfStale: false, // ✅ Không load lại nếu data đã cũ
+      dedupingInterval: 86400000, // Cache 24 giờ để tránh request quá nhiều
+      // ✅ Cho phép load lần đầu (giống StoreOrders)
+    }
+  );
+
+  // ✅ Update cached stats khi API load thành công
+  useEffect(() => {
+    if (statsData?.success && statsData.data) {
+      const data = statsData.data;
+      console.log('✅ [StoreProducts] Product stats loaded:', data);
+      setCachedStats({
+        total: data.total || data.TOTAL || 0,
+        approved: data.APPROVED || data.approved || 0,
+        pending: data.PENDING || data.pending || 0,
+        rejected: data.REJECTED || data.rejected || 0,
+      });
+    } else if (statsData && !statsData.success) {
+      console.error('❌ [StoreProducts] Failed to load stats:', statsData.error);
+      // ✅ Nếu API không tồn tại, tính từ products hiện tại
+      console.log('⚠️ [StoreProducts] API count-by-status không tồn tại, sẽ tính từ products hiện tại');
+    }
+  }, [statsData]);
 
   useEffect(() => {
     if (currentStore?.id) {
       fetchProducts();
     }
   }, [currentStore?.id]);
-
-  // Helper: lấy productId từ một biến thể với nhiều format khác nhau
-  const getVariantProductId = (variant) => {
-    // Trực tiếp
-    if (variant?.productId) {
-      const direct = variant.productId;
-      // Mongo ObjectId wrapper
-      if (typeof direct === 'object' && direct !== null) {
-        if (direct.$oid) return String(direct.$oid);
-        if (direct.$id) return String(direct.$id?.$oid || direct.$id);
-        if (direct._id) return String(direct._id);
-      }
-      return String(direct);
-    }
-    // Nằm trong object product
-    const prod = variant?.product;
-    if (typeof prod === 'string' && prod) return String(prod);
-    if (prod && typeof prod === 'object') {
-      if (prod.id) return String(prod.id);
-      if (prod._id) return String(prod._id);
-      // Mongo DBRef
-      if (prod.$id) {
-        const raw = prod.$id;
-        return String(raw?.$oid || raw);
-      }
-      // Một số backend trả dạng {$oid: "..."} trực tiếp
-      if (prod.$oid) return String(prod.$oid);
-    }
-    // Một số backend trả productRefId, product_id...
-    if (variant?.productRefId) return String(variant.productRefId);
-    if (variant?.product_id) return String(variant.product_id);
-    return null;
-  };
 
   // Helper: normalize product id (Mongo/ObjectId/string)
   const getProductId = (product) => {
@@ -134,17 +127,9 @@ const StoreProducts = () => {
     return null;
   };
 
-  // Process items - hiển thị TẤT CẢ sản phẩm, kèm cờ hasVariants
+  // Process items - hiển thị TẤT CẢ sản phẩm (không cần check variants)
   const allItems = useMemo(() => {
-    const productIdsWithVariants = new Set(
-      variants
-        .map(v => getVariantProductId(v))
-        .filter(Boolean)
-    );
-    
     return products.map(p => {
-      const pid = getProductId(p);
-      const hasVariants = pid ? productIdsWithVariants.has(pid) : false;
       // Parse brand (ưu tiên brandName → object.name → DBRef.$id → string → map)
       let brandName = 'Chưa có';
       let brandIdFromRef = null;
@@ -188,7 +173,6 @@ const StoreProducts = () => {
         displayName: p.name,
         // Trạng thái duyệt lấy trực tiếp từ product
         approvalStatus: p.status || 'APPROVED',
-        hasVariants,
         price: 0,
         images: [],
         stock: 0,
@@ -196,7 +180,7 @@ const StoreProducts = () => {
         category: categoryName,
       };
     });
-  }, [products, variants, brandMap]);
+  }, [products, brandMap]);
 
   // Filter items
   const filteredItems = useMemo(() => {
@@ -281,62 +265,69 @@ const StoreProducts = () => {
               </div>
 
               {/* Stats Cards - Nằm trong cùng khung */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <span className="text-lg">📦</span>
+              {/* ✅ Dùng API count-by-status (như yêu cầu), fallback về tính từ products hiện tại nếu API không tồn tại */}
+              {(() => {
+                const stats = statsData?.success ? statsData.data : null;
+                const displayStats = {
+                  total: stats?.total || stats?.TOTAL || (statsData?.success ? 0 : products.length),
+                  approved: stats?.APPROVED || stats?.approved || (statsData?.success ? 0 : allItems.filter(i => i.approvalStatus === 'APPROVED').length),
+                  pending: stats?.PENDING || stats?.pending || (statsData?.success ? 0 : allItems.filter(i => i.approvalStatus === 'PENDING').length),
+                  rejected: stats?.REJECTED || stats?.rejected || (statsData?.success ? 0 : allItems.filter(i => i.approvalStatus === 'REJECTED').length),
+                };
+                
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <span className="text-lg">📦</span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-600">Tổng sản phẩm</p>
+                          <p className="text-xl font-bold text-gray-900">{displayStats.total}</p>
+                          <p className="text-xs text-gray-500">Tất cả</p>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">Tổng sản phẩm</p>
-                      <p className="text-xl font-bold text-gray-900">{products.length}</p>
-                      <p className="text-xs text-gray-500">Tất cả</p>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="bg-green-50 rounded-lg p-4 border border-green-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                      <span className="text-lg">✅</span>
+                    <div className="bg-green-50 rounded-lg p-4 border border-green-100">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                          <span className="text-lg">✅</span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-600">Đã duyệt</p>
+                          <p className="text-xl font-bold text-gray-900">{displayStats.approved}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">Đã duyệt</p>
-                      <p className="text-xl font-bold text-gray-900">
-                        {allItems.filter(i => i.approvalStatus === 'APPROVED').length}
-                      </p>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
-                      <span className="text-lg">⏳</span>
+                    <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-100">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+                          <span className="text-lg">⏳</span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-600">Chờ duyệt</p>
+                          <p className="text-xl font-bold text-gray-900">{displayStats.pending}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">Chờ duyệt</p>
-                      <p className="text-xl font-bold text-gray-900">
-                        {allItems.filter(i => i.approvalStatus === 'PENDING').length}
-                      </p>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="bg-orange-50 rounded-lg p-4 border border-orange-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                      <span className="text-lg">⚠️</span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">Bị từ chối</p>
-                      <p className="text-xl font-bold text-gray-900">
-                        {allItems.filter(i => i.approvalStatus === 'REJECTED').length}
-                      </p>
+                    <div className="bg-orange-50 rounded-lg p-4 border border-orange-100">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                          <span className="text-lg">⚠️</span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-600">Bị từ chối</p>
+                          <p className="text-xl font-bold text-gray-900">{displayStats.rejected}</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
+                );
+              })()}
             </div>
           </div>
 

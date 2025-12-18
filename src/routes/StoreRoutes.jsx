@@ -17,6 +17,10 @@ import AddProductVariant from '../pages/store/AddProductVariant';
 import StoreManagement from '../pages/store/StoreManagement';
 import StoreWallet from '../pages/store/StoreWallet';
 import StoreShipments from '../pages/store/StoreShipments';
+import StoreReturnRequestsPage from '../pages/store/StoreReturnRequestsPage';
+import StoreDisputesPage from '../pages/store/StoreDisputesPage';
+import StoreDisputeDetailPage from '../pages/store/StoreDisputeDetailPage';
+import StoreReturnQualityDisputeCreatePage from '../pages/store/StoreReturnQualityDisputeCreatePage';
 
 const StoreRoutes = () => {
   return (
@@ -39,6 +43,10 @@ const StoreRoutes = () => {
         <Route path="/analytics" element={<StoreAnalytics />} />
         <Route path="/notifications" element={<StoreNotifications />} />
         <Route path="/shipments" element={<StoreShipments />} />
+        <Route path="/returns" element={<StoreReturnRequestsPage />} />
+        <Route path="/returns/:returnRequestId/dispute-quality" element={<StoreReturnQualityDisputeCreatePage />} />
+        <Route path="/disputes" element={<StoreDisputesPage />} />
+        <Route path="/returns/disputes/:disputeId" element={<StoreDisputeDetailPage />} />
         <Route path="/chats" element={<StoreChats />} />
         <Route path="/management" element={<StoreManagement />} />
         <Route path="/wallet/:storeId" element={<StoreWallet />} />

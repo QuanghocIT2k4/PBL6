@@ -52,16 +52,17 @@ export const StoreProvider = ({ children }) => {
         let selectedStore = null;
         
         if (savedStoreId) {
-          selectedStore = storeList.find(store => store.id === savedStoreId);
+          selectedStore = storeList.find(store => (store.id === savedStoreId) || (store.storeId === savedStoreId));
         }
         
-        // If no saved store or saved store not found, use first approved store
+        // If no saved store or saved store not found, pick first APPROVED; else pick first store
         if (!selectedStore) {
-          selectedStore = storeList.find(store => store.status === 'APPROVED');
+          selectedStore = storeList.find(store => store.status === 'APPROVED') || storeList[0] || null;
         }
         
         if (selectedStore) {
           setCurrentStore(selectedStore);
+          localStorage.setItem('selectedStoreId', selectedStore.id || selectedStore.storeId);
         }
       } else {
         console.error('Failed to fetch user stores:', result.error);
@@ -136,11 +137,11 @@ export const StoreProvider = ({ children }) => {
   };
 
   const selectStore = (storeId) => {
-    const store = userStores.find(s => s.id === storeId);
+    const store = userStores.find(s => s.id === storeId || s.storeId === storeId);
     if (store) {
       setCurrentStore(store);
       // TODO: Save selected store to localStorage or API
-      localStorage.setItem('selectedStoreId', storeId);
+      localStorage.setItem('selectedStoreId', store.id || store.storeId);
     }
   };
 

@@ -82,7 +82,7 @@ const CartItem = ({ item }) => {
       animate={{ opacity: isRemoving ? 0 : 1, x: 0 }}
       exit={{ opacity: 0, x: 20, scale: 0.95 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
-      className={`flex items-center space-x-4 bg-white p-4 rounded-lg shadow-sm border ${isUpdating || isRemoving ? 'opacity-60' : ''}`}
+      className={`flex items-center space-x-4 bg-white p-4 transition-all ${isUpdating || isRemoving ? 'opacity-60' : ''}`}
     >
       {/* Select Checkbox */}
       <input

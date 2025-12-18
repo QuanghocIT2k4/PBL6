@@ -139,10 +139,20 @@ export const login = async ({ email, password }) => {
  */
 export const getCurrentUser = async () => {
   try {
+    // ✅ Kiểm tra token trước - nếu không có token thì không lấy user
+    const token = localStorage.getItem('token');
+    if (!token) {
+      return null;
+    }
+    
     // Lấy user từ localStorage (đã có roles từ lúc login)
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
-      return JSON.parse(storedUser);
+      // ✅ Kiểm tra lại token để đảm bảo đồng bộ
+      if (token) {
+        return JSON.parse(storedUser);
+      }
+      return null;
     }
     
     // Nếu không có trong localStorage, gọi API
@@ -165,6 +175,12 @@ export const getCurrentUser = async () => {
     }
   } catch (error) {
     console.error('getCurrentUser error:', error);
+    // ✅ Nếu lỗi 401 (Unauthorized), clear localStorage
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+    }
     return null;
   }
 };
@@ -371,37 +387,27 @@ export const logout = async () => {
     // Gọi API logout để invalidate token trên server
     console.log('🚀 AuthService: Calling API logout');
     await api.post('/api/v1/users/logout');
-    
-    // Clear localStorage
+  } catch (error) {
+    console.error('Logout API error:', error);
+    // Tiếp tục clear localStorage dù API lỗi
+  } finally {
+    // ✅ Luôn clear localStorage và sessionStorage
     localStorage.removeItem('token');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
+    // ✅ Clear cart luôn để chắc chắn badge giỏ hàng về 0 sau logout
+    localStorage.removeItem('cart');
+    sessionStorage.clear(); // ✅ Clear sessionStorage để đảm bảo
     
     // Dispatch logout event để CartContext clear cart
     console.log('🚨 AuthService: Dispatching userLogout event');
     window.dispatchEvent(new CustomEvent('userLogout'));
-    
-    return { 
-      success: true,
-      message: 'Đăng xuất thành công'
-    };
-  } catch (error) {
-    console.error('Logout error:', error);
-    
-    // Vẫn clear localStorage dù API lỗi
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
-    
-    // Dispatch logout event để CartContext clear cart
-    console.log('🚨 AuthService: Dispatching userLogout event (error case)');
-    window.dispatchEvent(new CustomEvent('userLogout'));
-    
-    return { 
-      success: true, // Vẫn return success vì đã clear localStorage
-      message: 'Đăng xuất thành công'
-    };
   }
+  
+  return { 
+    success: true,
+    message: 'Đăng xuất thành công'
+  };
 };
 
 /**

@@ -1,8 +1,10 @@
-import { memo, useState, useEffect } from 'react';
+import { memo, useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 import ReviewForm from '../reviews/ReviewForm';
 import ChatButton from '../chat/ChatButton';
-import { getOrderById, getOrderStatusBadge, getPaymentMethodLabel, canCancelOrder, canReviewOrder } from '../../services/buyer/orderService';
+import { getOrderById, getOrderStatusBadge, getPaymentMethodLabel, canCancelOrder, canReviewOrder, completeOrder } from '../../services/buyer/orderService';
+import { getOrderCode } from '../../utils/displayCodeUtils';
 import { checkExistingReview } from '../../services/buyer/reviewService';
 import { useToast } from '../../context/ToastContext';
 
@@ -35,10 +37,12 @@ const formatDate = (dateString) => {
  */
 const OrderCard = ({ order, onCancel, onRefresh }) => {
   const { success } = useToast();
+  const navigate = useNavigate();
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [expanded, setExpanded] = useState(false);
   const [reviewedItems, setReviewedItems] = useState({}); // Track which items have been reviewed
+  const [cachedDiscount, setCachedDiscount] = useState(null);
 
   // Fetch order details to get items
   const { data: detailData } = useSWR(
@@ -64,6 +68,8 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
     storeName,
     store,
     shop,
+    refundStatus,
+    refundTransactionId,
   } = order;
 
   // Handle different store name formats from backend
@@ -88,21 +94,97 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
   const shippingFeeValue = parseFloat(
     orderDetail?.shippingFee ?? order.shippingFee ?? order.shippingCost ?? 0
   );
-  const serviceFeeValue = parseFloat(
-    orderDetail?.serviceFee ?? order.serviceFee ?? order.platformFee ?? 5000
+
+  // 💰 Hoa hồng nền tảng (platformCommission) - ưu tiên field mới, fallback các field cũ
+  const platformCommissionValue = parseFloat(
+    orderDetail?.platformCommission ??
+    order.platformCommission ??
+    orderDetail?.serviceFee ?? // backward-compat
+    order.serviceFee ??
+    order.platformFee ??
+    0
   );
-  const discountValue = parseFloat(
-    order.discount ?? orderDetail?.discount ?? order.discountAmount ?? 0
-  );
+  
+  // ✅ Tính discount - ƯU TIÊN dùng discount từ backend, KHÔNG tính ngược (tránh sai số)
+  // Backend đã tính discount chính xác, chỉ cần lấy từ field
+  let discountValue = 0;
+  let discountSource = 'none';
+  
+  // Ưu tiên 1: discount field trực tiếp
+  if (order.discount || orderDetail?.discount || order.discountAmount || orderDetail?.discountAmount) {
+    discountValue = parseFloat(order.discount ?? orderDetail?.discount ?? order.discountAmount ?? orderDetail?.discountAmount ?? 0);
+    discountSource = 'discount/discountAmount';
+  }
+  // Ưu tiên 2: promotion discount fields
+  else if (order.promotionDiscount || orderDetail?.promotionDiscount || order.appliedDiscount || orderDetail?.appliedDiscount) {
+    discountValue = parseFloat(order.promotionDiscount ?? orderDetail?.promotionDiscount ?? order.appliedDiscount ?? orderDetail?.appliedDiscount ?? 0);
+    discountSource = 'promotionDiscount/appliedDiscount';
+  }
+  // Ưu tiên 3: promotion amount
+  else if (order.promotionAmount || orderDetail?.promotionAmount) {
+    discountValue = parseFloat(order.promotionAmount ?? orderDetail?.promotionAmount ?? 0);
+    discountSource = 'promotionAmount';
+  }
+  // Ưu tiên 4: appliedPromotion object
+  else if (order.appliedPromotion?.discountAmount || orderDetail?.appliedPromotion?.discountAmount) {
+    discountValue = parseFloat(order.appliedPromotion?.discountAmount ?? orderDetail?.appliedPromotion?.discountAmount ?? 0);
+    discountSource = 'appliedPromotion.discountAmount';
+  }
+  else if (order.appliedPromotion?.discountValue || orderDetail?.appliedPromotion?.discountValue) {
+    discountValue = parseFloat(order.appliedPromotion?.discountValue ?? orderDetail?.appliedPromotion?.discountValue ?? 0);
+    discountSource = 'appliedPromotion.discountValue';
+  }
+  
+  // ✅ Debug log để kiểm tra discount đến từ đâu
+  // Không log debug discount ở môi trường production
+  
+  // ✅ Chỉ tính ngược từ totalPrice nếu KHÔNG có discount field nào (fallback cuối cùng)
+  // Và chỉ tính khi có promotion để tránh tính sai
+  if (discountValue === 0 && (order.appliedPromotion || orderDetail?.appliedPromotion || order.promotionCode || orderDetail?.promotionCode)) {
+    const calculatedTotal = subtotal + shippingFeeValue + platformCommissionValue;
+    const actualTotal = parseFloat(
+      order.finalTotal ?? 
+      orderDetail?.finalTotal ?? 
+      order.totalAmount ?? 
+      orderDetail?.totalAmount ?? 
+      order.totalPrice ?? 
+      orderDetail?.totalPrice ?? 
+      0
+    );
+    // ✅ Chỉ tính nếu actualTotal hợp lý và nhỏ hơn calculatedTotal
+    if (actualTotal > 0 && calculatedTotal > actualTotal && (calculatedTotal - actualTotal) > 0) {
+      discountValue = calculatedTotal - actualTotal;
+    }
+  }
+  
   const baseTotal = !isNaN(finalTotal) && finalTotal ? finalTotal
     : !isNaN(totalAmount) && totalAmount ? totalAmount
     : !isNaN(totalPrice) && totalPrice ? parseFloat(totalPrice)
     : NaN;
-  const fallbackTotal = Math.max(0, subtotal + shippingFeeValue + serviceFeeValue - discountValue);
+
+  // Fallback: tự tính lại từ breakdown (bao gồm platformCommission)
+  const fallbackTotal = Math.max(0, subtotal + shippingFeeValue + platformCommissionValue - discountValue);
   const calculatedTotal = Number.isNaN(baseTotal) ? fallbackTotal : Math.max(baseTotal, fallbackTotal);
-  const statusBadge = getOrderStatusBadge(status);
+
+  // Map trạng thái hiển thị cho badge: RETURNED + refundStatus COMPLETED => REFUNDED
+  let displayStatus = status;
+  if (status === 'RETURNED') {
+    displayStatus = refundStatus === 'COMPLETED' ? 'REFUNDED' : 'RETURNED';
+  }
+
+  const statusBadge = getOrderStatusBadge(displayStatus);
   const canCancel = canCancelOrder(status);
   const canReview = canReviewOrder(status);
+  const canComplete = status === 'DELIVERED';
+  const canReturn = status === 'DELIVERED' || status === 'COMPLETED';
+  // Đơn đang có yêu cầu trả hàng/khiếu nại trả hàng
+  const hasActiveReturnRequest =
+    !!order.hasReturnRequest ||
+    !!order.returnRequestId ||
+    !!order.returnRequest ||
+    order.returnStatus === 'REQUESTED' ||
+    order.returnRequestStatus === 'PENDING' ||
+    order.returnRequestStatus === 'REQUESTED';
 
   // Auto expand on mount to load items
   useEffect(() => {
@@ -131,6 +213,70 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
     
     checkReviews();
   }, [orderDetail, canReview, order.id]);
+  
+  // ✅ Cache discount khi tính được
+  useEffect(() => {
+    // Tính discount từ order object
+    let discount = 0;
+    
+    // 1. Lấy từ discount fields
+    if (order.discount) discount = parseFloat(order.discount);
+    else if (order.discountAmount) discount = parseFloat(order.discountAmount);
+    else if (order.promotionDiscount) discount = parseFloat(order.promotionDiscount);
+    else if (order.appliedDiscount) discount = parseFloat(order.appliedDiscount);
+    else if (order.promotionAmount) discount = parseFloat(order.promotionAmount);
+    else if (order.appliedPromotion?.discountAmount) discount = parseFloat(order.appliedPromotion.discountAmount);
+    else if (order.appliedPromotion?.discountValue) discount = parseFloat(order.appliedPromotion.discountValue);
+    
+    // 2. Nếu có orderDetail, ưu tiên lấy từ đó
+    if (orderDetail) {
+      if (orderDetail.discount) discount = parseFloat(orderDetail.discount);
+      else if (orderDetail.discountAmount) discount = parseFloat(orderDetail.discountAmount);
+      else if (orderDetail.promotionDiscount) discount = parseFloat(orderDetail.promotionDiscount);
+      else if (orderDetail.appliedDiscount) discount = parseFloat(orderDetail.appliedDiscount);
+      else if (orderDetail.promotionAmount) discount = parseFloat(orderDetail.promotionAmount);
+      else if (orderDetail.appliedPromotion?.discountAmount) discount = parseFloat(orderDetail.appliedPromotion.discountAmount);
+      else if (orderDetail.appliedPromotion?.discountValue) discount = parseFloat(orderDetail.appliedPromotion.discountValue);
+    }
+    
+    // 3. Nếu discount = 0 nhưng có promotion, tính ngược từ totalPrice
+    if (discount === 0 && (order.promotionCode || orderDetail?.promotionCode || order.appliedPromotion || orderDetail?.appliedPromotion)) {
+      const items = orderDetail?.items || orderDetail?.orderItems || [];
+      const subtotal = items.reduce(
+        (sum, item) => sum + (parseFloat(item.price || 0) * parseInt(item.quantity || 0)), 0
+      );
+      const shippingFee = parseFloat(order.shippingFee ?? orderDetail?.shippingFee ?? order.shippingCost ?? 0);
+      const platformCommission = parseFloat(
+        orderDetail?.platformCommission ??
+        order.platformCommission ??
+        orderDetail?.serviceFee ?? // backward-compat
+        order.serviceFee ??
+        order.platformFee ??
+        0
+      );
+      const calculatedTotal = subtotal + shippingFee + platformCommission;
+      const orderTotal = parseFloat(
+        order.finalTotal ?? 
+        orderDetail?.finalTotal ?? 
+        order.totalAmount ?? 
+        orderDetail?.totalAmount ?? 
+        order.totalPrice ?? 
+        orderDetail?.totalPrice ?? 
+        0
+      );
+      
+      if (orderTotal > 0 && calculatedTotal > orderTotal) {
+        discount = calculatedTotal - orderTotal;
+      }
+    }
+    
+    // 4. Cache discount nếu có giá trị > 0
+    const hasPromotion = !!(order.promotionCode || orderDetail?.promotionCode || order.appliedPromotion || orderDetail?.appliedPromotion);
+    
+      if (discount > 0) {
+        setCachedDiscount(discount);
+      }
+  }, [order, orderDetail]);
 
   const handleCancelClick = () => {
     if (onCancel) {
@@ -158,6 +304,25 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
     }
   };
 
+  const handleCompleteClick = async () => {
+    try {
+      const result = await completeOrder(order.id);
+      if (result.success) {
+        success('Đơn hàng đã được xác nhận hoàn tất');
+        if (onRefresh) onRefresh();
+      } else {
+        throw new Error(result.error || 'Không thể xác nhận hoàn tất đơn hàng');
+      }
+    } catch (error) {
+      console.error('Error completing order:', error);
+    }
+  };
+
+  const handleReturnClick = () => {
+    // Điều hướng tới trang tạo yêu cầu trả hàng (có orderId)
+    navigate(`/orders/returns/new?orderId=${order.id}`);
+  };
+
   return (
     <>
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-4 overflow-hidden hover:shadow-md transition-all">
@@ -169,6 +334,14 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
               </svg>
               <span>{formatDate(createdAt)}</span>
+              <span className="ml-2 text-xs text-gray-500">
+                Mã đơn: <span className="font-mono text-gray-700">{getOrderCode(id)}</span>
+                {refundStatus === 'COMPLETED' && refundTransactionId && (
+                  <span className="ml-1 text-emerald-600">
+                    · Đã hoàn tiền ({refundTransactionId})
+                  </span>
+                )}
+              </span>
             </div>
 
             {/* Status Badge - Simple */}
@@ -286,7 +459,7 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
             <div className="w-8 h-0.5 bg-blue-300"></div>
             
             {/* Step 2: Xác nhận */}
-            {(status === 'CONFIRMED' || status === 'SHIPPING' || status === 'DELIVERED' || orderDetail?.confirmedAt) ? (
+            {(displayStatus === 'CONFIRMED' || displayStatus === 'SHIPPING' || displayStatus === 'DELIVERED' || displayStatus === 'RETURNED' || displayStatus === 'REFUNDED' || orderDetail?.confirmedAt) ? (
               <>
                 <div className="flex items-center gap-1.5">
                   <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
@@ -313,27 +486,27 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
             )}
             
             {/* Step 3: Đang giao */}
-            {(status === 'SHIPPING' || status === 'DELIVERED' || orderDetail?.shippedAt) ? (
+            {(displayStatus === 'SHIPPING' || displayStatus === 'DELIVERED' || displayStatus === 'RETURNED' || displayStatus === 'REFUNDED' || orderDetail?.shippedAt) ? (
               <>
                 <div className="flex items-center gap-1.5">
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    status === 'SHIPPING' ? 'bg-purple-500 animate-pulse' : 'bg-purple-500'
+                    displayStatus === 'SHIPPING' ? 'bg-purple-500 animate-pulse' : 'bg-purple-500'
                   }`}>
                     <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
                     </svg>
                   </div>
                   <span className={`text-xs font-medium ${
-                    status === 'SHIPPING' ? 'text-purple-700' : 'text-purple-700'
+                    displayStatus === 'SHIPPING' ? 'text-purple-700' : 'text-purple-700'
                   }`}>
-                    {status === 'SHIPPING' ? 'Đang giao' : 'Đã giao'}
+                    {displayStatus === 'SHIPPING' ? 'Đang giao' : 'Đã giao'}
                   </span>
                 </div>
-                {(status === 'DELIVERED' || orderDetail?.deliveredAt) && (
+                {(displayStatus === 'DELIVERED' || displayStatus === 'RETURNED' || displayStatus === 'REFUNDED' || orderDetail?.deliveredAt) && (
                   <div className="w-8 h-0.5 bg-emerald-300"></div>
                 )}
               </>
-            ) : status !== 'CANCELLED' ? (
+            ) : displayStatus !== 'CANCELLED' ? (
               <>
                 <div className="flex items-center gap-1.5 opacity-40">
                   <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0">
@@ -346,16 +519,35 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
               </>
             ) : null}
             
-            {/* Step 4: Đã giao */}
-            {(status === 'DELIVERED' || orderDetail?.deliveredAt) && (
-              <div className="flex items-center gap-1.5">
-                <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
-                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/>
-                  </svg>
+            {/* Step 4: Đã giao / Đã trả hàng */}
+            {(displayStatus === 'DELIVERED' || displayStatus === 'RETURNED' || displayStatus === 'REFUNDED' || orderDetail?.deliveredAt) && (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                  </div>
+                  <span className="text-xs font-medium text-emerald-700">
+                    {status === 'RETURNED' ? 'Đã trả hàng' : 'Hoàn tất'}
+                  </span>
                 </div>
-                <span className="text-xs font-medium text-emerald-700">Hoàn tất</span>
-              </div>
+
+                {/* Step 5 (extra cho đơn đã trả hàng & đã hoàn tiền): Đã hoàn tiền */}
+                {status === 'RETURNED' && refundStatus === 'COMPLETED' && (
+                  <>
+                    <div className="w-8 h-0.5 bg-gray-300"></div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-6 h-6 rounded-full bg-gray-500 flex items-center justify-center flex-shrink-0">
+                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                      </div>
+                      <span className="text-xs font-medium text-gray-700">Đã hoàn tiền</span>
+                    </div>
+                  </>
+                )}
+              </>
             )}
             
             {/* Step 5: Đã hủy */}
@@ -384,71 +576,184 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
             </div>
 
             {/* Right: Action Buttons */}
-            <div className="flex items-center gap-2">
-              {/* Review Button - Check if all items are reviewed */}
-              {canReview && (() => {
-                const firstItem = items[0];
-                const variantId = firstItem?.productVariantId || firstItem?.id;
-                const hasReviewed = reviewedItems[variantId];
-                
-                if (hasReviewed) {
-                  return (
-                    <span className="flex items-center gap-1.5 px-4 py-2 bg-gray-100 text-gray-500 text-sm font-medium rounded-lg cursor-not-allowed">
-                      <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                      Đã đánh giá
-                    </span>
-                  );
-                }
-                
-                return (
-                  <button
-                    onClick={() => handleReviewClick(firstItem)}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white text-sm font-semibold rounded-lg hover:from-orange-600 hover:to-pink-600 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
-                    </svg>
-                    Đánh giá
-                  </button>
-                );
-              })()}
-              
-              {/* Cancel Button */}
-              {canCancel && (
-                <button
-                  onClick={handleCancelClick}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white text-sm font-semibold rounded-lg hover:from-red-600 hover:to-pink-600 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
-                >
+            <div className="flex items-center gap-2 flex-wrap">
+              {hasActiveReturnRequest && status !== 'RETURNED' && displayStatus !== 'REFUNDED' && refundStatus !== 'COMPLETED' ? (
+                <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-sm font-medium">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M12 8v4l2 2m6-4a8 8 0 11-16 0 8 8 0 0116 0z"
+                    />
                   </svg>
-                  Hủy đơn
-                </button>
+                  <span>Đã gửi lệnh trả hàng, chờ cửa hàng xử lý</span>
+                </div>
+              ) : (
+                <>
+                  {/* Complete Button */}
+                  {canComplete && (
+                    <button
+                      onClick={handleCompleteClick}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white text-sm font-semibold rounded-lg hover:from-green-600 hover:to-emerald-600 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                      </svg>
+                      Hoàn tất
+                    </button>
+                  )}
+
+                  {/* Return Button */}
+                  {canReturn && (
+                    <button
+                      onClick={handleReturnClick}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-semibold rounded-lg hover:from-orange-600 hover:to-red-600 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4-4 4m0 6H4m0 0l4 4m-4-4 4-4" />
+                      </svg>
+                      Trả hàng
+                    </button>
+                  )}
+
+                  {/* Review Button - Check if all items are reviewed */}
+                  {canReview &&
+                    (() => {
+                      const firstItem = items[0];
+                      const variantId = firstItem?.productVariantId || firstItem?.id;
+                      const hasReviewed = reviewedItems[variantId];
+
+                      if (hasReviewed) {
+                        return (
+                          <span className="flex items-center gap-1.5 px-4 py-2 bg-gray-100 text-gray-500 text-sm font-medium rounded-lg cursor-not-allowed">
+                            <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                              <path
+                                fillRule="evenodd"
+                                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                            Đã đánh giá
+                          </span>
+                        );
+                      }
+
+                      return (
+                        <button
+                          onClick={() => handleReviewClick(firstItem)}
+                          className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white text-sm font-semibold rounded-lg hover:from-orange-600 hover:to-pink-600 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
+                            />
+                          </svg>
+                          Đánh giá
+                        </button>
+                      );
+                    })()}
+
+                  {/* Cancel Button */}
+                  {canCancel && (
+                    <button
+                      onClick={handleCancelClick}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white text-sm font-semibold rounded-lg hover:from-red-600 hover:to-pink-600 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Hủy đơn
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>
 
           {/* Price Breakdown */}
           <div className="bg-white rounded-xl p-4 mt-3 shadow-sm border border-gray-200">
-            {(() => {
+            {useMemo(() => {
               const subtotal = items.reduce((sum, item) => 
                 sum + (parseFloat(item.price || 0) * parseInt(item.quantity || 0)), 0
               );
               const shippingFee = parseFloat(order.shippingFee ?? orderDetail?.shippingFee ?? order.shippingCost ?? 0);
-              const serviceFee = parseFloat(orderDetail?.serviceFee ?? order.serviceFee ?? order.platformFee ?? 5000);
+              const serviceFee = parseFloat(
+                orderDetail?.platformCommission ??
+                order.platformCommission ??
+                orderDetail?.serviceFee ?? // backward-compat
+                order.serviceFee ??
+                order.platformFee ??
+                0
+              );
+              const calculatedTotal = subtotal + shippingFee + serviceFee;
               
-              // Tìm tất cả các field có thể chứa discount
-              const discount = parseFloat(order.discount ?? orderDetail?.discount ?? order.discountAmount ?? 0);
-              const promotionDiscount = parseFloat(order.promotionDiscount ?? orderDetail?.promotionDiscount ?? 0);
-              const voucherDiscount = parseFloat(order.voucherDiscount ?? orderDetail?.voucherDiscount ?? 0);
-              const couponDiscount = parseFloat(order.couponDiscount ?? orderDetail?.couponDiscount ?? 0);
+              // Tính discount từ các field có sẵn
+              let displayDiscount = 0;
               
-              const total = calculatedTotal;
-
-              // Tổng tất cả giảm giá
-              const totalDiscount = discount + promotionDiscount + voucherDiscount + couponDiscount;
+              // 1. Ưu tiên lấy từ discount fields trực tiếp
+              if (order.discount || orderDetail?.discount) {
+                displayDiscount = parseFloat(order.discount ?? orderDetail?.discount ?? 0);
+              }
+              else if (order.discountAmount || orderDetail?.discountAmount) {
+                displayDiscount = parseFloat(order.discountAmount ?? orderDetail?.discountAmount ?? 0);
+              }
+              else if (order.promotionDiscount || orderDetail?.promotionDiscount) {
+                displayDiscount = parseFloat(order.promotionDiscount ?? orderDetail?.promotionDiscount ?? 0);
+              }
+              else if (order.appliedDiscount || orderDetail?.appliedDiscount) {
+                displayDiscount = parseFloat(order.appliedDiscount ?? orderDetail?.appliedDiscount ?? 0);
+              }
+              else if (order.promotionAmount || orderDetail?.promotionAmount) {
+                displayDiscount = parseFloat(order.promotionAmount ?? orderDetail?.promotionAmount ?? 0);
+              }
+              else if (order.appliedPromotion?.discountAmount || orderDetail?.appliedPromotion?.discountAmount) {
+                displayDiscount = parseFloat(order.appliedPromotion?.discountAmount ?? orderDetail?.appliedPromotion?.discountAmount ?? 0);
+              }
+              else if (order.appliedPromotion?.discountValue || orderDetail?.appliedPromotion?.discountValue) {
+                displayDiscount = parseFloat(order.appliedPromotion?.discountValue ?? orderDetail?.appliedPromotion?.discountValue ?? 0);
+              }
+              
+              // 2. Nếu không có discount field, dùng cached discount
+              if (displayDiscount === 0 && cachedDiscount && cachedDiscount > 0) {
+                displayDiscount = cachedDiscount;
+              }
+              
+              // 3. Nếu vẫn = 0 và có promotion, tính ngược từ totalPrice
+              const hasPromotion = !!(order.promotionCode || orderDetail?.promotionCode || order.appliedPromotion || orderDetail?.appliedPromotion);
+              if (displayDiscount === 0 && hasPromotion) {
+                const orderTotal = parseFloat(
+                  order.finalTotal ?? 
+                  orderDetail?.finalTotal ?? 
+                  order.totalAmount ?? 
+                  orderDetail?.totalAmount ?? 
+                  order.totalPrice ?? 
+                  orderDetail?.totalPrice ?? 
+                  0
+                );
+                
+                // Nếu items rỗng, dùng orderTotal trực tiếp để tính discount
+                if (items.length === 0 && orderTotal > 0) {
+                  // Ước tính discount từ totalAmount
+                  const estimatedSubtotal = orderTotal - shippingFee - serviceFee;
+                  if (estimatedSubtotal > 0) {
+                    // Nếu có promotion nhưng totalAmount nhỏ hơn expected, có discount
+                    const expectedTotal = estimatedSubtotal + shippingFee + serviceFee;
+                    if (expectedTotal > orderTotal) {
+                      displayDiscount = expectedTotal - orderTotal;
+                    }
+                  }
+                }
+                // Nếu có items, tính từ calculatedTotal
+                else if (orderTotal > 0 && calculatedTotal > orderTotal) {
+                  displayDiscount = calculatedTotal - orderTotal;
+                }
+              }
+              
+              const total = calculatedTotal - displayDiscount;
 
               return (
                 <div className="space-y-2">
@@ -462,34 +767,36 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
                     <span className="font-medium text-gray-900">{formatCurrency(shippingFee)}</span>
                   </div>
                   
-                  {/* Phí dịch vụ nếu có */}
+                  {/* Hoa hồng nền tảng nếu có */}
                   {serviceFee > 0 && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Phí dịch vụ:</span>
+                      <span className="text-gray-600">Hoa hồng nền tảng:</span>
                       <span className="font-medium text-gray-900">{formatCurrency(serviceFee)}</span>
                     </div>
                   )}
                   
-                  {/* Hiển thị khuyến mãi nếu có */}
-                  {(promotionDiscount > 0 || voucherDiscount > 0 || couponDiscount > 0) && (
+                  {/* Hiển thị giảm giá/khuyến mãi nếu có */}
+                  {displayDiscount > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600 flex items-center gap-1">
                         <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
                         </svg>
-                        Khuyến mãi:
+                        Giảm giá:
                       </span>
-                      <span className="font-medium text-orange-600">
-                        -{formatCurrency(promotionDiscount + voucherDiscount + couponDiscount)}
+                      <span className="font-medium text-green-600">
+                        -{formatCurrency(displayDiscount)}
                       </span>
                     </div>
                   )}
                   
-                  {/* Giảm giá khác */}
-                  {discount > 0 && (
+                  {/* Hiển thị mã khuyến mãi nếu có */}
+                  {(order.promotionCode || orderDetail?.promotionCode || order.appliedPromotion || orderDetail?.appliedPromotion) && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Giảm giá khác:</span>
-                      <span className="font-medium text-green-600">-{formatCurrency(discount)}</span>
+                      <span className="text-gray-600">Mã khuyến mãi:</span>
+                      <span className="font-medium text-blue-600">
+                        {order.promotionCode || orderDetail?.promotionCode || order.appliedPromotion?.code || orderDetail?.appliedPromotion?.code || 'N/A'}
+                      </span>
                     </div>
                   )}
                   
@@ -503,7 +810,7 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
                   </div>
                 </div>
               );
-            })()}
+            }, [items, order, orderDetail, cachedDiscount])}
           </div>
         </div>
       </div>
@@ -541,7 +848,7 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }

@@ -11,11 +11,7 @@ import api from '../common/api';
  */
 export const getProductsByStore = async (storeId, params = {}) => {
   try {
-    console.log('📚 [B2C] Getting products for store:', storeId, params);
-
     const response = await api.get(`/api/v1/b2c/products/${storeId}`, { params });
-
-    console.log('✅ [B2C] Products fetched:', response.data);
     
     // ✅ Debug: Log để xem API GET PRODUCT có trả về status và brand fields không
     if (response.data?.success && response.data?.data) {
@@ -41,7 +37,6 @@ export const getProductsByStore = async (storeId, params = {}) => {
       return { success: false, error: response.data.error || 'Không thể tải danh sách sản phẩm' };
     }
   } catch (error) {
-    console.error('❌ [B2C] Error fetching products:', error);
     return {
       success: false,
       error: error.response?.data?.error || error.message || 'Lỗi khi tải danh sách sản phẩm',
@@ -56,11 +51,7 @@ export const getProductsByStore = async (storeId, params = {}) => {
  */
 export const getProductVariantsByStore = async (storeId, params = {}) => {
   try {
-    console.log('🎨 [B2C] Getting product variants for store:', storeId, params);
-
     const response = await api.get(`/api/v1/b2c/product-variants/${storeId}`, { params });
-
-    console.log('✅ [B2C] Product variants fetched:', response.data);
     
     // ✅ Debug: Log toàn bộ response JSON để kiểm tra có field status không
     if (response.data?.success && response.data?.data) {
@@ -83,7 +74,6 @@ export const getProductVariantsByStore = async (storeId, params = {}) => {
       return { success: false, error: response.data.error || 'Không thể tải danh sách biến thể' };
     }
   } catch (error) {
-    console.error('❌ [B2C] Error fetching product variants:', error);
     return {
       success: false,
       error: error.response?.data?.error || error.message || 'Lỗi khi tải danh sách biến thể',
@@ -107,10 +97,36 @@ export const countProductVariantsByStatus = async (storeId) => {
       data: response.data.data || response.data,
     };
   } catch (error) {
-    console.error('❌ [B2C] Error counting variants by status:', error);
     return {
       success: false,
       error: error.response?.data?.error || error.message || 'Không thể đếm biến thể theo trạng thái',
+    };
+  }
+};
+
+/**
+ * 0.3 ĐẾM PRODUCTS THEO TRẠNG THÁI (API mới - tương tự orders)
+ * GET /api/v1/b2c/products/store/{storeId}/count-by-status
+ * ⚠️ API này có thể chưa có trong Swagger, nhưng thử gọi theo pattern tương tự orders
+ */
+export const countProductsByStatus = async (storeId) => {
+  try {
+    if (!storeId) {
+      return { success: false, error: 'storeId is required' };
+    }
+
+    // ✅ Thử endpoint theo pattern tương tự orders: /api/v1/b2c/products/store/{storeId}/count-by-status
+    const response = await api.get(`/api/v1/b2c/products/store/${storeId}/count-by-status`);
+    return {
+      success: true,
+      data: response.data.data || response.data,
+    };
+  } catch (error) {
+    
+    // ✅ Nếu API không tồn tại, trả về error để frontend xử lý (tính từ products hiện tại)
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Không thể đếm sản phẩm theo trạng thái',
     };
   }
 };
@@ -121,11 +137,7 @@ export const countProductVariantsByStatus = async (storeId) => {
  */
 export const createProduct = async (productData) => {
   try {
-    console.log('🆕 [B2C] Creating new product:', productData);
-
     const response = await api.post('/api/v1/b2c/products/create', productData);
-
-    console.log('✅ [B2C] Product created:', response.data);
 
     if (response.data.success) {
       return { success: true, data: response.data.data };
@@ -133,7 +145,6 @@ export const createProduct = async (productData) => {
       return { success: false, error: response.data.error || 'Không thể tạo sản phẩm' };
     }
   } catch (error) {
-    console.error('❌ [B2C] Error creating product:', error);
     return {
       success: false,
       error: error.response?.data?.error || error.message || 'Lỗi khi tạo sản phẩm',
@@ -147,11 +158,7 @@ export const createProduct = async (productData) => {
  */
 export const updateProduct = async (productId, productData) => {
   try {
-    console.log('🔄 [B2C] Updating product:', productId, productData);
-
     const response = await api.put(`/api/v1/b2c/products/update/${productId}`, productData);
-
-    console.log('✅ [B2C] Product updated:', response.data);
 
     if (response.data.success) {
       return { success: true, data: response.data.data };
@@ -159,7 +166,6 @@ export const updateProduct = async (productId, productData) => {
       return { success: false, error: response.data.error || 'Không thể cập nhật sản phẩm' };
     }
   } catch (error) {
-    console.error('❌ [B2C] Error updating product:', error);
     return {
       success: false,
       error: error.response?.data?.error || error.message || 'Lỗi khi cập nhật sản phẩm',
@@ -177,23 +183,18 @@ export const updateProduct = async (productId, productData) => {
  */
 export const createProductVariantWithFormData = async (formData) => {
   try {
-    console.log('🆕 [B2C] Creating product variant with FormData');
-    
     // ✅ Set header multipart/form-data
     const response = await api.post('/api/v1/b2c/product-variants/create', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
-    
-    console.log('✅ [B2C] Product variant created:', response.data);
     if (response.data.success) {
       return { success: true, data: response.data.data };
     } else {
       return { success: false, error: response.data.error || 'Không thể tạo variant' };
     }
   } catch (error) {
-    console.error('❌ [B2C] Error creating variant:', error);
     return {
       success: false,
       error: error.response?.data?.error || error.message || 'Lỗi khi tạo variant',
@@ -207,7 +208,6 @@ export const createProductVariantWithFormData = async (formData) => {
  */
 export const createProductVariant = async (productId, storeId, variantData, imageFiles = []) => {
   try {
-    console.log('🆕 [B2C] Creating product variant:', { productId, storeId, variantData, hasImages: imageFiles?.length > 0 });
 
     // Tạo DTO object theo schema ProductVariantDTO
     const dto = {
@@ -226,10 +226,7 @@ export const createProductVariant = async (productId, storeId, variantData, imag
 
     // Nếu KHÔNG CÓ ẢNH → Dùng API create-without-image
     if (!imageFiles || imageFiles.length === 0) {
-      console.log('📝 [B2C] Creating variant without images');
       const response = await api.post('/api/v1/b2c/product-variants/create-without-image', dto);
-      
-      console.log('✅ [B2C] Product variant created (no images):', response.data);
       
       if (response.data.success) {
         return { success: true, data: response.data.data };
@@ -239,7 +236,6 @@ export const createProductVariant = async (productId, storeId, variantData, imag
     }
 
     // Nếu CÓ ẢNH → Dùng API create với multipart/form-data
-    console.log('📸 [B2C] Creating variant with', imageFiles.length, 'images');
     const formData = new FormData();
 
     // Thêm DTO dưới dạng Blob với content-type application/json
@@ -251,9 +247,11 @@ export const createProductVariant = async (productId, storeId, variantData, imag
       formData.append('images', file);
     });
 
-    const response = await api.post('/api/v1/b2c/product-variants/create', formData);
+    // primaryImageIndex cần dạng string (theo API mới)
+    const primaryIdx = Math.max(0, Math.min(variantData?.primaryImageIndex ?? 0, imageFiles.length - 1));
+    formData.append('primaryImageIndex', String(primaryIdx));
 
-    console.log('✅ [B2C] Product variant created (with images):', response.data);
+    const response = await api.post('/api/v1/b2c/product-variants/create', formData);
 
     if (response.data.success) {
       return { success: true, data: response.data.data };
@@ -261,7 +259,6 @@ export const createProductVariant = async (productId, storeId, variantData, imag
       return { success: false, error: response.data.error || 'Không thể tạo variant' };
     }
   } catch (error) {
-    console.error('❌ [B2C] Error creating variant:', error);
     return {
       success: false,
       error: error.response?.data?.error || error.message || 'Lỗi khi tạo variant',
@@ -275,7 +272,6 @@ export const createProductVariant = async (productId, storeId, variantData, imag
  */
 export const updateProductVariant = async (variantId, variantData, imageFiles = []) => {
   try {
-    console.log('🔄 [B2C] Updating product variant:', variantId, variantData);
 
     const formData = new FormData();
 
@@ -292,15 +288,12 @@ export const updateProductVariant = async (variantId, variantData, imageFiles = 
 
     const response = await api.put(`/api/v1/b2c/product-variants/${variantId}`, formData);
 
-    console.log('✅ [B2C] Product variant updated:', response.data);
-
     if (response.data.success) {
       return { success: true, data: response.data.data };
     } else {
       return { success: false, error: response.data.error || 'Không thể cập nhật variant' };
     }
   } catch (error) {
-    console.error('❌ [B2C] Error updating variant:', error);
     return {
       success: false,
       error: error.response?.data?.error || error.message || 'Lỗi khi cập nhật variant',
@@ -314,7 +307,6 @@ export const updateProductVariant = async (variantId, variantData, imageFiles = 
  */
 export const updateVariantPrice = async (variantId, newPrice) => {
   try {
-    console.log('💰 [B2C] Updating variant price:', variantId, newPrice);
 
     // Theo Swagger: PUT /api/v1/b2c/product-variants/update-price/{id}
     // Request body là integer (new price), không phải query params
@@ -323,7 +315,6 @@ export const updateVariantPrice = async (variantId, newPrice) => {
       Number.isFinite(newPrice) ? Number(newPrice) : 0
     );
 
-    console.log('✅ [B2C] Variant price updated:', response.data);
 
     if (response.data.success || response.data) {
       return { success: true, data: response.data.data || response.data };
@@ -331,7 +322,6 @@ export const updateVariantPrice = async (variantId, newPrice) => {
       return { success: false, error: response.data.error || 'Không thể cập nhật giá' };
     }
   } catch (error) {
-    console.error('❌ [B2C] Error updating price:', error);
     return {
       success: false,
       error: error.response?.data?.error || error.message || 'Lỗi khi cập nhật giá',
@@ -345,7 +335,6 @@ export const updateVariantPrice = async (variantId, newPrice) => {
  */
 export const updateVariantStock = async (variantId, newStock) => {
   try {
-    console.log('📦 [B2C] Updating variant stock:', variantId, newStock);
 
     // Theo Swagger: PUT /api/v1/b2c/product-variants/update-stock/{id}
     // Request body là integer (new stock quantity), không phải query params
@@ -354,7 +343,6 @@ export const updateVariantStock = async (variantId, newStock) => {
       Number.isFinite(newStock) ? Number(newStock) : 0
     );
 
-    console.log('✅ [B2C] Variant stock updated:', response.data);
 
     if (response.data.success || response.data) {
       return { success: true, data: response.data.data || response.data };
@@ -362,7 +350,6 @@ export const updateVariantStock = async (variantId, newStock) => {
       return { success: false, error: response.data.error || 'Không thể cập nhật tồn kho' };
     }
   } catch (error) {
-    console.error('❌ [B2C] Error updating stock:', error);
     return {
       success: false,
       error: error.response?.data?.error || error.message || 'Lỗi khi cập nhật tồn kho',
@@ -379,14 +366,12 @@ export const updateVariantStock = async (variantId, newStock) => {
  */
 export const deleteProductVariant = async (variantId) => {
   try {
-    console.log('🗑️ [B2C] Deleting product variant by setting status DELETED:', variantId);
 
     // ✅ Dùng PUT endpoint để update status về DELETED thay vì DELETE endpoint
     const response = await api.put(`/api/v1/b2c/product-variants/${variantId}`, {
       status: 'DELETED'
     });
 
-    console.log('✅ [B2C] Product variant status set to DELETED:', response.data);
 
     if (response.data.success || response.data) {
       return { success: true, data: response.data.data || response.data };
@@ -394,7 +379,6 @@ export const deleteProductVariant = async (variantId) => {
       return { success: false, error: response.data.error || 'Không thể xóa variant' };
     }
   } catch (error) {
-    console.error('❌ [B2C] Error deleting variant:', error);
     return {
       success: false,
       error: error.response?.data?.error || error.message || 'Lỗi khi xóa variant',
@@ -409,7 +393,6 @@ export const deleteProductVariant = async (variantId) => {
  */
 export const addColorToVariant = async (variantId, colorData, imageFile) => {
   try {
-    console.log('🎨 [B2C] Adding color to variant:', variantId, colorData);
 
     const formData = new FormData();
 
@@ -436,7 +419,6 @@ export const addColorToVariant = async (variantId, colorData, imageFile) => {
       },
     });
 
-    console.log('✅ [B2C] Color added to variant:', response.data);
 
     if (response.data.success || response.data) {
       return { success: true, data: response.data.data || response.data };
@@ -444,7 +426,6 @@ export const addColorToVariant = async (variantId, colorData, imageFile) => {
       return { success: false, error: response.data.error || 'Không thể thêm màu sắc' };
     }
   } catch (error) {
-    console.error('❌ [B2C] Error adding color:', error);
     return {
       success: false,
       error: error.response?.data?.error || error.message || 'Lỗi khi thêm màu sắc',
@@ -455,17 +436,44 @@ export const addColorToVariant = async (variantId, colorData, imageFile) => {
 /**
  * 9. CẬP NHẬT MÀU SẮC CỦA VARIANT
  * PUT /api/v1/b2c/product-variants/update-colors/{variantId}/color/{colorId}
+ *
+ * Swagger: multipart/form-data với:
+ *  - dto: ColorOption (JSON)  { colorName, price, stock }
+ *  - image: file (OPTIONAL)  ảnh màu mới
+ *
+ * FE: colorData có thể truyền thêm imageFile nếu muốn cập nhật ảnh.
  */
-export const updateVariantColor = async (variantId, colorId, colorData) => {
+export const updateVariantColor = async (variantId, colorId, colorData = {}) => {
   try {
-    console.log('🔄 [B2C] Updating variant color:', variantId, colorId, colorData);
+    if (!variantId || !colorId) {
+      return { success: false, error: 'variantId và colorId là bắt buộc' };
+    }
+
+    const formData = new FormData();
+
+    const colorOptionDto = {
+      colorName: colorData.colorName,
+      price: colorData.price,
+      stock: colorData.stock,
+    };
+
+    const dtoBlob = new Blob([JSON.stringify(colorOptionDto)], { type: 'application/json' });
+    formData.append('dto', dtoBlob);
+
+    // Ảnh là OPTIONAL khi update
+    if (colorData.imageFile) {
+      formData.append('image', colorData.imageFile);
+    }
 
     const response = await api.put(
       `/api/v1/b2c/product-variants/update-colors/${variantId}/color/${colorId}`,
-      colorData
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
     );
-
-    console.log('✅ [B2C] Variant color updated:', response.data);
 
     if (response.data.success || response.data) {
       return { success: true, data: response.data.data || response.data };
@@ -473,10 +481,15 @@ export const updateVariantColor = async (variantId, colorId, colorData) => {
       return { success: false, error: response.data.error || 'Không thể cập nhật màu sắc' };
     }
   } catch (error) {
-    console.error('❌ [B2C] Error updating color:', error);
+    console.error('❌ [updateVariantColor] Error:', error);
+    console.error('❌ [updateVariantColor] Error response:', error.response?.data);
     return {
       success: false,
-      error: error.response?.data?.error || error.message || 'Lỗi khi cập nhật màu sắc',
+      error:
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        'Lỗi khi cập nhật màu sắc',
     };
   }
 };
@@ -487,15 +500,16 @@ export const updateVariantColor = async (variantId, colorId, colorData) => {
  */
 export const updateVariantImages = async (variantId, images, indexPrimary = 0) => {
   try {
-    console.log('🖼️ [B2C] Updating variant images:', variantId, images.length, 'images');
 
     const formData = new FormData();
     images.forEach((image) => {
       formData.append('images', image);
     });
 
+    const primaryIndex = String(indexPrimary);
+
     const response = await api.put(
-      `/api/v1/b2c/product-variants/update-images/${variantId}?indexPrimary=${indexPrimary}`,
+      `/api/v1/b2c/product-variants/update-images/${variantId}?indexPrimary=${primaryIndex}`,
       formData,
       {
         headers: {
@@ -504,7 +518,6 @@ export const updateVariantImages = async (variantId, images, indexPrimary = 0) =
       }
     );
 
-    console.log('✅ [B2C] Variant images updated:', response.data);
 
     if (response.data.success || response.data) {
       return { success: true, data: response.data.data || response.data };
@@ -512,7 +525,6 @@ export const updateVariantImages = async (variantId, images, indexPrimary = 0) =
       return { success: false, error: response.data.error || 'Không thể cập nhật ảnh' };
     }
   } catch (error) {
-    console.error('❌ [B2C] Error updating images:', error);
     return {
       success: false,
       error: error.response?.data?.error || error.message || 'Lỗi khi cập nhật ảnh',

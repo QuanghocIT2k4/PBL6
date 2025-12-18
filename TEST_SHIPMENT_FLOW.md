@@ -155,3 +155,4 @@ Kiểm tra xem sau khi Store confirm order, shipment có tự động hiển th�
 - Có thể cần kiểm tra backend logs để xem có lỗi gì không
 
 
+

@@ -177,19 +177,13 @@ const MainLayout = ({ children }) => {
 
               {/* Cart & Actions */}
               <div className="flex items-center space-x-4">
-                {/* Notifications - LUÔN HIỂN THỊ ICON, CHỈ HIỂN THỊ BADGE KHI ĐÃ ĐĂNG NHẬP */}
+                {/* Notifications */}
                 <NotificationContainer userType="buyer" />
 
-                {/* Orders - standalone orders page - LUÔN HIỂN THỊ */}
-                <button 
-                  className="relative p-2 text-gray-600 hover:text-blue-600 transition-colors group" 
-                  onClick={() => {
-                    if (!isAuthenticated) {
-                      navigate('/auth?tab=login');
-                      return;
-                    }
-                    navigate('/orders');
-                  }}
+                {/* Orders - standalone orders page */}
+                <button
+                  className="relative p-2 text-gray-600 hover:text-blue-600 transition-colors group"
+                  onClick={() => navigate('/orders')}
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -200,23 +194,61 @@ const MainLayout = ({ children }) => {
                   </div>
                 </button>
 
-                {/* Wallet - LUÔN HIỂN THỊ */}
-                <button 
+                {/* Returns - danh sách yêu cầu trả hàng */}
+                <button
+                  className="relative p-2 text-gray-600 hover:text-blue-600 transition-colors group"
                   onClick={() => {
                     if (!isAuthenticated) {
                       navigate('/auth?tab=login');
                       return;
                     }
-                    navigate('/wallet');
+                    navigate('/orders/returns');
                   }}
-                  className="relative p-2 text-gray-600 hover:text-blue-600 transition-colors group"
                 >
+                  {/* Icon 2 mũi tên hai chiều */}
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M7 7h10m0 0L13 3m4 4-4 4M17 17H7m0 0 4 4m-4-4 4-4"
+                    />
                   </svg>
                   {/* Tooltip */}
                   <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                    Ví của tôi
+                    Trả hàng
+                  </div>
+                </button>
+
+                {/* Disputes - danh sách khiếu nại */}
+                <button
+                  className="relative p-2 text-gray-600 hover:text-blue-600 transition-colors group"
+                  onClick={() => {
+                    if (!isAuthenticated) {
+                      navigate('/auth?tab=login');
+                      return;
+                    }
+                    navigate('/orders/disputes');
+                  }}
+                >
+                  {/* Icon khiếu nại: shield + check */}
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M12 3l7 4v5.5c0 3.59-2.39 6.91-5.76 8.02a3.34 3.34 0 01-2.48 0C7.39 19.41 5 16.09 5 12.5V7l7-4z"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M10 12.5l1.5 1.5L14 11"
+                    />
+                  </svg>
+                  {/* Tooltip */}
+                  <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                    Khiếu nại
                   </div>
                 </button>
 
@@ -266,16 +298,18 @@ const MainLayout = ({ children }) => {
                   </div>
                 </button>
 
-                {isAuthenticated && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={logout}
-                    className="ml-2"
-                  >
-                    Đăng xuất
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    await logout();
+                    // Sau khi logout xong, reload về trang chủ để đồng bộ mọi context + badge
+                    window.location.href = '/';
+                  }}
+                  className="ml-2"
+                >
+                  {isAuthenticated ? 'Đăng xuất' : 'Đăng nhập'}
+                </Button>
               </div>
             </div>
           </div>

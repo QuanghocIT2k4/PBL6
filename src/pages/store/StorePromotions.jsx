@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import StoreLayout from '../../layouts/StoreLayout';
 import StoreStatusGuard from '../../components/store/StoreStatusGuard';
@@ -10,6 +10,7 @@ import {
   getActivePromotions,
   getInactivePromotions,
   getExpiredPromotions,
+  countPromotionsByStatus,
   createPromotion,
   updatePromotion,
   activatePromotion,
@@ -23,6 +24,14 @@ const StorePromotions = () => {
   const { success: showSuccess, error: showError } = useToast();
   const [filter, setFilter] = useState('ALL');
   const [currentPage, setCurrentPage] = useState(0);
+  // ✅ Lưu stats cũ để tránh "nhảy" khi đang load
+  const [cachedStats, setCachedStats] = useState({
+    total: 0,
+    active: 0,
+    inactive: 0,
+    upcoming: 0,
+    expired: 0,
+  });
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingPromo, setEditingPromo] = useState(null);
@@ -73,6 +82,51 @@ const StorePromotions = () => {
   const promotions = promotionsData?.success ? (promotionsData.data?.content || promotionsData.data || []) : [];
   const totalPages = promotionsData?.data?.totalPages || 0;
   const totalElements = promotionsData?.data?.totalElements || promotions.length;
+
+  // ✅ Lấy stats chính xác từ API (không phụ thuộc vào filter/pagination)
+  // API này TRÁNH trường hợp khi search hay filter status khác thì bộ đếm cũng bị thay đổi theo
+  const { data: statsData, isLoading: statsLoading, mutate: mutateStats } = useSWR(
+    currentStore?.id ? ['store-promotions-stats', currentStore.id] : null,
+    () => {
+      return countPromotionsByStatus(currentStore.id);
+    },
+    {
+      revalidateOnFocus: false, // ✅ Không load lại khi focus
+      revalidateOnReconnect: false, // ✅ Không load lại khi reconnect
+      revalidateIfStale: false, // ✅ Không load lại nếu data đã cũ
+      dedupingInterval: 86400000, // Cache 24 giờ để tránh request quá nhiều
+      // ✅ Cho phép load lần đầu (giống StoreOrders và StoreProducts)
+    }
+  );
+
+  // ✅ Cập nhật cachedStats khi có data mới
+  useEffect(() => {
+    if (statsData?.success && statsData.data) {
+      const data = statsData.data;
+      console.log('✅ [StorePromotions] Promotion stats loaded:', data);
+      setCachedStats({
+        total: data.total || data.TOTAL || 0,
+        active: data.ACTIVE || data.active || 0,
+        inactive: data.INACTIVE || data.inactive || 0,
+        upcoming: data.UPCOMING || data.upcoming || 0,
+        expired: data.EXPIRED || data.expired || 0,
+      });
+    } else if (statsData && !statsData.success) {
+      console.error('❌ [StorePromotions] Failed to load stats:', statsData.error);
+    }
+  }, [statsData]);
+
+  // ✅ CHỈ dùng stats từ API, KHÔNG tính từ promotions hiện tại
+  // Điều này đảm bảo stats luôn hiển thị tổng số lượng theo từng trạng thái,
+  // không bị ảnh hưởng bởi filter/search
+  // ✅ Dùng cachedStats để tránh "nhảy" khi đang load
+  const stats = statsData?.success ? {
+    total: statsData.data?.total || statsData.data?.TOTAL || 0,
+    active: statsData.data?.ACTIVE || statsData.data?.active || 0,
+    inactive: statsData.data?.INACTIVE || statsData.data?.inactive || 0,
+    upcoming: statsData.data?.UPCOMING || statsData.data?.upcoming || 0,
+    expired: statsData.data?.EXPIRED || statsData.data?.expired || 0,
+  } : cachedStats; // ✅ Dùng giá trị cũ khi đang load
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('vi-VN', {
@@ -151,7 +205,8 @@ const StorePromotions = () => {
     const result = await activatePromotion(id);
     if (result.success) {
       showSuccess(result.message);
-      mutate();
+      mutate(); // Refresh list
+      mutateStats(); // ✅ Load stats sau khi kích hoạt
     } else {
       showError(result.error);
     }
@@ -161,7 +216,8 @@ const StorePromotions = () => {
     const result = await deactivatePromotion(id);
     if (result.success) {
       showSuccess(result.message);
-      mutate();
+      mutate(); // Refresh list
+      mutateStats(); // ✅ Load stats sau khi tạm dừng
     } else {
       showError(result.error);
     }
@@ -173,7 +229,8 @@ const StorePromotions = () => {
     const result = await deletePromotion(id);
     if (result.success) {
       showSuccess(result.message);
-      mutate();
+      mutate(); // Refresh list
+      mutateStats(); // ✅ Load stats sau khi xóa
     } else {
       showError(result.error);
     }
@@ -275,7 +332,8 @@ const StorePromotions = () => {
         setShowEditModal(false);
         setEditingPromo(null);
         resetForm();
-        mutate();
+        mutate(); // Refresh list
+        mutateStats(); // ✅ Load stats sau khi cập nhật
       } else {
         const errorMsg = result.error || result.message || 'Không thể cập nhật khuyến mãi';
         console.error('❌ Update error:', errorMsg);
@@ -350,6 +408,7 @@ const StorePromotions = () => {
         setShowCreateModal(false);
         resetForm();
         mutate(); // Refresh list
+        mutateStats(); // ✅ Load stats sau khi tạo
       } else {
         const errorMsg = result.error || result.message || 'Không thể tạo khuyến mãi';
         console.error('❌ Create error:', errorMsg);
@@ -407,7 +466,7 @@ const StorePromotions = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-gray-600 truncate">Tổng khuyến mãi</p>
-                        <p className="text-lg font-bold text-gray-900">{totalElements}</p>
+                        <p className="text-lg font-bold text-gray-900">{stats.total}</p>
                       </div>
                     </div>
                   </div>
@@ -421,7 +480,7 @@ const StorePromotions = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-gray-600 truncate">Đang hoạt động</p>
-                        <p className="text-lg font-bold text-gray-900">{promotions.filter(p => !isExpired(p) && new Date(p.startDate) <= new Date() && p.status === 'ACTIVE').length}</p>
+                        <p className="text-lg font-bold text-gray-900">{stats.active}</p>
                       </div>
                     </div>
                   </div>
@@ -435,7 +494,7 @@ const StorePromotions = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-gray-600 truncate">Tạm dừng</p>
-                        <p className="text-lg font-bold text-gray-900">{promotions.filter(p => !isExpired(p) && new Date(p.startDate) <= new Date() && p.status === 'INACTIVE').length}</p>
+                        <p className="text-lg font-bold text-gray-900">{stats.inactive}</p>
                       </div>
                     </div>
                   </div>
@@ -449,7 +508,7 @@ const StorePromotions = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-gray-600 truncate">Sắp diễn ra</p>
-                        <p className="text-lg font-bold text-gray-900">{promotions.filter(p => new Date(p.startDate) > new Date()).length}</p>
+                        <p className="text-lg font-bold text-gray-900">{stats.upcoming}</p>
                       </div>
                     </div>
                   </div>
@@ -463,7 +522,7 @@ const StorePromotions = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-gray-600 truncate">Hết hạn</p>
-                        <p className="text-lg font-bold text-gray-900">{promotions.filter(p => isExpired(p)).length}</p>
+                        <p className="text-lg font-bold text-gray-900">{stats.expired}</p>
                       </div>
                     </div>
                   </div>

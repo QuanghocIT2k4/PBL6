@@ -1,15 +1,86 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 import StoreLayout from '../../layouts/StoreLayout';
 import { useStoreContext } from '../../context/StoreContext';
 import StoreStatusGuard from '../../components/store/StoreStatusGuard';
 import StorePageHeader from '../../components/store/StorePageHeader';
-import { getStoreOrders, getStoreOrderById, confirmOrder, shipOrder, deliverOrder } from '../../services/b2c/b2cOrderService';
-import { getShipmentByOrderId, updateShipmentStatus } from '../../services/b2c/shipmentService';
-import { getOrderStatusAnalytics } from '../../services/b2c/b2cAnalyticsService';
+import { getStoreOrders, getStoreOrderById, confirmOrder, shipOrder, deliverOrder, countOrdersByStatus } from '../../services/b2c/b2cOrderService';
+import { updateShipmentStatus, createShipmentForOrder, getShipmentByOrderId } from '../../services/b2c/shipmentService';
 import { useToast } from '../../context/ToastContext';
 import { confirmAction } from '../../utils/sweetalert';
+
+/**
+ * OrderShipmentButton Component
+ * Nút tạo vận đơn cho đơn hàng (giả định: đơn có icon này chắc chắn chưa có shipment)
+ */
+const OrderShipmentButton = ({ orderId, storeId, onNavigate, onCreating, onCreated, onError, isUpdating }) => {
+  const handleClick = async () => {
+    // ✅ TRƯỚC KHI TẠO: kiểm tra xem đơn đã có vận đơn chưa
+    try {
+      const checkResult = await getShipmentByOrderId(orderId);
+      if (checkResult.success && checkResult.data && !checkResult.notFound) {
+        // Đã có vận đơn → không cho tạo nữa
+        onError?.('Đơn hàng này đã có vận đơn, hãy xem ở mục Vận chuyển.');
+        // Optional: điều hướng sang trang vận đơn
+        if (typeof onNavigate === 'function') {
+          onNavigate();
+        }
+        return;
+      }
+    } catch (err) {
+      // Nếu check lỗi thật sự, vẫn cho user thử tạo, lỗi backend sẽ hiển thị sau
+      console.warn('[OrderShipmentButton] Không thể kiểm tra shipment hiện tại, tiếp tục tạo:', err);
+    }
+
+    const confirmed = await confirmAction('tạo vận đơn cho đơn hàng này');
+    if (!confirmed) return;
+
+    if (!storeId) {
+      onError('Không xác định được storeId để tạo vận đơn. Vui lòng tải lại trang hoặc đăng nhập lại.');
+      return;
+    }
+
+    onCreating();
+    try {
+      const createResult = await createShipmentForOrder(orderId, storeId);
+
+      if (createResult.success) {
+        onCreated();
+      } else {
+        onError(createResult.error || 'Không thể tạo vận đơn. Vui lòng thử lại.');
+      }
+    } catch (err) {
+      onError(err.response?.data?.message || err.message || 'Có lỗi xảy ra khi tạo vận đơn. Vui lòng thử lại.');
+    }
+  };
+
+  // Nút luôn ở trạng thái "tạo vận đơn" (chỉ render khi chưa có shipment theo design)
+  const buttonColor = 'bg-cyan-500 hover:bg-cyan-600';
+  const tooltip = 'Tạo vận đơn cho shipper';
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={isUpdating}
+      className={`w-10 h-10 flex items-center justify-center ${buttonColor} text-white rounded-lg transition-colors disabled:opacity-50 relative`}
+      title={tooltip}
+    >
+      {isUpdating ? (
+        <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      ) : (
+        <>
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
+          </svg>
+        </>
+      )}
+    </button>
+  );
+};
 
 const StoreOrders = () => {
   const navigate = useNavigate();
@@ -18,11 +89,20 @@ const StoreOrders = () => {
   const [statusFilter, setStatusFilter] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(0); // ✅ 0-based pagination (page starts from 0)
-  const pageSize = 20;
+  const pageSize = 20; // ✅ pageSize mặc định (fallback khi chưa có thống kê)
   const [updatingOrderId, setUpdatingOrderId] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const { mutate: globalMutate } = useSWRConfig();
+  
+  // ✅ Lưu stats cũ để tránh "nhảy" khi đang load - hiển thị số ngay lập tức
+  const [cachedStats, setCachedStats] = useState({
+    pending: 0,
+    confirmed: 0,
+    shipping: 0,
+    delivered: 0,
+    cancelled: 0,
+  });
 
   // Handle order status updates
   const handleConfirmOrder = async (orderId) => {
@@ -40,14 +120,12 @@ const StoreOrders = () => {
       if (result.success) {
         success(result.message || 'Xác nhận đơn hàng thành công! Vận đơn sẽ được tạo tự động.');
         
-        // ✅ Refresh cả orders và analytics với revalidate
+        // ✅ Refresh cả orders và stats với revalidate
         // Invalidate tất cả queries liên quan đến orders
         await Promise.all([
           mutate(undefined, { revalidate: true }), // Force refresh orders list hiện tại
-          mutateAnalytics(undefined, { revalidate: true }), // Force refresh analytics
+          mutateStats(undefined, { revalidate: true }), // Force refresh stats
         ]);
-        
-        console.log('🔄 [StoreOrders] Invalidating shipments cache after confirm order...');
         
         // ⚠️ LƯU Ý: Backend KHÔNG tự động tạo shipment khi confirm order
         // Shipment sẽ được tạo khi shipper pickup hoặc cần backend sửa để tự động tạo
@@ -75,7 +153,6 @@ const StoreOrders = () => {
         
         // ✅ Retry refresh shipments sau 2 giây (để đảm bảo backend đã tạo shipment)
         setTimeout(() => {
-          console.log('🔄 [StoreOrders] Retry refresh shipments (2s)...');
           globalMutate(
             (key) => {
               if (Array.isArray(key) && (key[0] === 'store-shipments' || key[0] === 'store-shipments-stats')) {
@@ -91,7 +168,6 @@ const StoreOrders = () => {
         showError(result.error || 'Không thể xác nhận đơn hàng');
       }
     } catch (err) {
-      console.error('Error confirming order:', err);
       showError('Có lỗi xảy ra khi xác nhận đơn hàng');
     } finally {
       setUpdatingOrderId(null);
@@ -113,9 +189,9 @@ const StoreOrders = () => {
       if (result.success) {
         success(result.message || 'Đơn hàng đã chuyển sang trạng thái đang giao!');
         
-        // ✅ Refresh cả orders và analytics với revalidate
+        // ✅ Refresh cả orders và stats với revalidate
         mutate(undefined, { revalidate: true }); // Force refresh orders list hiện tại
-        mutateAnalytics(undefined, { revalidate: true }); // Force refresh analytics
+        mutateStats(undefined, { revalidate: true }); // Force refresh stats
         
         // Invalidate tất cả store-orders và order-detail queries
         const cacheKeys = Array.from(globalMutate.keys?.() || []);
@@ -128,7 +204,6 @@ const StoreOrders = () => {
         showError(result.error || 'Không thể cập nhật trạng thái giao hàng');
       }
     } catch (err) {
-      console.error('Error shipping order:', err);
       showError('Có lỗi xảy ra khi cập nhật trạng thái giao hàng');
     } finally {
       setUpdatingOrderId(null);
@@ -150,9 +225,9 @@ const StoreOrders = () => {
       if (result.success) {
         success(result.message || 'Đơn hàng đã được giao thành công!');
         
-        // ✅ Refresh cả orders và analytics với revalidate
+        // ✅ Refresh cả orders và stats với revalidate
         mutate(undefined, { revalidate: true }); // Force refresh orders list hiện tại
-        mutateAnalytics(undefined, { revalidate: true }); // Force refresh analytics
+        mutateStats(undefined, { revalidate: true }); // Force refresh stats
         
         // Invalidate tất cả store-orders và order-detail queries
         const cacheKeys = Array.from(globalMutate.keys?.() || []);
@@ -165,45 +240,79 @@ const StoreOrders = () => {
         showError(result.error || 'Không thể hoàn tất giao hàng');
       }
     } catch (err) {
-      console.error('Error delivering order:', err);
       showError('Có lỗi xảy ra khi hoàn tất giao hàng');
     } finally {
       setUpdatingOrderId(null);
     }
   };
 
-  // ✅ Fetch order status analytics
-  const { data: statusAnalytics, mutate: mutateAnalytics } = useSWR(
-    currentStore?.id ? ['order-status-analytics', currentStore.id] : null,
-    () => getOrderStatusAnalytics(currentStore.id),
+  // ✅ Fetch order count by status - Dùng API count-by-status như yêu cầu Trello
+  // API này TRÁNH trường hợp khi search hay filter status khác thì bộ đếm cũng bị thay đổi theo
+  const { data: statusCountData, mutate: mutateStats } = useSWR(
+    currentStore?.id ? ['store-orders-stats', currentStore.id] : null,
+    () => {
+      return countOrdersByStatus(currentStore.id);
+    },
     { 
-      revalidateOnFocus: false,
-      revalidateOnReconnect: true,
-      dedupingInterval: 2000, // Cache 2s để tránh request quá nhiều
+      // ⚠️ ĐÂY LÀ THỐNG KÊ, KHÔNG CẦN TỰ REFETCH LIÊN TỤC
+      // Chỉ load 1 lần khi vào trang hoặc khi bấm nút “Làm mới” / cập nhật đơn.
+      revalidateOnFocus: false,       // TẮT auto refetch khi focus tab để giảm tải
+      revalidateOnReconnect: false,   // Không refetch khi mạng reconnect
+      revalidateIfStale: true,        // Nếu data bị stale và ta gọi mutate() thì vẫn refetch
+      dedupingInterval: 5000,         // Ghép request trong 5s khi tự mutate
     }
   );
 
-  const analytics = statusAnalytics?.success ? statusAnalytics.data : null;
+  // ✅ Update cached stats khi API load thành công
+  useEffect(() => {
+    if (statusCountData?.success && statusCountData.data) {
+      const data = statusCountData.data;
+      setCachedStats({
+        pending: data.PENDING || data.pending || 0,
+        confirmed: data.CONFIRMED || data.confirmed || 0,
+        shipping: data.SHIPPING || data.shipping || 0,
+        delivered: data.DELIVERED || data.delivered || 0,
+        cancelled: data.CANCELLED || data.cancelled || 0,
+      });
+    }
+  }, [statusCountData]);
+
+  // ✅ Sử dụng data từ API nếu có, nếu không thì dùng cached stats
+  const stats = statusCountData?.success ? statusCountData.data : null;
+
+  // ✅ Dùng API count-by-status (như yêu cầu Trello), fallback về cached stats
+  // API này TRÁNH trường hợp khi search hay filter status khác thì bộ đếm cũng bị thay đổi theo
+  const displayAnalytics = {
+    pending: stats?.PENDING ?? stats?.pending ?? cachedStats.pending,
+    confirmed: stats?.CONFIRMED ?? stats?.confirmed ?? cachedStats.confirmed,
+    shipping: stats?.SHIPPING ?? stats?.shipping ?? cachedStats.shipping,
+    delivered: stats?.DELIVERED ?? stats?.delivered ?? cachedStats.delivered,
+    cancelled: stats?.CANCELLED ?? stats?.cancelled ?? cachedStats.cancelled,
+  };
+
+  // ✅ Tổng đơn hàng: ưu tiên số totalOrders từ API, nếu không có thì tự cộng các trạng thái
+  const totalOrdersFromStatsRaw =
+    stats?.totalOrders ??
+    stats?.TOTAL_ORDERS ??
+    null;
+
+  const totalOrdersFromStats =
+    typeof totalOrdersFromStatsRaw === 'number' && !Number.isNaN(totalOrdersFromStatsRaw)
+      ? totalOrdersFromStatsRaw
+      : (displayAnalytics.pending +
+         displayAnalytics.confirmed +
+         displayAnalytics.shipping +
+         displayAnalytics.delivered +
+         displayAnalytics.cancelled);
 
   // ✅ Fetch orders từ API với filter
   const { data: ordersData, error, isLoading, mutate } = useSWR(
-    currentStore?.id ? ['store-orders', currentStore.id, statusFilter, currentPage] : null,
+    currentStore?.id ? ['store-orders', currentStore.id, statusFilter, currentPage, pageSize] : null,
     () => {
       // ✅ Đảm bảo storeId tồn tại trước khi gọi API
       if (!currentStore?.id) {
-        console.error('❌ [StoreOrders] storeId is missing:', currentStore);
         return { success: false, error: 'storeId is required' };
       }
-      
-      console.log('📦 [StoreOrders] Current page state:', currentPage, 'type:', typeof currentPage);
-      console.log('📦 [StoreOrders] Fetching orders with params:', {
-        storeId: currentStore.id,
-        page: currentPage,
-        size: pageSize,
-        sortBy: 'createdAt',
-        sortDir: 'desc',
-        status: statusFilter
-      });
       
       return getStoreOrders({
         storeId: currentStore.id,
@@ -222,8 +331,46 @@ const StoreOrders = () => {
   );
 
   const orders = ordersData?.success ? (ordersData.data?.content || ordersData.data || []) : [];
-  const totalPages = ordersData?.data?.totalPages || 0;
-  const totalElements = ordersData?.data?.totalElements || 0;
+  const apiTotalPages = ordersData?.data?.totalPages || 0;
+  const apiTotalElements = ordersData?.data?.totalElements || 0;
+
+  // ✅ Tổng đơn hiển thị:
+  // - Nếu có cả thống kê và meta từ API, lấy giá trị LỚN HƠN (tránh case BE thống kê thiếu status)
+  // - Nếu chỉ có 1 nguồn thì dùng nguồn đó, fallback về số phần tử thực tế
+  let totalOrders = orders.length;
+  if (Number.isFinite(totalOrdersFromStats) && totalOrdersFromStats > 0 && apiTotalElements > 0) {
+    totalOrders = Math.max(totalOrdersFromStats, apiTotalElements);
+  } else if (Number.isFinite(totalOrdersFromStats) && totalOrdersFromStats > 0) {
+    totalOrders = totalOrdersFromStats;
+  } else if (apiTotalElements > 0) {
+    totalOrders = apiTotalElements;
+  }
+
+  // ✅ Số trang: ưu tiên meta từ API, nếu không có thì tự tính
+  const computedTotalPages =
+    totalOrders > 0 && pageSize > 0
+      ? Math.ceil(totalOrders / pageSize)
+      : 0;
+
+  const totalPages = apiTotalPages || computedTotalPages;
+  const totalElements = totalOrders;
+
+  // ✅ Hàm xử lý chuyển trang (0-based)
+  const handlePageChange = (newPage) => {
+    if (newPage < 0 || newPage >= totalPages) return;
+    setCurrentPage(newPage);
+    // Scroll lên đầu list khi đổi trang
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // ✅ Tính danh sách trang hiển thị (giống trang ProductList, nhưng 0-based)
+  const getVisiblePages = () => {
+    const pages = [];
+    for (let i = 0; i < totalPages; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
 
   // Filter by search term (client-side)
   const filteredOrders = orders.filter(order => {
@@ -256,34 +403,15 @@ const StoreOrders = () => {
 
   const getStatusBadge = (status) => {
     const badges = {
-      PENDING: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Chờ xác nhận', icon: '⏳' },
-      CONFIRMED: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Đã xác nhận', icon: '✅' },
-      SHIPPING: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Đang giao', icon: '🚚' },
-      DELIVERED: { bg: 'bg-green-100', text: 'text-green-800', label: 'Đã giao', icon: '📦' },
-      CANCELLED: { bg: 'bg-red-100', text: 'text-red-800', label: 'Đã hủy', icon: '❌' }
+      PENDING:   { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Chờ xác nhận',        icon: '⏳' },
+      CONFIRMED: { bg: 'bg-blue-100',   text: 'text-blue-800',   label: 'Đã xác nhận',         icon: '✅' },
+      SHIPPING:  { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Đang giao',           icon: '🚚' },
+      DELIVERED: { bg: 'bg-green-100',  text: 'text-green-800',  label: 'Đã giao',             icon: '📦' },
+      COMPLETED: { bg: 'bg-green-100',  text: 'text-green-800',  label: 'Hoàn tất',            icon: '✅' },
+      RETURNED:  { bg: 'bg-gray-100',   text: 'text-gray-800',   label: 'Đã trả hàng / Hoàn tiền', icon: '↩️' },
+      CANCELLED: { bg: 'bg-red-100',    text: 'text-red-800',    label: 'Đã hủy',              icon: '❌' },
     };
     return badges[status] || { bg: 'bg-gray-100', text: 'text-gray-800', label: status, icon: '📋' };
-  };
-
-  // ✅ Tính toán status counts từ orders hiện tại (fallback nếu analytics chưa có)
-  const statusCounts = {
-    ALL: totalElements,
-    PENDING: orders.filter(o => o.status === 'PENDING').length,
-    CONFIRMED: orders.filter(o => o.status === 'CONFIRMED').length,
-    SHIPPING: orders.filter(o => o.status === 'SHIPPING').length,
-    DELIVERED: orders.filter(o => o.status === 'DELIVERED').length,
-    CANCELLED: orders.filter(o => o.status === 'CANCELLED').length
-  };
-
-  // ✅ Ưu tiên dùng analytics từ API, fallback về tính từ orders hiện tại
-  // Nếu analytics có và đang ở trang 1 (toàn bộ orders), dùng analytics
-  // Nếu không, tính từ orders hiện tại
-  const displayAnalytics = {
-    pending: analytics?.pending ?? statusCounts.PENDING,
-    confirmed: analytics?.confirmed ?? statusCounts.CONFIRMED,
-    shipping: analytics?.shipping ?? statusCounts.SHIPPING,
-    delivered: analytics?.delivered ?? statusCounts.DELIVERED,
-    cancelled: analytics?.cancelled ?? statusCounts.CANCELLED,
   };
 
   return (
@@ -295,19 +423,19 @@ const StoreOrders = () => {
             <div className="bg-gradient-to-r from-cyan-200 to-blue-200 rounded-2xl p-6">
               <div className="relative bg-white rounded-2xl border border-gray-100 p-8 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 to-blue-400 rounded-xl flex items-center justify-center">
-                      <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                      </svg>
-                    </div>
-                    <div>
-                      <h1 className="text-3xl font-bold">
-                        <span className="text-cyan-600">Quản lý</span> <span className="text-blue-600">đơn hàng</span>
-                      </h1>
-                      <p className="text-gray-600 mt-1">Quản lý danh sách đơn hàng của cửa hàng</p>
-                    </div>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 to-blue-400 rounded-xl flex items-center justify-center">
+                    <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                    </svg>
                   </div>
+                  <div>
+                    <h1 className="text-3xl font-bold">
+                      <span className="text-cyan-600">Quản lý</span> <span className="text-blue-600">đơn hàng</span>
+                    </h1>
+                    <p className="text-gray-600 mt-1">Quản lý danh sách đơn hàng của cửa hàng</p>
+                  </div>
+                </div>
                 </div>
                 
                 {/* Stats Cards - Vertical Layout */}
@@ -429,7 +557,6 @@ const StoreOrders = () => {
             <div className="flex flex-col items-center justify-center h-64 gap-4">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
               <p className="text-gray-600">Đang tải đơn hàng...</p>
-              <p className="text-sm text-gray-400">Backend có thể mất 30-60s để khởi động (cold start)</p>
             </div>
           ) : error ? (
             <div className="text-center py-12 text-red-600">
@@ -514,17 +641,53 @@ const StoreOrders = () => {
                         Chi tiết
                       </button>
                       
-                      {/* Nút Xem vận đơn - chỉ hiển thị khi đã xác nhận */}
-                      {(order.status === 'CONFIRMED' || order.status === 'SHIPPING' || order.status === 'DELIVERED') && (
-                        <button
-                          onClick={() => navigate('/store-dashboard/shipments')}
-                          className="w-10 h-10 flex items-center justify-center bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 transition-colors"
-                          title="Xem vận đơn"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
-                          </svg>
-                        </button>
+                      {/* Nút Tạo vận đơn - chỉ hiển thị khi đã xác nhận và chưa giao */}
+                      {order.status === 'CONFIRMED' && (
+                        <OrderShipmentButton 
+                          orderId={order.id}
+                          storeId={currentStore?.id}
+                          onNavigate={() => navigate('/store-dashboard/shipments')}
+                          onCreating={() => setUpdatingOrderId(order.id)}
+                          onCreated={async () => {
+                            success('Đã tạo vận đơn thành công!');
+                            await mutate(undefined, { revalidate: true });
+                            setTimeout(() => {
+                              globalMutate(
+                                (key) => {
+                                  if (Array.isArray(key)) {
+                                    const keyName = key[0];
+                                    return (
+                                      keyName === 'store-shipments' ||
+                                      keyName === 'store-shipments-stats' ||
+                                      keyName === 'shipper-picking-up' ||
+                                      keyName === 'shipper-history'
+                                    );
+                                  }
+                                  return false;
+                                },
+                                undefined,
+                                { revalidate: true }
+                              );
+                            }, 500);
+                            setTimeout(() => {
+                              globalMutate(
+                                (key) => {
+                                  if (Array.isArray(key) && (key[0] === 'store-shipments' || key[0] === 'store-shipments-stats')) {
+                                    return true;
+                                  }
+                                  return false;
+                                },
+                                undefined,
+                                { revalidate: true }
+                              );
+                            }, 2000);
+                            setTimeout(() => {
+                              navigate('/store-dashboard/shipments');
+                            }, 1500);
+                          }}
+                          onError={(error) => showError(error)}
+                          isUpdating={updatingOrderId === order.id}
+                        />
                       )}
 
                       {order.status === 'PENDING' && (
@@ -547,25 +710,11 @@ const StoreOrders = () => {
                         </button>
                       )}
 
-                      {order.status === 'CONFIRMED' && (
-                        <button
-                          onClick={() => handleShipOrder(order.id)}
-                          disabled={updatingOrderId === order.id}
-                          className="w-10 h-10 flex items-center justify-center bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50"
-                          title="Bắt đầu giao hàng"
-                        >
-                          {updatingOrderId === order.id ? (
-                            <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                          ) : (
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                            </svg>
-                          )}
-                        </button>
-                      )}
+                      {/* ❌ REMOVED: Button màu tím "Bắt đầu giao hàng" 
+                          Lý do: Theo workflow mới, Store chỉ tạo shipment (icon cyan),
+                          Shipper mới là người chuyển shipment status sang SHIPPING khi bắt đầu giao hàng.
+                          Store không nên tự chuyển shipment status sang SHIPPING.
+                      */}
 
                       {order.status === 'SHIPPING' && (
                         <button
@@ -593,32 +742,61 @@ const StoreOrders = () => {
             </div>
           )}
 
-          {/* Pagination */}
+          {/* Pagination - 20 đơn / trang, hiển thị số trang giống màn biến thể */}
           {!isLoading && !error && totalPages > 1 && (
-            <div className="bg-gradient-to-r from-white to-gray-50 rounded-2xl shadow-lg border-2 border-gray-200 p-6 flex items-center justify-between">
-              <div className="text-sm text-gray-700 font-medium">
-                Trang <span className="text-blue-600 font-bold text-lg">{currentPage + 1}</span> / <span className="text-gray-600 font-bold text-lg">{totalPages}</span>
-                <span className="ml-4 text-gray-500">({totalElements} đơn hàng)</span>
-              </div>
-              <div className="flex gap-3">
+            <div className="flex items-center justify-center mt-8 mb-8">
+              <div className="flex items-center justify-center gap-2">
+                {/* Previous */}
                 <button
-                  onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                  onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 0}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-white border-2 border-gray-300 rounded-xl hover:bg-gray-50 hover:border-blue-500 hover:text-blue-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-300 disabled:hover:text-gray-700 font-medium shadow-sm hover:shadow-md"
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                    currentPage === 0
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-blue-50 hover:text-blue-600 border border-gray-200 shadow-sm hover:shadow-md hover:scale-105'
+                  }`}
+                  aria-label="Trang trước"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path>
                   </svg>
-                  Trước
                 </button>
+
+                {/* Page numbers */}
+                <div className="flex items-center gap-1">
+                  {getVisiblePages().map((page) => {
+                    const isActive = page === currentPage;
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => handlePageChange(page)}
+                        className={`min-w-[40px] h-10 px-4 rounded-lg font-semibold transition-all duration-200 ${
+                          isActive
+                            ? 'bg-red-500 text-white shadow-lg scale-110'
+                            : 'bg-white text-gray-700 hover:bg-blue-50 hover:text-blue-600 border border-gray-200 shadow-sm hover:shadow-md hover:scale-105'
+                        }`}
+                        aria-label={`Trang ${page + 1}`}
+                        aria-current={isActive ? 'page' : undefined}
+                      >
+                        {page + 1}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Next */}
                 <button
-                  onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+                  onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage >= totalPages - 1}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-white border-2 border-gray-300 rounded-xl hover:bg-gray-50 hover:border-blue-500 hover:text-blue-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-300 disabled:hover:text-gray-700 font-medium shadow-sm hover:shadow-md"
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                    currentPage >= totalPages - 1
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-blue-50 hover:text-blue-600 border border-gray-200 shadow-sm hover:shadow-md hover:scale-105'
+                  }`}
+                  aria-label="Trang sau"
                 >
-                  Sau
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
                   </svg>
                 </button>
               </div>

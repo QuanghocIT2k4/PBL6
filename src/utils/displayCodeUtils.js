@@ -31,11 +31,26 @@ export const getShipmentCode = (shipmentId) => {
 };
 
 /**
- * Order ID → Mã đơn hàng
- * VD: "69233170-..." → "DH69233170"
+ * Order ID → Mã đơn hàng hiển thị
+ *
+ * YÊU CẦU MỚI: hiển thị đúng `orderId` gốc, KHÔNG dùng prefix "DH" nữa.
+ * Ví dụ: orderId = "6942ba94f5bd3d765c8dd3cb" → hiển thị nguyên chuỗi đó.
  */
 export const getOrderCode = (orderId) => {
-  return generateDisplayCode(orderId, 'DH', 8);
+  if (!orderId) return 'N/A';
+
+  // Một số nơi có thể truyền object Mongo-like, xử lý nhẹ cho an toàn
+  let raw = orderId;
+  if (typeof raw === 'object' && raw !== null) {
+    raw =
+      raw.id ??
+      raw._id ??
+      raw.$oid ??
+      (raw.$id && (raw.$id.$oid || raw.$id)) ??
+      raw.toString?.();
+  }
+
+  return String(raw);
 };
 
 /**

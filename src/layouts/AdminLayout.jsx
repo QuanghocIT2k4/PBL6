@@ -18,6 +18,8 @@ const AdminLayout = ({ children }) => {
     { path: '/admin-dashboard/variants', icon: '🎨', label: 'Biến thể' },
     { path: '/admin-dashboard/promotions', icon: '🎁', label: 'Khuyến mãi' },
     { path: '/admin-dashboard/shippers', icon: '🚚', label: 'Quản lý Shipper' },
+    { path: '/admin-dashboard/disputes', icon: '⚖️', label: 'Khiếu nại' },
+    { path: '/admin-dashboard/refunds', icon: '💳', label: 'Hoàn tiền' },
     { path: '/admin-dashboard/withdrawals', icon: '💰', label: 'Rút tiền' },
     { path: '/admin-dashboard/revenue', icon: '📊', label: 'Doanh Thu' },
   ];
@@ -37,11 +39,17 @@ const AdminLayout = ({ children }) => {
       const result = await logout();
       if (result.success) {
         showSuccess('Đăng xuất thành công!');
-        navigate('/auth');
+        // ✅ Force reload page để đảm bảo clear hoàn toàn state và cache
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 100);
       }
     } catch (error) {
       console.error('Logout error:', error);
-      navigate('/auth');
+      // ✅ Vẫn force reload dù có lỗi để đảm bảo logout
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 100);
     } finally {
       setLoggingOut(false);
     }

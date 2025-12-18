@@ -66,6 +66,7 @@ const OrderList = () => {
     { value: 'SHIPPING', label: 'Đang giao', icon: '🚚' },
     { value: 'DELIVERED', label: 'Đã giao', icon: '✅' },
     { value: 'CANCELLED', label: 'Đã hủy', icon: '❌' },
+    { value: 'RETURNED', label: 'Đã trả hàng / Hoàn tiền', icon: '↩️' },
   ];
 
   // Loading state

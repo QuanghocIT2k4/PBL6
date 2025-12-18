@@ -14,7 +14,7 @@ import {
   formatCurrency,
   formatAddress,
 } from '../../services/b2c/shipmentService';
-import { getShipmentCode, getOrderCode } from '../../utils/displayCodeUtils';
+import { getOrderCode } from '../../utils/displayCodeUtils';
 
 /**
  * StoreShipments Page
@@ -25,15 +25,27 @@ const StoreShipments = () => {
   const { currentStore, loading: storeLoading } = useStoreContext();
   const { success, error: showError } = useToast();
 
-  const [filter, setFilter] = useState('all'); // all, PICKING_UP, SHIPPING, DELIVERED, FAILED
+  const [filter, setFilter] = useState('all'); // all, READY_TO_PICK, PICKING, SHIPPING, DELIVERED, DELIVERED_FAIL, RETURNED
   const [page, setPage] = useState(0);
+  // Lưu toàn bộ shipment đã load để hỗ trợ "Xem thêm"
+  const [loadedShipments, setLoadedShipments] = useState([]);
+  const [hasMore, setHasMore] = useState(false);
+  // ✅ Lưu stats cũ để tránh "nhảy" khi đang load
+  const [cachedStats, setCachedStats] = useState({
+    total: 0,
+    readyToPick: 0,
+    picking: 0,
+    shipping: 0,
+    delivered: 0,
+    deliverFail: 0,
+    returned: 0,
+  });
 
   // ✅ Dùng SWR để có thể invalidate từ nơi khác (sau khi confirm order)
-  const { data: shipmentsData, error, isLoading, isValidating, mutate } = useSWR(
+  const { data: shipmentsData, error, isLoading, mutate } = useSWR(
     currentStore?.id ? ['store-shipments', currentStore.id, filter, page] : null,
     () => {
       const statusFilter = filter === 'all' ? null : filter;
-      console.log('📦 [StoreShipments] Fetching shipments...', { storeId: currentStore.id, filter: statusFilter, page });
       return getShipmentsByStoreId(currentStore.id, {
         page,
         size: 10,
@@ -44,74 +56,155 @@ const StoreShipments = () => {
       revalidateOnFocus: true, // ✅ Refresh khi focus vào tab để thấy shipment mới
       revalidateOnReconnect: true,
       dedupingInterval: 2000, // Cache 2s để tránh request quá nhiều
-      onSuccess: (data) => {
-        console.log('✅ [StoreShipments] Shipments loaded:', data);
-        const shipments = data?.data?.content || data?.data?.shipments || [];
-        const count = shipments.length;
-        console.log(`📊 [StoreShipments] Total shipments: ${count}`);
-        
-        // ✅ Log status của từng shipment để debug
-        if (count > 0) {
-          console.log('📋 [StoreShipments] Shipment statuses:');
-          shipments.forEach((shipment, index) => {
-            console.log(`  ${index + 1}. ID: ${shipment.id}, Status: ${shipment.status}, Order: ${shipment.order?.id}`);
-          });
+      onError: (error) => {
+        // ✅ Xử lý lỗi 500 từ Java backend (lỗi getFromAddress null)
+        if (error.response?.status === 500) {
+          console.warn('⚠️ [StoreShipments] Backend error 500 - có thể do Java backend expect fromAddress object');
         }
       },
     }
   );
 
-  const shipments = shipmentsData?.success ? (shipmentsData.data?.content || shipmentsData.data?.shipments || []) : [];
+  // ✅ Xử lý nhiều format response từ backend (1 page)
+  const pageShipments = shipmentsData?.success 
+    ? (Array.isArray(shipmentsData.data?.content) 
+        ? shipmentsData.data.content 
+        : Array.isArray(shipmentsData.data?.shipments)
+          ? shipmentsData.data.shipments
+          : Array.isArray(shipmentsData.data)
+            ? shipmentsData.data
+            : [])
+    : [];
+  
   const totalPages = shipmentsData?.data?.totalPages || 0;
+
+  // ✅ Gộp các page lại thành danh sách hiển thị liên tục (newest → oldest)
+  useEffect(() => {
+    if (!shipmentsData?.success) return;
+
+    // Còn trang để tải tiếp không?
+    setHasMore(page < totalPages - 1);
+
+    setLoadedShipments(prev => {
+      // Nếu là trang đầu tiên hoặc filter/store thay đổi, reset danh sách
+      if (page === 0) {
+        return pageShipments;
+      }
+      // Các trang tiếp theo: append
+      return [...prev, ...pageShipments];
+    });
+  }, [shipmentsData, page, totalPages, pageShipments]);
+
+  // ✅ Fallback: đếm theo danh sách đã load nếu API stats lỗi/0
+  const countsFromShipments = React.useMemo(() => {
+    const counts = {
+      total: loadedShipments.length,
+      readyToPick: 0,
+      picking: 0,
+      shipping: 0,
+      delivered: 0,
+      deliverFail: 0,
+      returned: 0,
+    };
+    loadedShipments.forEach((s) => {
+      switch (s.status) {
+        case 'READY_TO_PICK':
+          counts.readyToPick += 1;
+          break;
+        case 'PICKING_UP':
+        case 'PICKING':
+          counts.picking += 1;
+          break;
+        case 'SHIPPING':
+          counts.shipping += 1;
+          break;
+        case 'DELIVERED':
+          counts.delivered += 1;
+          break;
+        case 'DELIVERED_FAIL':
+        case 'FAILED':
+          counts.deliverFail += 1;
+          break;
+        case 'RETURNED':
+          counts.returned += 1;
+          break;
+        default:
+          break;
+      }
+    });
+    return counts;
+  }, [loadedShipments]);
+  
   
   // ✅ Lấy stats chính xác từ API (không phụ thuộc vào filter/pagination)
-  const { data: statsData } = useSWR(
+  // API này TRÁNH trường hợp khi search hay filter status khác thì bộ đếm cũng bị thay đổi theo
+  // ✅ Lần đầu KHÔNG load luôn, chỉ dùng giá trị mặc định (0), chỉ load khi cần thiết
+  const { data: statsData, isLoading: statsLoading, mutate: mutateStats } = useSWR(
     currentStore?.id ? ['store-shipments-stats', currentStore.id] : null,
     () => countShipmentsByStatus(currentStore.id),
     {
       revalidateOnFocus: true,
-      dedupingInterval: 5000, // Cache 5s
+      revalidateOnReconnect: true,
+      revalidateIfStale: true,
+      dedupingInterval: 3000, // cache ngắn để đồng bộ bộ đếm
     }
   );
 
-  // ✅ Tính stats từ API hoặc fallback về tính từ shipments hiện tại
-  const stats = statsData?.success ? {
-    total: statsData.data?.total || 0,
-    pickingUp: statsData.data?.PICKING_UP || 0,
-    shipping: statsData.data?.SHIPPING || 0,
-    delivered: statsData.data?.DELIVERED || 0,
-    failed: statsData.data?.FAILED || 0,
-  } : {
-    // Fallback: tính từ shipments hiện tại (nếu API chưa load)
-    total: shipments.length,
-    pickingUp: shipments.filter((s) => s.status === 'PICKING_UP').length,
-    shipping: shipments.filter((s) => s.status === 'SHIPPING').length,
-    delivered: shipments.filter((s) => s.status === 'DELIVERED').length,
-    failed: shipments.filter((s) => s.status === 'FAILED').length,
-  };
-  
-  // Log khi shipments thay đổi
-  useEffect(() => {
-    console.log('📦 [StoreShipments] Shipments updated:', shipments.length, 'items');
-    console.log('📊 [StoreShipments] Stats:', stats);
-    
-    // ✅ Log chi tiết status của từng shipment
-    if (shipments.length > 0) {
-      console.log('🔍 [StoreShipments] Current shipments status breakdown:');
-      const statusCount = {};
-      shipments.forEach((s) => {
-        const status = s.status || 'UNKNOWN';
-        statusCount[status] = (statusCount[status] || 0) + 1;
-        console.log(`  - Shipment ${s.id}: status="${status}", orderId=${s.order?.id}`);
-      });
-      console.log('📊 [StoreShipments] Status count:', statusCount);
-    }
-  }, [shipments.length, stats, shipments]);
+  // ✅ Helper: chuẩn hóa dữ liệu đếm theo nhiều format backend có thể trả về
+  const normalizeShipmentStats = React.useCallback((raw = {}) => {
+    // Chấp nhận cả UPPER_SNAKE, camelCase, và một số key thay thế
+    const get = (...keys) => {
+      for (const k of keys) {
+        if (raw[k] !== undefined && raw[k] !== null) return raw[k];
+      }
+      return 0;
+    };
 
-  const handleManualRefresh = () => {
-    mutate(undefined, { revalidate: true });
-    success('Đã làm mới danh sách vận đơn');
-  };
+    const normalized = {
+      total: get('total', 'TOTAL'),
+      readyToPick: get('READY_TO_PICK', 'READY_TO_PICKUP', 'readyToPick', 'ready_to_pick', 'readyToPickup'),
+      // gộp PICKING_UP + PICKING về "picking"
+      picking: get('PICKING_UP', 'PICKING', 'pickingUp', 'picking'),
+      shipping: get('SHIPPING', 'shipping'),
+      delivered: get('DELIVERED', 'delivered'),
+      // DELIVERED_FAIL / FAILED
+      deliverFail: get('DELIVERED_FAIL', 'FAILED', 'failed', 'deliverFail', 'deliveredFail', 'delivered_fail'),
+      returned: get('RETURNED', 'returned'),
+    };
+
+    return normalized;
+  }, []);
+
+  // ✅ Cập nhật cachedStats khi có data mới từ API count-by-status
+  useEffect(() => {
+    if (statsData?.success && statsData.data) {
+      setCachedStats(normalizeShipmentStats(statsData.data));
+    }
+  }, [statsData, normalizeShipmentStats]);
+
+  // ✅ CHỈ dùng stats từ API (đã normalize), fallback sang đếm từ danh sách nếu API lỗi
+  // Dùng cachedStats để tránh "nhảy" khi đang load
+  const statsRaw = statsData?.success && statsData.data
+    ? normalizeShipmentStats(statsData.data)
+    : countsFromShipments; // ✅ Fallback đếm theo danh sách
+
+  // ✅ Nếu BE không trả field "total" thì tự cộng từ các trạng thái con
+  const stats = React.useMemo(() => {
+    const totalFromStatuses =
+      (statsRaw.readyToPick || 0) +
+      (statsRaw.picking || 0) +
+      (statsRaw.shipping || 0) +
+      (statsRaw.delivered || 0) +
+      (statsRaw.deliverFail || 0) +
+      (statsRaw.returned || 0);
+
+    return {
+      ...statsRaw,
+      total: statsRaw.total && statsRaw.total > 0 ? statsRaw.total : totalFromStatuses,
+    };
+  }, [statsRaw]);
+
+  // Đã bỏ nút "Làm mới" để tránh gây nhầm lẫn và request thừa trên trang này
 
   const handleViewDetails = (shipment) => {
     // Navigate to order detail page with orderId
@@ -126,34 +219,12 @@ const StoreShipments = () => {
     <StoreStatusGuard currentStore={currentStore} pageName="vận đơn" loading={storeLoading}>
       <StoreLayout>
         <div className="space-y-6">
-          {/* Header with Refresh Button */}
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Quản lý vận đơn</h1>
-              <p className="text-sm text-gray-600 mt-1">
-                {/* ❌ TẮT AUTO-REFRESH - Theo yêu cầu tắt tự động vận chuyển */}
-              </p>
-            </div>
-            <button
-              onClick={handleManualRefresh}
-              disabled={isLoading || isValidating}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <svg
-                className={`w-5 h-5 ${isValidating ? 'animate-spin' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
-              </svg>
-              {isValidating ? 'Đang làm mới...' : 'Làm mới'}
-            </button>
+          {/* Header */}
+          <div className="mb-4">
+            <h1 className="text-2xl font-bold text-gray-900">Quản lý vận đơn</h1>
+            <p className="text-sm text-gray-600 mt-1">
+              Quản lý danh sách vận đơn cho các đơn hàng của cửa hàng
+            </p>
           </div>
 
           {/* Stats Section - Giống Product Variants */}
@@ -169,9 +240,23 @@ const StoreShipments = () => {
                 </div>
               </div>
 
-              {/* Stats Cards - 4 cards ngang */}
-              <div className="grid grid-cols-4 gap-4">
-                {/* Đang lấy hàng */}
+              {/* Stats Cards - 6 status */}
+              <div className="grid grid-cols-6 gap-4">
+                {/* READY_TO_PICK */}
+                <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-xl p-4 border-2 border-cyan-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-cyan-200 rounded-xl flex items-center justify-center">
+                      <span className="text-2xl">📦</span>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-600 font-medium">Sẵn sàng lấy hàng</div>
+                      <div className="text-xs text-gray-500">Chờ shipper</div>
+                    </div>
+                  </div>
+                  <div className="text-3xl font-bold text-gray-900 mt-3">{stats.readyToPick}</div>
+                </div>
+
+                {/* PICKING */}
                 <div className="bg-gradient-to-br from-pink-50 to-pink-100 rounded-xl p-4 border-2 border-pink-200">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-pink-200 rounded-xl flex items-center justify-center">
@@ -179,13 +264,13 @@ const StoreShipments = () => {
                     </div>
                     <div>
                       <div className="text-xs text-gray-600 font-medium">Đang lấy hàng</div>
-                      <div className="text-xs text-gray-500">Tất cả</div>
+                      <div className="text-xs text-gray-500">Shipper đang lấy</div>
                     </div>
                   </div>
-                  <div className="text-3xl font-bold text-gray-900 mt-3">{stats.pickingUp}</div>
+                  <div className="text-3xl font-bold text-gray-900 mt-3">{stats.picking}</div>
                 </div>
 
-                {/* Đang giao */}
+                {/* SHIPPING */}
                 <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border-2 border-green-200">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-green-200 rounded-xl flex items-center justify-center">
@@ -199,7 +284,7 @@ const StoreShipments = () => {
                   <div className="text-3xl font-bold text-gray-900 mt-3">{stats.shipping}</div>
                 </div>
 
-                {/* Đã giao */}
+                {/* DELIVERED */}
                 <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-4 border-2 border-yellow-200">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-yellow-200 rounded-xl flex items-center justify-center">
@@ -213,7 +298,7 @@ const StoreShipments = () => {
                   <div className="text-3xl font-bold text-gray-900 mt-3">{stats.delivered}</div>
                 </div>
 
-                {/* Thất bại */}
+                {/* DELIVER_FAIL */}
                 <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 border-2 border-orange-200">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-orange-200 rounded-xl flex items-center justify-center">
@@ -221,10 +306,24 @@ const StoreShipments = () => {
                     </div>
                     <div>
                       <div className="text-xs text-gray-600 font-medium">Thất bại</div>
-                      <div className="text-xs text-gray-500">Hết hàng</div>
+                      <div className="text-xs text-gray-500">Giao thất bại</div>
                     </div>
                   </div>
-                  <div className="text-3xl font-bold text-gray-900 mt-3">{stats.failed}</div>
+                  <div className="text-3xl font-bold text-gray-900 mt-3">{stats.deliverFail}</div>
+                </div>
+
+                {/* RETURNED */}
+                <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl p-4 border-2 border-indigo-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-indigo-200 rounded-xl flex items-center justify-center">
+                      <span className="text-2xl">↩️</span>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-600 font-medium">Đã trả hàng</div>
+                      <div className="text-xs text-gray-500">Hoàn tất trả</div>
+                    </div>
+                  </div>
+                  <div className="text-3xl font-bold text-gray-900 mt-3">{stats.returned}</div>
                 </div>
               </div>
             </div>
@@ -234,11 +333,17 @@ const StoreShipments = () => {
           <div className="bg-white rounded-lg shadow-sm p-4">
             <div className="flex gap-2 flex-wrap">
               {[
+                // Lưu ý: filter dùng giá trị status ĐÚNG như backend cho LIST,
+                // còn phần đếm đã normalize cả READY_TO_PICK và READY_TO_PICKUP.
                 { key: 'all', label: 'Tất cả', count: stats.total },
-                { key: 'PICKING_UP', label: 'Đang lấy hàng', count: stats.pickingUp },
+                // Backend LIST đang dùng status READY_TO_PICK cho các đơn sẵn sàng lấy hàng
+                { key: 'READY_TO_PICK', label: 'Sẵn sàng lấy hàng', count: stats.readyToPick },
+                // PICKING_UP + PICKING được gộp trong stats.picking, filter dùng PICKING để backend trả đúng
+                { key: 'PICKING', label: 'Đang lấy hàng', count: stats.picking },
                 { key: 'SHIPPING', label: 'Đang giao', count: stats.shipping },
                 { key: 'DELIVERED', label: 'Đã giao', count: stats.delivered },
-                { key: 'FAILED', label: 'Thất bại', count: stats.failed },
+                { key: 'DELIVERED_FAIL', label: 'Thất bại', count: stats.deliverFail },
+                { key: 'RETURNED', label: 'Đã trả', count: stats.returned },
               ].map((tab) => (
                 <button
                   key={tab.key}
@@ -260,11 +365,11 @@ const StoreShipments = () => {
 
           {/* Shipments List */}
           <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            {isLoading ? (
+            {isLoading && page === 0 ? (
               <div className="flex items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
               </div>
-            ) : shipments.length === 0 ? (
+            ) : loadedShipments.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 px-4">
                 <div className="text-6xl mb-4">📦</div>
                 <p className="text-gray-500 text-center text-lg">Chưa có vận đơn nào</p>
@@ -277,100 +382,117 @@ const StoreShipments = () => {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Mã vận đơn
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        ID vận đơn
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Đơn hàng
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Địa chỉ shop
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Địa chỉ giao hàng
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Shipper
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Phí ship
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Trạng thái
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Dự kiến giao
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Thao tác
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {shipments.map((shipment) => {
+                    {loadedShipments.map((shipment) => {
                       const statusBadge = getShipmentStatusBadge(shipment.status);
                       const timeRemaining = getDeliveryTimeRemaining(shipment.expectedDeliveryDate);
 
                       return (
                         <tr key={shipment.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-4 py-4 whitespace-nowrap">
                             <div className="text-sm font-medium text-blue-600">
-                              {getShipmentCode(shipment.id)}
+                              {shipment.id}
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-cyan-600 font-medium">
-                              {getOrderCode(shipment.order?.id)}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
+                          <td className="px-4 py-4">
                             <div className="text-sm text-gray-900 max-w-xs truncate">
-                              {formatAddress(shipment.shopAddress || shipment.store?.address || 'N/A')}
+                              {formatAddress(
+                                shipment.toAddress ||
+                                shipment.address ||
+                                'N/A'
+                              )}
                             </div>
                           </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900 max-w-xs truncate">
-                              {formatAddress(shipment.address)}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            {shipment.carrier ? (
-                              <div className="flex items-center gap-2">
-                                {shipment.carrier.avatar && (
-                                  <img 
-                                    src={shipment.carrier.avatar} 
-                                    alt={shipment.carrier.fullName || shipment.carrier.name} 
-                                    className="w-6 h-6 rounded-full object-cover"
-                                  />
-                                )}
-                                <div>
-                                  <div className="text-sm font-medium text-gray-900">
-                                    {shipment.carrier.fullName || shipment.carrier.name || 'N/A'}
-                                  </div>
-                                  {shipment.carrier.phone && (
-                                    <div className="text-xs text-gray-500">
-                                      {shipment.carrier.phone}
-                                    </div>
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            {(() => {
+                              // ✅ Hỗ trợ nhiều format dữ liệu shipper khác nhau từ backend
+                              const shipperObj =
+                                shipment.carrier || // format mới: carrier object
+                                shipment.shipper || // có thể là shipper object
+                                shipment.assignedShipper || // tên khác
+                                null;
+
+                              const shipperName =
+                                shipperObj?.fullName ||
+                                shipperObj?.name ||
+                                shipment.shipperName || // format: field shipperName riêng
+                                null;
+
+                              const shipperPhone =
+                                shipperObj?.phone ||
+                                shipment.shipperPhone ||
+                                null;
+
+                              const avatar =
+                                shipperObj?.avatar || shipperObj?.avatarUrl || null;
+
+                              if (!shipperName && !shipperPhone && !avatar) {
+                                return (
+                                  <span className="text-sm text-gray-400">
+                                    Chưa có shipper
+                                  </span>
+                                );
+                              }
+
+                              return (
+                                <div className="flex items-center gap-2">
+                                  {avatar && (
+                                    <img
+                                      src={avatar}
+                                      alt={shipperName || 'Shipper'}
+                                      className="w-6 h-6 rounded-full object-cover"
+                                    />
                                   )}
+                                  <div>
+                                    <div className="text-sm font-medium text-gray-900">
+                                      {shipperName || 'N/A'}
+                                    </div>
+                                    {shipperPhone && (
+                                      <div className="text-xs text-gray-500">
+                                        {shipperPhone}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            ) : (
-                              <span className="text-sm text-gray-400">Chưa có shipper</span>
-                            )}
+                              );
+                            })()}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-4 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">
                               {formatCurrency(shipment.shippingFee || 0)}
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-4 py-4 whitespace-nowrap">
                             <span
                               className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusBadge.bgColor} ${statusBadge.textColor}`}
                             >
                               {statusBadge.icon} {statusBadge.text}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-4 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">
                               {formatExpectedDeliveryDate(shipment.expectedDeliveryDate)}
                             </div>
@@ -380,7 +502,7 @@ const StoreShipments = () => {
                               </div>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <td className="px-4 py-4 whitespace-nowrap text-sm">
                             <button
                               onClick={() => handleViewDetails(shipment)}
                               className="text-blue-600 hover:text-blue-800 font-medium"
@@ -396,25 +518,15 @@ const StoreShipments = () => {
               </div>
             )}
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+            {/* Nút Xem thêm - dạng load-more, mỗi lần +10 đơn cho đến khi hết */}
+            {hasMore && (
+              <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-center">
                 <button
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
-                  disabled={page === 0}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={isLoading}
+                  className="px-6 py-2 bg-blue-500 text-white rounded-lg text-sm font-semibold hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Trang trước
-                </button>
-                <span className="text-sm text-gray-700">
-                  Trang {page + 1} / {totalPages}
-                </span>
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                  disabled={page >= totalPages - 1}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Trang sau
+                  {isLoading ? 'Đang tải...' : 'Xem thêm'}
                 </button>
               </div>
             )}

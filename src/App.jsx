@@ -23,7 +23,11 @@ const OrderDetailPage = lazy(() => import('./pages/orders/OrderDetailPage'));
 const SearchResults = lazy(() => import('./pages/search/SearchResults'));
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'));
 const BuyerNotifications = lazy(() => import('./pages/buyer/BuyerNotifications'));
-const BuyerWallet = lazy(() => import('./pages/buyer/BuyerWallet'));
+const BuyerReturnRequestsPage = lazy(() => import('./pages/buyer/BuyerReturnRequestsPage'));
+const ReturnRequestCreatePage = lazy(() => import('./pages/buyer/ReturnRequestCreatePage'));
+const ReturnDisputeCreatePage = lazy(() => import('./pages/buyer/ReturnDisputeCreatePage'));
+const BuyerDisputesPage = lazy(() => import('./pages/buyer/BuyerDisputesPage'));
+const BuyerDisputeDetailPage = lazy(() => import('./pages/buyer/BuyerDisputeDetailPage'));
 const StoresPage = lazy(() => import('./pages/stores/StoresPage'));
 const StoreDetailPage = lazy(() => import('./pages/stores/StoreDetailPage'));
 const StoreRoutes = lazy(() => import('./routes/StoreRoutes'));
@@ -66,9 +70,13 @@ const AppContent = () => {
         <Route path="/store/:storeId" element={<StoreDetailPage />} />
         <Route path="/checkout" element={<CheckoutPage />} />
         <Route path="/orders" element={<OrdersPage />} />
+        <Route path="/orders/returns/new" element={<ReturnRequestCreatePage />} />
         <Route path="/orders/:id" element={<OrderDetailPage />} />
+        <Route path="/orders/returns" element={<BuyerReturnRequestsPage />} />
+        <Route path="/orders/returns/:returnRequestId/dispute" element={<ReturnDisputeCreatePage />} />
+        <Route path="/orders/disputes" element={<BuyerDisputesPage />} />
+        <Route path="/orders/disputes/:disputeId" element={<BuyerDisputeDetailPage />} />
         <Route path="/notifications" element={<BuyerNotifications />} />
-        <Route path="/wallet" element={<BuyerWallet />} />
         <Route path="/payment/callback" element={<PaymentCallback />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/chat" element={<ChatPage />} />
@@ -77,7 +85,7 @@ const AppContent = () => {
         {/* Shipper Routes */}
         <Route path="/shipper" element={<ShipperDashboard />} />
         <Route path="/shipper/history" element={<ShipperDashboard />} />
-        <Route path="/shipper/shipments/:orderId" element={<ShipperShipmentDetail />} />
+        <Route path="/shipper/shipments/:shipmentId" element={<ShipperShipmentDetail />} />
         
         {/* Store Management Routes (B2C) */}
         <Route path="/store-dashboard/*" element={<StoreRoutes />} />

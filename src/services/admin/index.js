@@ -12,9 +12,9 @@ export * from './adminStoreService';
 export * from './adminUserService';
 export * from './adminPromotionService';
 export * from './adminShipperService';
+export * from './adminOrderService';
 
 // TODO: Thêm các admin services khác:
-// - adminOrderService
 // - adminAnalyticsService
 
 

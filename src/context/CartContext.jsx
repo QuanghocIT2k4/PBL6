@@ -50,7 +50,7 @@ export const CartProvider = ({ children }) => {
             
             const normalized = backendCart.map(item => {
               // ✅ Backend đã sửa: trả về productVariantId + productVariantName
-              // Structure: { id, productVariantId, productVariantName, imageUrl, quantity, price, storeId }
+              // Structure: { id, productVariantId, productVariantName, imageUrl, quantity, price, storeId, storeName }
               
               const variantId = item.productVariantId || item.productId;
               const productName = item.productVariantName || item.productName || item.name;
@@ -66,6 +66,23 @@ export const CartProvider = ({ children }) => {
                 });
                 return null;
               }
+
+              const resolvedStoreId = item.storeId || item.store?.id || null;
+              const resolvedStoreName =
+                item.storeName ||
+                item.store?.storeName ||
+                item.store?.name ||
+                null;
+
+              console.log('🛒[CartContext] Normalize cart item store info:', {
+                cartItemId: item.id,
+                rawStoreId: item.storeId,
+                rawStoreObj: item.store,
+                resolvedStoreId,
+                resolvedStoreName,
+                productVariantId: variantId,
+                productName,
+              });
               
               // ✅ Tạo product object từ backend data
               const product = {
@@ -73,7 +90,8 @@ export const CartProvider = ({ children }) => {
                 name: productName,
                 image: item.imageUrl,
                 price: item.price || 0,
-                storeId: item.storeId || item.store?.id, // ← Backend có thể trả về store.id thay vì storeId
+                storeId: resolvedStoreId,      // lưu đúng storeId
+                storeName: resolvedStoreName,  // lưu đúng storeName
                 // Copy tất cả fields khác từ backend item
                 ...item
               };
@@ -130,6 +148,20 @@ export const CartProvider = ({ children }) => {
 
   // Load cart từ backend hoặc localStorage khi khởi tạo
   useEffect(() => {
+    // 🛑 Không load cart trên các trang dashboard (store/admin/shipper) để tránh gọi API thừa
+    const path = typeof window !== 'undefined' ? window.location.pathname : '';
+    const isDashboardPath =
+      path.startsWith('/store-dashboard') ||
+      path.startsWith('/admin-dashboard') ||
+      path.startsWith('/shipper');
+
+    if (isDashboardPath) {
+      // Đánh dấu đã init để các effect khác không ghi đè, nhưng KHÔNG fetch cart
+      setIsInitialized(true);
+      setCartItems([]);
+      return;
+    }
+
     fetchCart();
   }, [user?.roles]);
 

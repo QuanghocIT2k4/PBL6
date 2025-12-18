@@ -55,12 +55,19 @@ api.interceptors.response.use(
   async (error) => {
     const config = error.config;
     
-    console.error('❌ API Error:', {
-      url: config?.url,
-      method: config?.method,
-      status: error.response?.status,
-      message: error.message,
-    });
+    // ✅ Không log lỗi 400/404 cho endpoint kiểm tra shipment (đây là trường hợp bình thường)
+    const isShipmentCheck = config?.url?.includes('/shipments/order/');
+    const isNotFoundError = error.response?.status === 400 || error.response?.status === 404;
+    
+    if (!(isShipmentCheck && isNotFoundError)) {
+      // Chỉ log các lỗi khác, không log lỗi "not found" khi kiểm tra shipment
+      console.error('❌ API Error:', {
+        url: config?.url,
+        method: config?.method,
+        status: error.response?.status,
+        message: error.message,
+      });
+    }
     
     // ✅ Auto-retry for server cold starts (502, 503, 504)
     if (error.response && [502, 503, 504].includes(error.response.status)) {

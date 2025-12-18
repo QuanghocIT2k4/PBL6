@@ -17,6 +17,33 @@ const ShipmentTimeline = ({ shipment }) => {
 
   const timeline = getShipmentTimeline(shipment);
 
+  // Chuẩn hóa history từ backend: có thể là array object hoặc array string
+  const rawHistory = Array.isArray(shipment.history) ? shipment.history : [];
+  const isStringHistory = rawHistory.length > 0 && typeof rawHistory[0] === 'string';
+
+  const parsedStringHistory = isStringHistory
+    ? rawHistory.map((line) => {
+        // Format ví dụ: "2025-12-15T23:12:00.247955989: Đã giao hàng thành công (DELIVERED)"
+        const [timestampPart, ...rest] = line.split(': ');
+        const message = rest.join(': ');
+        let time = timestampPart;
+        let date = null;
+        try {
+          const d = new Date(timestampPart);
+          if (!isNaN(d.getTime())) {
+            date = d.toLocaleString('vi-VN');
+          }
+        } catch (e) {
+          // ignore parse error, fallback to raw string
+        }
+        return {
+          raw: line,
+          timestamp: date,
+          message,
+        };
+      })
+    : [];
+
   return (
     <div className="bg-white rounded-lg shadow-sm p-6">
       {/* Header */}
@@ -29,7 +56,7 @@ const ShipmentTimeline = ({ shipment }) => {
         </p>
       </div>
 
-      {/* Timeline */}
+      {/* Timeline trạng thái chính */}
       <div className="relative">
         {timeline.map((step, index) => (
           <div key={step.status} className="relative pb-8 last:pb-0">
@@ -101,6 +128,28 @@ const ShipmentTimeline = ({ shipment }) => {
           </div>
         ))}
       </div>
+
+      {/* Lịch sử vận đơn chi tiết từ backend (history array) */}
+      {parsedStringHistory.length > 0 && (
+        <div className="mt-8">
+          <h4 className="text-sm font-semibold text-gray-900 mb-3">Lịch sử vận đơn</h4>
+          <div className="space-y-2 text-sm text-gray-700 max-h-60 overflow-y-auto border border-gray-100 rounded-lg p-3 bg-gray-50">
+            {parsedStringHistory.map((entry, idx) => (
+              <div key={idx} className="flex items-start gap-2">
+                <span className="mt-1 text-xs text-gray-400">•</span>
+                <div>
+                  {entry.timestamp && (
+                    <p className="text-xs text-gray-500">{entry.timestamp}</p>
+                  )}
+                  <p className="text-sm">
+                    {entry.message || entry.raw}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Additional Info */}
       {shipment.status === 'FAILED' && (

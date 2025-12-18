@@ -125,6 +125,19 @@ const StoreDetailPage = () => {
     : `Khám phá ${storeTitle} - Cửa hàng công nghệ uy tín với nhiều sản phẩm chất lượng và giá tốt nhất.`;
   const storeKeywords = `${storeTitle}, cửa hàng công nghệ, mua sắm online, ${store?.address?.province || 'Đà Nẵng'}`;
 
+  // ✅ Helper: resolve banner URL từ nhiều field khác nhau
+  const bannerRaw =
+    store?.banner ||
+    store?.bannerUrl ||
+    store?.bannerURL ||
+    store?.bannerImage ||
+    store?.banner_image ||
+    null;
+
+  const bannerUrl = bannerRaw
+    ? (bannerRaw.startsWith('http') ? bannerRaw : getFullImageUrl(bannerRaw))
+    : null;
+
   return (
     <MainLayout>
       <SEO
@@ -165,7 +178,22 @@ const StoreDetailPage = () => {
         {/* Store Header */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
           {/* Banner */}
-          <div className="h-48 bg-gradient-to-r from-blue-500 to-purple-600 rounded-t-lg relative overflow-hidden">
+          <div className="h-48 rounded-t-lg relative overflow-hidden">
+            {/* Banner image nếu có, fallback gradient */}
+            {bannerUrl ? (
+              <img
+                src={bannerUrl}
+                alt={store.name}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  e.target.parentElement.innerHTML =
+                    '<div class=\"w-full h-full bg-gradient-to-r from-blue-500 to-purple-600\"></div>';
+                }}
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-r from-blue-500 to-purple-600" />
+            )}
             <div className="absolute inset-0 bg-black bg-opacity-20"></div>
             <div className="absolute top-4 left-4">
               <span className="px-3 py-1 bg-green-500 text-white text-sm rounded-full">

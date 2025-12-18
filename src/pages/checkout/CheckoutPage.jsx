@@ -9,6 +9,7 @@ import PromoCodeInput from '../../components/promotions/PromoCodeInput';
 import PromotionList from '../../components/promotions/PromotionList';
 import { calculateDiscount } from '../../services/admin/promotionService';
 import { createPaymentUrl } from '../../services/buyer/paymentService';
+import { createMoMoPayment } from '../../services/buyer/momoPaymentService';
 import { getProductVariantById } from '../../services/common/productService';
 import SEO from '../../components/seo/SEO';
 
@@ -83,82 +84,164 @@ const CheckoutPage = () => {
   const productTotal = getSelectedTotalPrice();
   const discount = appliedPromotion?.discount || 0;
   const shippingFee = 30000; // Phí vận chuyển cố định 30k
-  const serviceFee = 5000; // Phụ thu dịch vụ cố định 5k
-  const finalTotal = Math.max(0, productTotal - discount + shippingFee + serviceFee);
-  
-  // Debug log
-  useEffect(() => {
-  }, [productTotal, discount, appliedPromotion, finalTotal]);
 
-  // ✅ State để lưu storeId
-  const [storeId, setStoreId] = useState(null);
+  // ❌ KHÔNG cộng hoa hồng nền tảng vào tiền khách trả
+  // Hoa hồng nền tảng (serviceFee/platformCommission) sẽ do backend tính trên doanh thu của người bán
+  // Tổng tiền khách phải trả chỉ gồm: tiền hàng - giảm giá + phí vận chuyển
+  const finalTotal = Math.max(0, productTotal - discount + shippingFee);
   
-  // 🔥 TEMPORARY FIX: Hardcode storeId for testing
-  const TEMP_STORE_ID = "690ef0b2c07d8e4b12c79"; // From console logs
-
-  // ✅ Lấy storeId từ items - GỌI API LẤY PRODUCT DETAIL
+  // Debug log (có thể bật lại khi cần)
   useEffect(() => {
-    const fetchStoreId = async () => {
-      // 🔥 FIX: Không fetch lại nếu đã có storeId
-      if (storeId) {
-        return;
+    // console.log('[Checkout] Totals:', { productTotal, discount, shippingFee, finalTotal });
+  }, [productTotal, discount, appliedPromotion, shippingFee, finalTotal]);
+
+  // 🔁 Map variantId -> { storeId, storeName } được resolve từ API (nếu thiếu)
+  // ⚠️ PHẢI KHAI BÁO TRƯỚC groupedItems vì groupedItems sử dụng nó
+  const [resolvedStoreMap, setResolvedStoreMap] = useState({});
+
+  // ✅ Group sản phẩm theo từng store để hiển thị tách biệt
+  const groupedItems = useMemo(() => {
+    if (!items || items.length === 0) return [];
+
+    const groups = {};
+
+    items.forEach((it) => {
+      const product = it.product || {};
+      const variantId = it.productVariantId || product.id;
+      const resolved = (variantId && resolvedStoreMap[variantId]) || {};
+
+      const storeId =
+        resolved.storeId ||
+        product.storeId ||
+        product.store?.id ||
+        it.storeId ||
+        it.store?.id ||
+        null;
+
+      const storeName =
+        resolved.storeName ||
+        product.storeName ||
+        product.store?.storeName ||
+        product.store?.name ||
+        it.storeName ||
+        it.store?.storeName ||
+        it.store?.name ||
+        (storeId
+          ? `Cửa hàng #${String(storeId).slice(-6)}`
+          : 'Cửa hàng chưa xác định');
+
+      const key = storeId || storeName || 'unknown';
+
+      console.log('🧾[Checkout] Grouping item by store:', {
+        cartItemId: it.id,
+        productVariantId: it.productVariantId || product.id,
+        productName: product.name,
+        storeId,
+        storeName,
+        productStoreId: product.storeId,
+        productStoreName: product.storeName,
+        rawStoreObj: product.store,
+      });
+
+      if (!groups[key]) {
+        groups[key] = {
+          storeId,
+          storeName,
+          items: [],
+        };
       }
-      
-      if (!items || items.length === 0) {
-        setStoreId(null);
-        return;
+
+      groups[key].items.push(it);
+    });
+
+    return Object.values(groups);
+  }, [items, resolvedStoreMap]);
+
+  // ✅ Tập các cửa hàng xuất hiện trong các item được chọn (tính từ groupedItems đã resolve)
+  const uniqueStores = useMemo(() => {
+    if (!groupedItems || groupedItems.length === 0) return [];
+    
+    return groupedItems.map(group => ({
+      storeId: group.storeId,
+      storeName: group.storeName,
+    }));
+  }, [groupedItems]);
+
+  // ✅ Store chính nếu chỉ có 1 store (dùng cho khuyến mãi theo store)
+  const primaryStoreId = useMemo(() => {
+    if (uniqueStores.length === 1) {
+      return uniqueStores[0].storeId || null;
+    }
+    return null;
+  }, [uniqueStores]);
+
+  // Nếu thiếu thông tin store trên item, gọi API variant để bổ sung (giống CartPage)
+  useEffect(() => {
+    if (!items || items.length === 0) return;
+
+    const needResolve = [];
+    const seenVariant = new Set();
+
+    items.forEach((it) => {
+      const product = it.product || {};
+      const variantId = it.productVariantId || product.id;
+      if (!variantId) return;
+
+      const hasStoreInfo =
+        product.storeId ||
+        product.store?.id ||
+        it.storeId ||
+        it.store?.id ||
+        product.storeName ||
+        product.store?.name ||
+        it.storeName ||
+        it.store?.name;
+
+      if (!hasStoreInfo && !seenVariant.has(variantId)) {
+        seenVariant.add(variantId);
+        needResolve.push(variantId);
       }
-      
-      const firstItem = items[0];
-      const product = firstItem?.product;
-      
-      
-      // Thử lấy storeId từ product (nếu backend đã trả về)
-      const directStoreId = 
-        product?.storeId || 
-        product?.store?.id || 
-        (product?.store && typeof product.store === 'string' ? product.store : null);
-      
-      if (directStoreId) {
-        setStoreId(directStoreId);
-        return;
-      }
-      
-      // ⚠️ FALLBACK 1: Gọi API lấy VARIANT detail để lấy storeId
-      // 🔥 FIX: Cart chứa productVariantId, cần gọi VARIANT API không phải PRODUCT API
-      const variantId = firstItem?.productVariantId || firstItem?.id;
-      if (variantId) {
+    });
+
+    if (needResolve.length === 0) return;
+
+    console.log('🧾[Checkout] Need resolve store from variant API for variantIds:', needResolve);
+
+    (async () => {
+      const updates = {};
+      for (const variantId of needResolve) {
         try {
-          const result = await getProductVariantById(variantId);
-          
-          if (result.success && result.data) {
-            // � SIMPLE: Chỉ lấy storeId từ store.id
-            
-            // 🔥 FORCE: Dùng storeId đúng từ store dashboard
-            const fetchedStoreId = result.data.store?.id || '690ef0b2c07d8e4b1c3679';
-            if (fetchedStoreId) {
-              setStoreId(fetchedStoreId);
-              return;
-            }
+          const res = await getProductVariantById(variantId);
+          if (res?.success && res.data) {
+            const store = res.data.store || {};
+            updates[variantId] = {
+              storeId: store.id || null,
+              storeName: store.name || store.storeName || null,
+            };
+            console.log('🧾[Checkout] Resolved store from variant API:', {
+              variantId,
+              resolvedStoreId: updates[variantId].storeId,
+              resolvedStoreName: updates[variantId].storeName,
+            });
           }
-        } catch (error) {
-          // Silent error
+        } catch (err) {
+          console.error('🧾[Checkout] Failed to resolve store for variant', variantId, err);
         }
       }
-      
-      // ⚠️ FALLBACK 2: Lấy từ localStorage (last visited store)
-      const lastStoreId = localStorage.getItem('lastViewedStoreId');
-      if (lastStoreId) {
-        setStoreId(lastStoreId);
-        return;
+
+      if (Object.keys(updates).length > 0) {
+        setResolvedStoreMap((prev) => ({ ...prev, ...updates }));
       }
-      
-      // ❌ Không tìm thấy storeId - dùng TEMP_STORE_ID
-      setStoreId(TEMP_STORE_ID); // 🔥 TEMPORARY: Use hardcoded storeId
-    };
-    
-    fetchStoreId();
+    })();
   }, [items]);
+
+  // 🔍 Log debug tổng quan store ở checkout
+  useEffect(() => {
+    console.log('🧾[Checkout] Selected items:', items);
+    console.log('🧾[Checkout] uniqueStores:', uniqueStores);
+    console.log('🧾[Checkout] primaryStoreId:', primaryStoreId);
+    console.log('🧾[Checkout] groupedItems:', groupedItems);
+  }, [items, uniqueStores, primaryStoreId, groupedItems]);
   
 
   const placeOrder = async () => {
@@ -240,10 +323,11 @@ const CheckoutPage = () => {
           fullPromotion: appliedPromotion.promotion
         });
         
-        if (isStorePromotion && storeId) {
+        // ❗ Chỉ map khuyến mãi theo store nếu đơn chỉ có 1 store rõ ràng
+        if (isStorePromotion && primaryStoreId) {
           // Store promotion - format: { [storeId]: promotionCode }
           storePromotions = {
-            [storeId]: appliedPromotion.code
+            [primaryStoreId]: appliedPromotion.code
           };
           console.log('🏬 [Checkout] Using store promotion:', storePromotions);
         } else {
@@ -258,10 +342,9 @@ const CheckoutPage = () => {
       
       const orderData = {
         selectedItems,
-        paymentMethod: paymentMethod === 'VNPAY' ? 'BANK_TRANSFER' : paymentMethod.toUpperCase(),
+        paymentMethod: paymentMethod.toUpperCase(), // ✅ Đã cập nhật: Không còn chuyển VNPAY thành BANK_TRANSFER
         note: note.trim(),
         address: addressDTO,
-        serviceFee,
         ...(platformPromotions && { platformPromotions }),
         ...(storePromotions && Object.keys(storePromotions).length > 0 && { storePromotions }),
       };
@@ -279,10 +362,9 @@ const CheckoutPage = () => {
       
       console.log('📦 [Checkout] Order data:', JSON.stringify(orderData, null, 2));
       console.log('🎫 [Checkout] Applied promotion:', appliedPromotion);
-      console.log('🏪 [Checkout] Store ID:', storeId);
+      console.log('🏪 [Checkout] Primary Store ID:', primaryStoreId);
       console.log('💰 [Checkout] Order total:', productTotal);
       console.log('💸 [Checkout] Discount:', discount);
-      console.log('🧾 [Checkout] Service fee:', serviceFee);
       console.log('💵 [Checkout] Final total:', finalTotal);
       
       const result = await createOrder(orderData);
@@ -298,8 +380,17 @@ const CheckoutPage = () => {
       if (result.success) {
         console.log('✅ [Checkout] Order created:', result.data);
         
-        // Lấy orderId từ response
-        const orderId = result.data?.id || result.data?.orderId;
+        // ✅ Lấy orderId từ response (có thể là object hoặc array)
+        let orderId = null;
+        if (Array.isArray(result.data) && result.data.length > 0) {
+          // Nếu là array, lấy order đầu tiên
+          orderId = result.data[0]?.id || result.data[0]?.orderId;
+        } else if (result.data) {
+          // Nếu là object
+          orderId = result.data.id || result.data.orderId;
+        }
+        
+        console.log('✅ [Checkout] Extracted Order ID:', orderId);
         
         removeSelectedItems();
         
@@ -334,7 +425,37 @@ const CheckoutPage = () => {
             error('Không thể tạo link thanh toán. Vui lòng thử lại.');
             console.error('❌ [Checkout] Failed to create payment URL:', paymentResult);
           }
-        } else {
+        }
+        // ✅ Nếu chọn MoMo → Tạo payment request và redirect
+        else if (paymentMethod === 'MOMO') {
+          console.log('💳 [Checkout] MoMo selected, creating payment request...');
+          console.log('💳 [Checkout] Order ID:', orderId);
+          console.log('💳 [Checkout] Final total:', finalTotal);
+          
+          // ✅ Truyền orderId và orderInfo để backend có thể liên kết với order
+          const orderInfo = `Thanh toán đơn hàng ${orderId || 'chưa có ID'}`;
+          const momoResult = await createMoMoPayment(finalTotal, orderId, orderInfo);
+          
+          if (momoResult.success && momoResult.data?.payUrl) {
+            console.log('✅ [Checkout] MoMo payment URL created:', momoResult.data.payUrl);
+            console.log('✅ [Checkout] MoMo order ID:', momoResult.data.orderId);
+            console.log('✅ [Checkout] MoMo trans ID:', momoResult.data.transId);
+            
+            // Mở MoMo trong tab mới
+            const momoWindow = window.open(momoResult.data.payUrl, '_blank');
+            
+            if (momoWindow) {
+              success('🎉 Đơn hàng đã tạo! Vui lòng thanh toán qua MoMo trên tab mới.');
+              // TODO: Có thể thêm logic để check payment status sau khi thanh toán
+            } else {
+              error('Trình duyệt chặn popup! Vui lòng cho phép popup và thử lại.');
+            }
+          } else {
+            error(momoResult.error || 'Không thể tạo link thanh toán MoMo. Vui lòng thử lại.');
+            console.error('❌ [Checkout] Failed to create MoMo payment:', momoResult);
+          }
+        }
+        else {
           // COD hoặc payment method khác → Redirect về orders
           success('🎉 Đặt hàng thành công! Cảm ơn bạn đã mua hàng.');
           setTimeout(() => {
@@ -437,29 +558,82 @@ const CheckoutPage = () => {
           </div>
 
           <div className="bg-white p-6 rounded-lg border shadow-sm">
-            <h2 className="text-xl font-bold mb-4">Sản phẩm đã chọn ({totalItems})</h2>
-            <div className="divide-y">
-              {items.map(it => (
-                <div key={it.id} className="py-3 flex items-center justify-between">
-                  <div className="flex items-center space-x-3 min-w-0">
-                    <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center">
-                      <span className="text-xl">{it.product.image?.startsWith('http') ? '🛍️' : (it.product.image || '📦')}</span>
-                    </div>
-                    <div className="truncate">
-                      <div className="font-medium truncate">{it.product.name}</div>
-                      <div className="text-sm text-gray-500">x{it.quantity}</div>
-                    </div>
-                  </div>
-                  <div className="font-semibold text-red-600">
-                    {formatPrice(
-                      (typeof it.product.price === 'string' 
-                        ? parseInt(it.product.price.replace(/\./g,'')||0)
-                        : parseInt(it.product.price||0)) * it.quantity
-                    )}đ
+            <h2 className="text-xl font-bold mb-1">Sản phẩm đã chọn ({totalItems})</h2>
+            <p className="text-sm text-gray-500 mb-3">
+              {groupedItems.length <= 1 ? 'Đơn hàng của cửa hàng: ' : 'Đơn hàng của các cửa hàng: '}
+              <span className="font-medium text-gray-800">
+              {groupedItems.length > 0
+                ? groupedItems
+                    .map((group) =>
+                      group.storeName && group.storeName !== 'Cửa hàng chưa xác định'
+                        ? group.storeName
+                        : group.storeId
+                        ? `Cửa hàng #${String(group.storeId).slice(-6)}`
+                        : 'Cửa hàng chưa xác định'
+                    )
+                    .join(', ')
+                : 'Đang xác định...'}
+              </span>
+            </p>
+          <div className="space-y-4">
+            {groupedItems.map((group) => (
+              <div
+                key={group.storeId || group.storeName || 'unknown'}
+                className="border rounded-lg overflow-hidden"
+              >
+                <div className="px-4 py-2 bg-gray-50 border-b flex items-center justify-between">
+                  <div className="font-semibold text-gray-800">
+                    Cửa hàng: {group.storeName}
                   </div>
                 </div>
-              ))}
-            </div>
+                <div className="divide-y">
+                  {group.items.map((it) => (
+                    <div key={it.id} className="py-3 px-4 flex items-center justify-between">
+                      <div className="flex items-center space-x-3 min-w-0">
+                        <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center overflow-hidden">
+                          {(() => {
+                            // Ưu tiên: image > primaryImage > images[0]
+                            const imageUrl =
+                              it.product?.image ||
+                              it.product?.primaryImage ||
+                              (Array.isArray(it.product?.images) && it.product.images[0]);
+
+                            if (imageUrl && (imageUrl.startsWith('http') || imageUrl.startsWith('/'))) {
+                              return (
+                                <img
+                                  src={imageUrl}
+                                  alt={it.product?.name || 'Sản phẩm'}
+                                  className="w-full h-full object-cover rounded"
+                                  onError={(e) => {
+                                    e.target.onerror = null;
+                                    e.target.style.display = 'none';
+                                    e.target.parentElement.innerHTML = '<span class=\"text-xl\">📦</span>';
+                                  }}
+                                />
+                              );
+                            }
+
+                            return <span className="text-xl">📦</span>;
+                          })()}
+                        </div>
+                        <div className="truncate">
+                          <div className="font-medium truncate">{it.product.name}</div>
+                          <div className="text-sm text-gray-500">x{it.quantity}</div>
+                        </div>
+                      </div>
+                      <div className="font-semibold text-red-600">
+                        {formatPrice(
+                          (typeof it.product.price === 'string'
+                            ? parseInt(it.product.price.replace(/\./g, '') || 0)
+                            : parseInt(it.product.price || 0)) * it.quantity
+                        )}đ
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
           </div>
         </div>
 
@@ -470,21 +644,44 @@ const CheckoutPage = () => {
             <div className="mb-4">
               <div className="text-sm font-medium mb-2">Phương thức thanh toán</div>
               <div className="space-y-2 text-sm">
-                <label className="flex items-center space-x-2">
-                  <input type="radio" name="pm" value="COD" checked={paymentMethod==='COD'} onChange={()=>setPaymentMethod('COD')}/>
-                  <span>Thanh toán khi nhận hàng (COD)</span>
+                <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                  <input 
+                    type="radio" 
+                    name="pm" 
+                    value="COD" 
+                    checked={paymentMethod==='COD'} 
+                    onChange={()=>setPaymentMethod('COD')}
+                    className="cursor-pointer"
+                  />
+                  <span className="flex items-center gap-2">
+                    💵 Thanh toán khi nhận hàng (COD)
+                  </span>
                 </label>
-                <label className="flex items-center space-x-2">
-                  <input type="radio" name="pm" value="BANK_TRANSFER" checked={paymentMethod==='BANK_TRANSFER'} onChange={()=>setPaymentMethod('BANK_TRANSFER')}/>
-                  <span>Chuyển khoản ngân hàng</span>
+                <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                  <input 
+                    type="radio" 
+                    name="pm" 
+                    value="VNPAY" 
+                    checked={paymentMethod==='VNPAY'} 
+                    onChange={()=>setPaymentMethod('VNPAY')}
+                    className="cursor-pointer"
+                  />
+                  <span className="flex items-center gap-2">
+                    🏦 Thanh toán qua VNPay
+                  </span>
                 </label>
-                <label className="flex items-center space-x-2">
-                  <input type="radio" name="pm" value="VNPAY" checked={paymentMethod==='VNPAY'} onChange={()=>setPaymentMethod('VNPAY')}/>
-                  <span>VNPay</span>
-                </label>
-                <label className="flex items-center space-x-2">
-                  <input type="radio" name="pm" value="MOMO" checked={paymentMethod==='MOMO'} onChange={()=>setPaymentMethod('MOMO')}/>
-                  <span>Ví MoMo</span>
+                <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                  <input 
+                    type="radio" 
+                    name="pm" 
+                    value="MOMO" 
+                    checked={paymentMethod==='MOMO'} 
+                    onChange={()=>setPaymentMethod('MOMO')}
+                    className="cursor-pointer"
+                  />
+                  <span className="flex items-center gap-2">
+                    💳 Thanh toán qua MoMo
+                  </span>
                 </label>
               </div>
             </div>
@@ -493,7 +690,7 @@ const CheckoutPage = () => {
             <div className="mb-4">
               <PromoCodeInput
                 orderTotal={productTotal}
-                storeId={storeId}
+                storeId={primaryStoreId}
                 productIds={items.map(it => it.productVariantId || it.product?.id)}
                 onApplySuccess={(promoData) => {
                   setAppliedPromotion(promoData);
@@ -508,7 +705,7 @@ const CheckoutPage = () => {
               <div className="mt-2">
                 <PromotionList
                   orderTotal={productTotal}
-                  storeId={storeId}
+                  storeId={primaryStoreId}
                   productIds={items.map(it => it.productVariantId || it.product?.id)}
                   selectedCode={appliedPromotion?.code}
                   onSelectPromotion={(promotion, isStorePromotion = false) => {
@@ -549,7 +746,6 @@ const CheckoutPage = () => {
                 </div>
               )}
               <div className="flex justify-between"><span>Phí vận chuyển</span><span>{formatPrice(shippingFee)}đ</span></div>
-              <div className="flex justify-between"><span>Phụ thu dịch vụ</span><span>{formatPrice(serviceFee)}đ</span></div>
               <div className="border-t pt-2 font-semibold text-lg flex justify-between">
                 <span>Tổng cộng</span>
                 <span className="text-red-600">

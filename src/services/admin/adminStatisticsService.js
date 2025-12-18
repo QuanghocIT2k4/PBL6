@@ -56,10 +56,10 @@ export const getOverviewStatistics = async () => {
 };
 
 /**
- * 2. GET SERVICE FEES 💰
- * GET /api/v1/admin/statistics/service-fees
+ * 2. GET PLATFORM COMMISSIONS 💰
+ * GET /api/v1/admin/statistics/platform-commissions
  * 
- * Xem danh sách phí dịch vụ (SERVICE_FEE)
+ * Xem danh sách hoa hồng nền tảng (platformCommission)
  */
 export const getServiceFees = async (params = {}) => {
   try {
@@ -70,7 +70,7 @@ export const getServiceFees = async (params = {}) => {
       sortDir = 'desc',
     } = params;
 
-    const response = await api.get('/api/v1/admin/statistics/service-fees', {
+    const response = await api.get('/api/v1/admin/statistics/platform-commissions', {
       params: { page, size, sortBy, sortDir },
     });
 
@@ -79,10 +79,10 @@ export const getServiceFees = async (params = {}) => {
       data: response.data.data || response.data,
     };
   } catch (error) {
-    console.error('❌ Error fetching service fees:', error);
+    console.error('❌ Error fetching platform commissions:', error);
     return {
       success: false,
-      error: error.response?.data?.message || 'Không thể tải danh sách phí dịch vụ',
+      error: error.response?.data?.message || 'Không thể tải danh sách hoa hồng nền tảng',
     };
   }
 };
@@ -92,6 +92,11 @@ export const getServiceFees = async (params = {}) => {
  * GET /api/v1/admin/statistics/revenue
  * 
  * Xem thống kê tổng doanh thu: tổng phí dịch vụ và tổng tiền lỗ
+ * Response bao gồm:
+ * - totalPlatformCommission: Tổng hoa hồng nền tảng
+ * - totalShippingFee: Tổng phí vận chuyển
+ * - platformCommissionCount: Số lượng hoa hồng nền tảng
+ * - shippingFeeCount: Số lượng phí vận chuyển
  */
 export const getRevenueStatistics = async () => {
   try {
@@ -110,6 +115,42 @@ export const getRevenueStatistics = async () => {
     return {
       success: false,
       error: error.response?.data?.message || 'Không thể tải thống kê revenue',
+    };
+  }
+};
+
+/**
+ * 3.5. GET SHIPPING FEES 📦
+ * GET /api/v1/admin/statistics/shipping-fees
+ * 
+ * Lấy danh sách phí vận chuyển từ các đơn hàng đã hoàn thành
+ */
+export const getShippingFees = async (params = {}) => {
+  try {
+    const {
+      page = 0,
+      size = 10,
+      sortBy = 'createdAt',
+      sortDir = 'desc',
+    } = params;
+
+    console.log('📥 Fetching shipping fees:', { page, size, sortBy, sortDir });
+
+    const response = await api.get('/api/v1/admin/statistics/shipping-fees', {
+      params: { page, size, sortBy, sortDir },
+    });
+
+    console.log('✅ Shipping fees:', response.data);
+
+    return {
+      success: true,
+      data: response.data.data || response.data,
+    };
+  } catch (error) {
+    console.error('❌ Error fetching shipping fees:', error);
+    return {
+      success: false,
+      error: error.response?.data?.message || 'Không thể tải danh sách phí vận chuyển',
     };
   }
 };
@@ -370,4 +411,20 @@ export const getPeriodLabel = (period) => {
     YEAR: 'Năm',
   };
   return labels[period] || period;
+};
+
+// Export all functions
+export default {
+  getOverviewStatistics,
+  getServiceFees,
+  getRevenueStatistics,
+  getPlatformDiscountLosses,
+  getRevenueByDateRange,
+  getRevenueChartData,
+  getShippingFees, // ✅ NEW
+  getRevenueTypeBadge,
+  formatCurrency,
+  formatDateForAPI,
+  getDateRange,
+  getPeriodLabel,
 };

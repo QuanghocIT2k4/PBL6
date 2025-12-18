@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import AdminLayout from '../../layouts/AdminLayout';
 import AdminPageHeader from '../../components/admin/AdminPageHeader';
-import Chart from '../../components/charts/Chart';
 import { getOrderCode } from '../../utils/displayCodeUtils';
+import Chart from '../../components/charts/Chart';
 // ✅ TESTING: Dùng API mới với enhanced logging
 import {
   getOverviewStatistics,
@@ -27,7 +27,7 @@ const AdminRevenue = () => {
   const [error, setError] = useState(null);
   
   // Filter states
-  const [activeTab, setActiveTab] = useState('serviceFee'); // 'serviceFee', 'platformLoss', 'dateRange'
+  const [activeTab, setActiveTab] = useState('serviceFee'); // 'serviceFee' (platformCommission), 'platformLoss', 'dateRange'
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
@@ -42,13 +42,14 @@ const AdminRevenue = () => {
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortDir, setSortDir] = useState('desc');
 
-  // Chart period
+  // Chart period state
   const [chartPeriod, setChartPeriod] = useState('MONTH');
-  // Chart type: 'netRevenue' | 'serviceFees' | 'discountLosses'
-  const [chartType, setChartType] = useState('netRevenue');
+  
+  // Chart type state - chọn loại biểu đồ
+  const [chartType, setChartType] = useState('serviceFee'); // 'serviceFee' (platformCommission), 'discountLoss', 'netRevenue'
 
   // Fetch chart data
-  const { data: revenueChartData } = useSWR(
+  const { data: chartData } = useSWR(
     ['admin-revenue-chart', chartPeriod],
     () => getRevenueChartData(chartPeriod),
     { revalidateOnFocus: false }
@@ -83,6 +84,7 @@ const AdminRevenue = () => {
     try {
       switch (activeTab) {
         case 'serviceFee':
+          // Tab "Phí Hoa Hồng Nền Tảng" - lấy theo platformCommission
           result = await getServiceFees(params);
           break;
         case 'platformLoss':
@@ -146,101 +148,97 @@ const AdminRevenue = () => {
     return new Date(dateString).toLocaleString('vi-VN');
   };
 
-  // Prepare chart data - xử lý structure từ API
-  let revenueChartFormatted = [];
+  // Removed getStatusBadge - now using getRevenueTypeBadge from service
+
+  // Format chart data - kiểm tra xem API có trả về cả 3 loại không
+  let formattedServiceFeeData = [];
+  let formattedDiscountLossData = [];
+  let formattedNetRevenueData = [];
   
-  if (revenueChartData?.success && revenueChartData.data) {
-    let chartData = revenueChartData.data;
+  if (chartData?.success && chartData.data) {
+    const rawData = Array.isArray(chartData.data) ? chartData.data : [chartData.data];
     
-    // Case 1: Nếu là array, lấy phần tử đầu tiên (vì service có thể wrap object vào array)
-    if (Array.isArray(chartData) && chartData.length > 0) {
-      // Nếu array có 1 phần tử và phần tử đó là object có netRevenue/serviceFees
-      if (chartData.length === 1 && typeof chartData[0] === 'object') {
-        chartData = chartData[0];
-      } else {
-        // Nếu array có nhiều phần tử, map trực tiếp
-        revenueChartFormatted = chartData.map((item) => {
-          if (item.netRevenue && Array.isArray(item.netRevenue)) {
-            const labels = item.labels || item.netRevenue.map((_, idx) => {
-              if (chartPeriod === 'MONTH') return `Tháng ${idx + 1}`;
-              if (chartPeriod === 'WEEK') return `Tuần ${idx + 1}`;
-              if (chartPeriod === 'YEAR') return `Năm ${idx + 1}`;
-              return `Period ${idx + 1}`;
-            });
-            return item.netRevenue.map((value, idx) => ({
-              label: labels[idx] || `Period ${idx + 1}`,
-              value: value || 0,
-            }));
-          } else if (item.serviceFees && Array.isArray(item.serviceFees)) {
-            const labels = item.labels || item.serviceFees.map((_, idx) => {
-              if (chartPeriod === 'MONTH') return `Tháng ${idx + 1}`;
-              if (chartPeriod === 'WEEK') return `Tuần ${idx + 1}`;
-              if (chartPeriod === 'YEAR') return `Năm ${idx + 1}`;
-              return `Period ${idx + 1}`;
-            });
-            return item.serviceFees.map((value, idx) => ({
-              label: labels[idx] || `Period ${idx + 1}`,
-              value: value || 0,
-            }));
-          } else {
-            return {
-              label: item.label || item.period || item.month || item.date || item.name || item.time || 'N/A',
-              value: item.totalRevenue || item.revenue || item.total || item.amount || item.value || item.count || 0,
-            };
-          }
-        }).flat();
-      }
-    }
-    
-    // Case 2: Nếu là object có arrays (netRevenue, serviceFees, discountLosses)
-    if (!Array.isArray(chartData)) {
-      // Chọn array dựa trên chartType
-      let selectedArray = null;
-      let chartTitle = '';
+    // Handle different data structures
+    rawData.forEach((item) => {
+      // Kiểm tra xem có cả 3 loại không
+      // serviceFees: tên cũ; platformCommissions/platformCommission: tên mới
+      const platformCommissionArray =
+        item.platformCommissions ||
+        item.platformCommission ||
+        item.serviceFees ||
+        null;
+
+      const hasServiceFees = platformCommissionArray && Array.isArray(platformCommissionArray);
+      const hasDiscountLosses = item.discountLosses && Array.isArray(item.discountLosses);
+      const hasPlatformDiscountLosses = item.platformDiscountLosses && Array.isArray(item.platformDiscountLosses);
+      const hasNetRevenue = item.netRevenue && Array.isArray(item.netRevenue);
       
-      if (chartType === 'netRevenue' && chartData.netRevenue && Array.isArray(chartData.netRevenue)) {
-        selectedArray = chartData.netRevenue;
-        chartTitle = 'Doanh Thu Ròng';
-      } else if (chartType === 'serviceFees' && chartData.serviceFees && Array.isArray(chartData.serviceFees)) {
-        selectedArray = chartData.serviceFees;
-        chartTitle = 'Phí Dịch Vụ';
-      } else if (chartType === 'discountLosses' && chartData.discountLosses && Array.isArray(chartData.discountLosses)) {
-        selectedArray = chartData.discountLosses;
-        chartTitle = 'Tiền Lỗ Giảm Giá';
-      } else if (chartData.netRevenue && Array.isArray(chartData.netRevenue)) {
-        // Fallback: ưu tiên netRevenue
-        selectedArray = chartData.netRevenue;
-        chartTitle = 'Doanh Thu Ròng';
-      } else if (chartData.serviceFees && Array.isArray(chartData.serviceFees)) {
-        // Fallback: serviceFees
-        selectedArray = chartData.serviceFees;
-        chartTitle = 'Phí Dịch Vụ';
-      }
+      const labels = item.labels || platformCommissionArray?.map((_, idx) => {
+        if (chartPeriod === 'MONTH') return `Tháng ${idx + 1}`;
+        if (chartPeriod === 'WEEK') return `Tuần ${idx + 1}`;
+        if (chartPeriod === 'YEAR') return `Năm ${idx + 1}`;
+        return `Kỳ ${idx + 1}`;
+      }) || [];
       
-      if (selectedArray) {
-        const labels = chartData.labels || selectedArray.map((_, idx) => {
-          if (chartPeriod === 'MONTH') return `Tháng ${idx + 1}`;
-          if (chartPeriod === 'WEEK') return `Tuần ${idx + 1}`;
-          if (chartPeriod === 'YEAR') return `Năm ${idx + 1}`;
-          return `Period ${idx + 1}`;
-        });
-        
-        revenueChartFormatted = selectedArray.map((value, idx) => ({
-          label: labels[idx] || `Period ${idx + 1}`,
+      // Hoa hồng nền tảng (trước đây là Phí Dịch Vụ)
+      if (hasServiceFees) {
+        formattedServiceFeeData = platformCommissionArray.map((value, idx) => ({
+          label: labels[idx] || `Kỳ ${idx + 1}`,
           value: value || 0,
         }));
       }
-    }
-    // Case 4: Object thông thường (fallback)
-    else if (!Array.isArray(chartData) && revenueChartFormatted.length === 0) {
-      revenueChartFormatted = [{
-        label: chartData.label || chartData.period || chartData.month || chartData.date || chartData.name || chartData.time || 'N/A',
-        value: chartData.totalRevenue || chartData.revenue || chartData.total || chartData.amount || chartData.value || chartData.count || 0,
-      }];
-    }
+      
+      // Tiền Lỗ Giảm Giá
+      const discountLossArray = hasDiscountLosses ? item.discountLosses : 
+                                hasPlatformDiscountLosses ? item.platformDiscountLosses : null;
+      if (discountLossArray) {
+        formattedDiscountLossData = discountLossArray.map((value, idx) => ({
+          label: labels[idx] || `Kỳ ${idx + 1}`,
+          value: value || 0,
+        }));
+      }
+      
+      // Doanh Thu Ròng
+      if (hasNetRevenue) {
+        formattedNetRevenueData = item.netRevenue.map((value, idx) => ({
+          label: labels[idx] || `Kỳ ${idx + 1}`,
+          value: value || 0,
+        }));
+      } else if (hasServiceFees && discountLossArray) {
+        // Tính toán từ platformCommission - discountLosses
+        formattedNetRevenueData = platformCommissionArray.map((commission, idx) => {
+          const discountLoss = discountLossArray[idx] || 0;
+          return {
+            label: labels[idx] || `Kỳ ${idx + 1}`,
+            value: (commission || 0) - (discountLoss || 0),
+          };
+        });
+      }
+      
+      // Fallback: chỉ có serviceFees / platformCommission dưới dạng values
+      if (!hasServiceFees && item.values && Array.isArray(item.values)) {
+        const fallbackLabels = item.labels || item.values.map((_, idx) => {
+          if (chartPeriod === 'MONTH') return `Tháng ${idx + 1}`;
+          if (chartPeriod === 'WEEK') return `Tuần ${idx + 1}`;
+          if (chartPeriod === 'YEAR') return `Năm ${idx + 1}`;
+          return `Kỳ ${idx + 1}`;
+        });
+        
+        formattedServiceFeeData = item.values.map((value, idx) => ({
+          label: fallbackLabels[idx] || `Kỳ ${idx + 1}`,
+          value: value || 0,
+        }));
+      } else if (!hasServiceFees && Array.isArray(item)) {
+        formattedServiceFeeData = item.map((val, idx) => ({
+          label: chartPeriod === 'MONTH' ? `Tháng ${idx + 1}` : 
+                 chartPeriod === 'WEEK' ? `Tuần ${idx + 1}` : 
+                 `Năm ${idx + 1}`,
+          value: val || 0,
+        }));
+      }
+    });
   }
-
-  // Removed getStatusBadge - now using getRevenueTypeBadge from service
+  
 
   return (
     <div className="space-y-6">
@@ -250,22 +248,172 @@ const AdminRevenue = () => {
         subtitle="Theo dõi phí dịch vụ và thống kê doanh thu nền tảng"
       />
       <div className="space-y-6">
-        {/* Statistics Cards - VER 1.0 */}
+        {/* Revenue Chart */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm mb-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Biểu đồ Doanh Thu</h2>
+              <p className="text-sm text-gray-600">Theo dõi doanh thu theo thời gian</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setChartPeriod('WEEK')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  chartPeriod === 'WEEK'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Tuần
+              </button>
+              <button
+                onClick={() => setChartPeriod('MONTH')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  chartPeriod === 'MONTH'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Tháng
+              </button>
+              <button
+                onClick={() => setChartPeriod('YEAR')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  chartPeriod === 'YEAR'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Năm
+              </button>
+            </div>
+          </div>
+          
+          {/* Chart Type Selector */}
+          <div className="flex gap-2 mb-6 flex-wrap">
+            <button
+              onClick={() => setChartType('serviceFee')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                chartType === 'serviceFee'
+                  ? 'bg-green-600 text-white shadow-md'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              💰 Phí Dịch Vụ
+            </button>
+            {formattedDiscountLossData.length > 0 && (
+              <button
+                onClick={() => setChartType('discountLoss')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  chartType === 'discountLoss'
+                    ? 'bg-red-600 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                📉 Tiền Lỗ Giảm Giá
+              </button>
+            )}
+            {formattedNetRevenueData.length > 0 && (
+              <button
+                onClick={() => setChartType('netRevenue')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  chartType === 'netRevenue'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                📊 Doanh Thu Ròng
+              </button>
+            )}
+          </div>
+          
+          {/* Chart Container với scroll */}
+          <div className="w-full overflow-x-auto overflow-y-visible pb-4">
+            <div className="min-w-full" style={{ minHeight: '600px' }}>
+              {/* Render chart based on selected type */}
+              {chartType === 'serviceFee' && formattedServiceFeeData.length > 0 && (
+                <Chart
+                  data={formattedServiceFeeData}
+                  type="bar"
+                  height="600px"
+                  color="green"
+                  valueKey="value"
+                  labelKey="label"
+                  formatValue={(val) => formatCurrency(val)}
+                  title="Phí Dịch Vụ"
+                  subtitle={`Theo ${chartPeriod === 'WEEK' ? 'tuần' : chartPeriod === 'MONTH' ? 'tháng' : 'năm'}`}
+                />
+              )}
+              
+              {chartType === 'discountLoss' && formattedDiscountLossData.length > 0 && (
+                <Chart
+                  data={formattedDiscountLossData}
+                  type="bar"
+                  height="600px"
+                  color="red"
+                  valueKey="value"
+                  labelKey="label"
+                  formatValue={(val) => formatCurrency(val)}
+                  title="Tiền Lỗ Giảm Giá"
+                  subtitle={`Theo ${chartPeriod === 'WEEK' ? 'tuần' : chartPeriod === 'MONTH' ? 'tháng' : 'năm'}`}
+                />
+              )}
+              
+              {chartType === 'netRevenue' && formattedNetRevenueData.length > 0 && (
+                <Chart
+                  data={formattedNetRevenueData}
+                  type="bar"
+                  height="600px"
+                  color="blue"
+                  valueKey="value"
+                  labelKey="label"
+                  formatValue={(val) => formatCurrency(val)}
+                  title="Doanh Thu Ròng"
+                  subtitle={`Theo ${chartPeriod === 'WEEK' ? 'tuần' : chartPeriod === 'MONTH' ? 'tháng' : 'năm'}`}
+                />
+              )}
+              
+              {chartType === 'serviceFee' && formattedServiceFeeData.length === 0 && (
+                <div className="flex items-center justify-center h-64 text-gray-500">
+                  <p>Chưa có dữ liệu Phí Dịch Vụ</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Statistics Cards - VER 2.0 - Updated với các field mới */}
         {statistics && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            {/* Service Fees */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+            {/* Platform Commission */}
             <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white shadow-xl">
               <div className="flex items-center justify-between mb-4">
                 <div className="bg-white/20 p-3 rounded-xl">
                   <span className="text-2xl">💰</span>
                 </div>
-                <span className="text-sm font-medium opacity-90">Phí Dịch Vụ</span>
+                <span className="text-sm font-medium opacity-90">Hoa Hồng Nền Tảng</span>
               </div>
               <div className="text-3xl font-bold mb-2">
-                {formatCurrency(statistics.totalServiceFee || 0)}
+                {formatCurrency(statistics.totalPlatformCommission || statistics.totalServiceFee || 0)}
               </div>
               <div className="text-sm opacity-90">
-                Thu từ shop
+                {statistics.platformCommissionCount || 0} đơn hàng
+              </div>
+            </div>
+
+            {/* Shipping Fees */}
+            <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 text-white shadow-xl">
+              <div className="flex items-center justify-between mb-4">
+                <div className="bg-white/20 p-3 rounded-xl">
+                  <span className="text-2xl">🚚</span>
+                </div>
+                <span className="text-sm font-medium opacity-90">Phí Vận Chuyển</span>
+              </div>
+              <div className="text-3xl font-bold mb-2">
+                {formatCurrency(statistics.totalShippingFee || 0)}
+              </div>
+              <div className="text-sm opacity-90">
+                {statistics.shippingFeeCount || 0} đơn hàng
               </div>
             </div>
 
@@ -294,102 +442,37 @@ const AdminRevenue = () => {
                 <span className="text-sm font-medium opacity-90">Doanh Thu Ròng</span>
               </div>
               <div className="text-3xl font-bold mb-2">
-                {formatCurrency((statistics.totalServiceFee || 0) - (statistics.totalPlatformDiscountLoss || 0))}
+                {formatCurrency(
+                  (statistics.totalPlatformCommission || statistics.totalServiceFee || 0) - 
+                  (statistics.totalPlatformDiscountLoss || 0)
+                )}
               </div>
               <div className="text-sm opacity-90">
-                = Phí DV - Lỗ GG
+                = HH - Lỗ GG
+              </div>
+            </div>
+
+            {/* Total Revenue */}
+            <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl p-6 text-white shadow-xl">
+              <div className="flex items-center justify-between mb-4">
+                <div className="bg-white/20 p-3 rounded-xl">
+                  <span className="text-2xl">💵</span>
+                </div>
+                <span className="text-sm font-medium opacity-90">Tổng Doanh Thu</span>
+              </div>
+              <div className="text-3xl font-bold mb-2">
+                {formatCurrency(
+                  (statistics.totalPlatformCommission || statistics.totalServiceFee || 0) + 
+                  (statistics.totalShippingFee || 0) - 
+                  (statistics.totalPlatformDiscountLoss || 0)
+                )}
+              </div>
+              <div className="text-sm opacity-90">
+                HH + VC - Lỗ GG
               </div>
             </div>
           </div>
         )}
-
-        {/* Revenue Chart */}
-        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          <div className="mb-4">
-            <h3 className="text-xl font-bold text-gray-900">Doanh thu theo thời gian</h3>
-            <p className="text-sm text-gray-500 mt-1">
-              Phân tích doanh thu theo {chartPeriod === 'WEEK' ? 'tuần' : chartPeriod === 'MONTH' ? 'tháng' : 'năm'}
-            </p>
-          </div>
-          
-          {/* Chart Type Selector */}
-          <div className="flex gap-2 mb-4">
-            <button
-              onClick={() => setChartType('netRevenue')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                chartType === 'netRevenue'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              📊 Doanh Thu Ròng
-            </button>
-            <button
-              onClick={() => setChartType('serviceFees')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                chartType === 'serviceFees'
-                  ? 'bg-green-500 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              💰 Phí Dịch Vụ
-            </button>
-            <button
-              onClick={() => setChartType('discountLosses')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                chartType === 'discountLosses'
-                  ? 'bg-red-500 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              📉 Tiền Lỗ
-            </button>
-          </div>
-
-          {/* Period Selector */}
-          <div className="flex gap-2 mb-4">
-            <button
-              onClick={() => setChartPeriod('WEEK')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                chartPeriod === 'WEEK'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Tuần
-            </button>
-            <button
-              onClick={() => setChartPeriod('MONTH')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                chartPeriod === 'MONTH'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Tháng
-            </button>
-            <button
-              onClick={() => setChartPeriod('YEAR')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                chartPeriod === 'YEAR'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Năm
-            </button>
-          </div>
-          <Chart
-            type="bar"
-            data={revenueChartFormatted}
-            valueKey="value"
-            labelKey="label"
-            formatValue={formatCurrency}
-            color="blue"
-            height="200px"
-            className="border-0 shadow-none p-0"
-          />
-        </div>
 
         {/* Filters */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">

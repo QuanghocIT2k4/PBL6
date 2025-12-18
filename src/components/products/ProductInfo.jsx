@@ -277,7 +277,7 @@ const ProductInfo = ({ product, variantsOverride = [], initialVariantId }) => {
       <div className="animate-in fade-in duration-700">
         <div className="flex items-center space-x-2 mb-2">
           <h1 className="text-2xl font-bold text-gray-900 transition-all duration-300 ease-in-out hover:text-blue-600">
-            {currentVariant?.name || product?.name}
+            {product?.name}
           </h1>
           {product?.badge && (
             <span className={`px-2 py-1 rounded text-xs font-medium text-white transition-all duration-300 ease-in-out transform hover:scale-110 ${

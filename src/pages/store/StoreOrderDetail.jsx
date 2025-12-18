@@ -17,6 +17,7 @@ import {
   cancelStoreOrder 
 } from '../../services/b2c/b2cOrderService';
 import { getShipmentByOrderId, updateShipmentStatus } from '../../services/b2c/shipmentService';
+import { getPaymentMethodLabel } from '../../services/buyer/orderService';
 
 const StoreOrderDetail = () => {
   const { orderId } = useParams();
@@ -468,8 +469,58 @@ const StoreOrderDetail = () => {
   const items = order.items || order.orderItems || [];
   const subtotal = items.reduce((sum, item) => sum + (parseFloat(item.price || 0) * parseInt(item.quantity || 0)), 0);
   const shippingFee = parseFloat(order.shippingFee || order.shippingCost || 0);
-  const discount = parseFloat(order.discount || order.discountAmount || 0);
+  
+  // ✅ Tính discount từ nhiều nguồn có thể có
+  let discount = 0;
+  
+  // 1. Từ discount field trực tiếp
+  discount = parseFloat(order.discount || order.discountAmount || 0);
+  
+  // 2. Nếu không có, thử từ promotion fields
+  if (discount === 0) {
+    discount = parseFloat(
+      order.promotionDiscount || 
+      order.appliedDiscount || 
+      order.promotionAmount ||
+      order.appliedPromotion?.discountAmount ||
+      order.appliedPromotion?.discountValue ||
+      0
+    );
+  }
+  
+  // 3. Nếu vẫn không có và có promotion, tính từ totalPrice ngược lại
+  if (discount === 0 && order.appliedPromotion) {
+    const calculatedTotal = subtotal + shippingFee;
+    const actualTotal = parseFloat(order.totalPrice || order.totalAmount || order.finalTotal || 0);
+    if (actualTotal > 0 && calculatedTotal > actualTotal) {
+      discount = calculatedTotal - actualTotal;
+    }
+  }
+  
+  // 4. Nếu vẫn không có, tính từ totalPrice ngược lại (fallback)
+  if (discount === 0) {
+    const calculatedTotal = subtotal + shippingFee;
+    const actualTotal = parseFloat(order.totalPrice || order.totalAmount || order.finalTotal || 0);
+    if (actualTotal > 0 && calculatedTotal > actualTotal) {
+      discount = calculatedTotal - actualTotal;
+    }
+  }
+  
   const totalPrice = parseFloat(order.totalPrice) || order.totalAmount || order.finalTotal || (subtotal + shippingFee - discount);
+  
+  // ✅ Debug log để kiểm tra
+  console.log('[StoreOrderDetail] Order breakdown:', {
+    subtotal,
+    shippingFee,
+    discount,
+    totalPrice,
+    orderTotalPrice: order.totalPrice,
+    orderTotalAmount: order.totalAmount,
+    orderFinalTotal: order.finalTotal,
+    appliedPromotion: order.appliedPromotion,
+    promotionCode: order.promotionCode,
+    orderKeys: Object.keys(order).filter(k => k.toLowerCase().includes('discount') || k.toLowerCase().includes('promotion'))
+  });
 
   return (
     <StoreStatusGuard currentStore={currentStore} pageName="chi tiết đơn hàng">
@@ -636,19 +687,25 @@ const StoreOrderDetail = () => {
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Phương thức thanh toán</h2>
                 <p className="text-gray-700 mb-2">
                   {order.paymentMethod === 'COD' ? '💵 Thanh toán khi nhận hàng (COD)' : 
-                   order.paymentMethod === 'BANK_TRANSFER' ? '🏦 Chuyển khoản ngân hàng' :
-                   order.paymentMethod || 'Chưa xác định'}
+                   order.paymentMethod === 'VNPAY' ? '🏦 Thanh toán qua VNPay' :
+                   order.paymentMethod === 'MOMO' ? '💳 Thanh toán qua MoMo' :
+                   // Backward compatibility: Map các method cũ
+                   order.paymentMethod === 'BANK_TRANSFER' ? '🏦 Thanh toán qua VNPay' :
+                   order.paymentMethod === 'E_WALLET' ? '💳 Thanh toán qua MoMo' :
+                   order.paymentMethod ? getPaymentMethodLabel(order.paymentMethod) : 'Chưa xác định'}
                 </p>
                 {order.paymentStatus && (
                   <p className="text-sm text-gray-600">
                     Trạng thái: <span className={`font-medium ${
                       order.paymentStatus === 'PAID' ? 'text-green-600' :
-                      order.paymentStatus === 'PENDING' ? 'text-yellow-600' :
-                      'text-red-600'
+                      order.paymentStatus === 'FAILED' ? 'text-red-600' :
+                      'text-yellow-600'
                     }`}>
-                      {order.paymentStatus === 'PAID' ? 'Đã thanh toán' :
-                       order.paymentStatus === 'PENDING' ? 'Chờ thanh toán' :
-                       'Chưa thanh toán'}
+                      {order.paymentStatus === 'PAID'
+                        ? 'Đã thanh toán'
+                        : order.paymentStatus === 'FAILED'
+                          ? 'Thanh toán thất bại'
+                          : 'Chưa thanh toán'}
                     </span>
                   </p>
                 )}

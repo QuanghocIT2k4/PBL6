@@ -46,32 +46,38 @@ const Chart = ({
     return typeof val === 'number' ? val : 0;
   }), 1);
   
-  // Debug log
-  if (type === 'bar' && data.length > 0) {
-    console.log('📊 [Chart] Bar chart data:', data);
-    console.log('📊 [Chart] Max value:', maxValue);
-    console.log('📊 [Chart] Values:', data.map(d => ({
-      label: d[labelKey] || d.label,
-      value: d[valueKey] || d.value || d.total || d.count || 0
-    })));
-  }
 
   const renderBarChart = () => {
-    // Tính chiều cao container
-    const chartHeight = 280; // Chiều cao thực tế cho các bar
-    const totalHeight = 380; // Tổng chiều cao bao gồm padding
+    // --- SỬA ĐOẠN NÀY ---
+    // Chuyển props height (ví dụ '300px') thành số (300) để tính toán
+    const containerHeight = parseInt(height) || 300;
     
-    // Tính các giá trị cho trục Y (chia thành 5 mức)
+    // Thiết lập padding - tăng paddingTop để giá trị không bị che
+    const paddingTop = 60; // Tăng lên để có đủ không gian cho giá trị trên đầu cột
+    const paddingBottom = 40;
+    const paddingLeft = 80; // Tăng lên để có đủ không gian hiển thị số trên trục Y (ví dụ: 20.000 ₫)
+    
+    // Tính chiều cao thực của các cột bar dựa trên khung bao ngoài
+    // Trừ đi padding trên dưới và một chút khoảng hở an toàn (-20)
+    const chartHeight = containerHeight - paddingTop - paddingBottom - 20;
+    
+    // Tổng chiều cao khớp với container
+    const totalHeight = containerHeight;
+    
+    // Tính các giá trị cho trục Y (chia thành 5 mức, BẮT ĐẦU TỪ 0)
     const yAxisSteps = 5;
-    const yAxisMax = Math.ceil(maxValue / 10) * 10; // Làm tròn lên đến bội số của 10
-    if (yAxisMax === 0) return <div className="text-center text-gray-500 py-8">Không có dữ liệu</div>;
+    const yAxisMax = maxValue > 0 
+      ? Math.max(Math.ceil(maxValue / 10) * 10, 10) 
+      : 10;
     
     const yAxisInterval = yAxisMax / yAxisSteps;
     const yAxisValues = Array.from({ length: yAxisSteps + 1 }, (_, i) => 
       Math.round(yAxisMax - (i * yAxisInterval))
     );
+    // Đảm bảo số 0 luôn có ở cuối
+    yAxisValues[yAxisValues.length - 1] = 0;
     
-    // Màu sắc cho từng cột (sử dụng color từ data hoặc color prop)
+    // Màu sắc cho từng cột
     const getBarColor = (item, idx) => {
       if (item.color) {
         const colorMap = {
@@ -90,74 +96,158 @@ const Chart = ({
     };
     
     return (
-      <div className="w-full" style={{ height: `${totalHeight}px` }}>
-        <div className="flex gap-4 h-full">
+      <div className="w-full overflow-visible" style={{ height: `${totalHeight}px`, position: 'relative', minHeight: `${totalHeight}px` }}>
+        <div className="flex gap-2 h-full w-full" style={{ width: '100%', maxWidth: '100%' }}>
           {/* Trục Y với các giá trị */}
-          <div className="flex flex-col justify-between h-full" style={{ width: '60px', paddingBottom: '60px' }}>
-            {yAxisValues.map((val, idx) => (
-              <div 
-                key={idx} 
-                className="text-sm font-semibold text-gray-700 flex items-center justify-end pr-2 h-full"
-              >
-                {formatValue(val)}
-              </div>
-            ))}
+          <div 
+            className="flex flex-col justify-between flex-shrink-0" 
+            style={{ 
+              width: `${paddingLeft}px`, 
+              paddingTop: `${paddingTop}px`, 
+              paddingBottom: `${paddingBottom}px`,
+              position: 'relative',
+              flexShrink: 0,
+              overflow: 'visible' // Đảm bảo số không bị che
+            }}
+          >
+            {yAxisValues.map((val, idx) => {
+              const isZero = val === 0;
+              let yPos;
+              if (isZero) {
+                // Số 0 nằm ở đáy trục X (baseline của các cột)
+                yPos = chartHeight;
+              } else {
+                // Các số khác
+                yPos = ((yAxisMax - val) / yAxisMax) * chartHeight;
+              }
+              // ĐẨY TẤT CẢ CÁC SỐ LÊN TRÊN, kể cả số 0 - tăng lên để số 0 nằm sát trục OX
+              const offsetUp = 30;
+              return (
+                <div 
+                  key={idx} 
+                  className="text-xs font-semibold text-gray-700 flex items-end justify-end pr-2 absolute"
+                  style={{ 
+                    top: `${paddingTop + yPos - offsetUp}px`,
+                    transform: isZero ? 'translateY(0)' : 'translateY(-50%)',
+                    width: `${paddingLeft}px`,
+                    right: '0',
+                    textAlign: 'right',
+                    overflow: 'visible',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  <span style={{ overflow: 'visible', whiteSpace: 'nowrap' }}>{formatValue(val)}</span>
+                </div>
+              );
+            })}
           </div>
           
           {/* Biểu đồ cột */}
-          <div className="flex-1 flex flex-col relative h-full">
-            {/* Đường lưới ngang */}
-            <div className="absolute inset-0" style={{ paddingBottom: '60px' }}>
-              {yAxisValues.map((val, idx) => {
-                const position = (idx / yAxisSteps) * 100;
-                return (
-                  <div
-                    key={idx}
-                    className="absolute left-0 right-0 border-t border-gray-200"
-                    style={{ bottom: `${60 + (position / 100) * chartHeight}px` }}
-                  ></div>
-                );
-              })}
-            </div>
-            
+          <div className="flex-1 flex flex-col relative h-full" style={{ minWidth: 0, width: 0, overflow: 'visible' }}>
             {/* Container cho các cột */}
-            <div className="flex-1 flex items-end gap-4 relative z-10" style={{ paddingBottom: '60px' }}>
+            <div 
+              className="flex items-end relative z-10" 
+              style={{ 
+                paddingTop: `${paddingTop}px`, 
+                paddingBottom: `${paddingBottom}px`,
+                alignItems: 'flex-end',
+                justifyContent: 'space-between',
+                width: '100%',
+                height: '100%',
+                gap: '8px',
+                boxSizing: 'border-box'
+              }}
+            >
               {data.map((item, idx) => {
-                const value = item[valueKey] || item.value || item.total || item.count || 0;
+                const rawValue = item[valueKey] ?? item.value ?? item.total ?? item.count ?? 0;
+                const value = Number(rawValue) || 0;
                 const label = item[labelKey] || item.label || item.period || item.month || item.date || item.name || `Item ${idx + 1}`;
-                // Tính chiều cao dựa trên yAxisMax
                 const heightPercent = yAxisMax > 0 ? (value / yAxisMax) * 100 : 0;
                 const actualHeight = (heightPercent / 100) * chartHeight;
-                const finalHeight = Math.max(actualHeight, 8); // Min 8px để hiển thị
+                const finalHeight = value === 0 || actualHeight === 0 ? 0 : Math.max(actualHeight, 2);
                 const barColor = getBarColor(item, idx);
                 
                 return (
-                  <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full relative">
-                    {/* Cột */}
-                    <div className="relative w-full flex items-end flex-1" style={{ minHeight: '0' }}>
-                      <div
-                        className={`w-full bg-gradient-to-t ${barColor} rounded-t-lg transition-all duration-300 hover:opacity-90 cursor-pointer shadow-lg hover:shadow-xl border-2 border-white relative`}
-                        style={{ 
-                          height: `${finalHeight}px`,
-                          minHeight: '8px'
-                        }}
-                        title={`${label}: ${formatValue(value)}`}
-                      >
-                        {/* Hiệu ứng hover */}
-                        <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 rounded-t-lg transition-opacity"></div>
-                        
-                        {/* Giá trị trên đầu cột - nằm ngay trên cột */}
-                        <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 whitespace-nowrap">
-                          <div className="text-base font-bold text-gray-800">
-                            {formatValue(value)}
-                          </div>
-                        </div>
+                  <div key={idx} className="flex flex-col items-center justify-end relative" style={{ 
+                    height: '100%', 
+                    position: 'relative',
+                    flex: '1 1 0',
+                    minWidth: 0,
+                    maxWidth: '100%',
+                    boxSizing: 'border-box'
+                  }}>
+                    {/* Giá trị trên đầu cột */}
+                    <div 
+                      className="absolute left-1/2 transform -translate-x-1/2 whitespace-nowrap z-30"
+                      style={{ 
+                        bottom: finalHeight > 0 
+                          ? `${paddingBottom + finalHeight + 15}px` 
+                          : `${paddingBottom + 10}px`,
+                        top: 'auto',
+                        maxWidth: '100%',
+                        overflow: 'visible'
+                      }}
+                    >
+                      <div className={`text-sm font-bold ${
+                        value === 0 
+                          ? 'text-gray-400' 
+                          : 'text-gray-800'
+                      }`}>
+                        {formatValue(value)}
                       </div>
                     </div>
                     
+                    {/* Cột */}
+                    <div className="relative w-full flex flex-col items-center justify-end" style={{ 
+                      height: `${chartHeight}px`, 
+                      marginBottom: `${paddingBottom}px`,
+                      width: '100%',
+                      maxWidth: '100%',
+                      boxSizing: 'border-box'
+                    }}>
+                      {finalHeight > 0 ? (
+                        <div
+                          className={`w-full bg-gradient-to-t ${barColor} rounded-t-lg transition-all duration-300 hover:opacity-90 cursor-pointer shadow-lg hover:shadow-xl border-2 border-white relative`}
+                          style={{ 
+                            height: `${finalHeight}px`,
+                            minHeight: '2px',
+                            alignSelf: 'flex-end',
+                            maxWidth: '100%',
+                            boxSizing: 'border-box'
+                          }}
+                          title={`${label}: ${formatValue(value)}`}
+                        >
+                          <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 rounded-t-lg transition-opacity"></div>
+                        </div>
+                      ) : (
+                        <div
+                          className="w-full bg-transparent"
+                          style={{ 
+                            height: '0px',
+                            minHeight: '0px',
+                            alignSelf: 'flex-end',
+                            maxWidth: '100%',
+                            boxSizing: 'border-box'
+                          }}
+                          title={`${label}: ${formatValue(value)}`}
+                        >
+                        </div>
+                      )}
+                    </div>
+                    
                     {/* Nhãn dưới cột */}
-                    <div className="mt-3 w-full flex-shrink-0" style={{ height: '40px' }}>
-                      <div className="text-sm font-semibold text-gray-700 text-center truncate" title={label}>
+                    <div className="absolute w-full flex-shrink-0" style={{ 
+                      bottom: '0', 
+                      height: `${paddingBottom}px`, 
+                      display: 'flex', 
+                      alignItems: 'flex-start', 
+                      justifyContent: 'center', 
+                      paddingTop: '8px',
+                      width: '100%',
+                      maxWidth: '100%',
+                      boxSizing: 'border-box'
+                    }}>
+                      <div className="text-xs font-semibold text-gray-700 text-center truncate w-full" title={label} style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {label}
                       </div>
                     </div>
@@ -197,13 +287,12 @@ const Chart = ({
       Math.round(yAxisMax - (i * yAxisInterval))
     );
 
-    // Tính toán các điểm - đảm bảo phân bố đều
+    // Tính toán các điểm
     const points = data.map((item, idx) => {
       const value = Number(item[valueKey] || item.value || item.total || item.count || 0);
-      // Tính x dựa trên index, đảm bảo phân bố đều
       const x = data.length > 1 
         ? paddingLeft + (idx / (data.length - 1)) * innerWidth
-        : paddingLeft + innerWidth / 2; // Nếu chỉ có 1 điểm, đặt ở giữa
+        : paddingLeft + innerWidth / 2;
       const yPercent = yAxisMax > 0 ? (value / yAxisMax) * 100 : 0;
       const y = paddingTop + innerHeight - (yPercent / 100) * innerHeight;
       return { 
@@ -215,41 +304,33 @@ const Chart = ({
       };
     });
 
-    // Tạo path cho đường line với curve mượt hơn
+    // Tạo path cho đường line
     const createSmoothPath = (points) => {
       if (points.length < 2) return '';
-      
       let path = `M ${points[0].x} ${points[0].y}`;
-      
       for (let i = 1; i < points.length; i++) {
         const prev = points[i - 1];
         const curr = points[i];
         const next = points[i + 1];
-        
         if (next) {
-          // Sử dụng quadratic curve để làm mượt
           const cp1x = prev.x + (curr.x - prev.x) / 2;
           const cp1y = prev.y;
           const cp2x = curr.x - (next.x - curr.x) / 2;
           const cp2y = curr.y;
           path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${curr.x} ${curr.y}`;
         } else {
-          // Điểm cuối cùng
           const cp1x = prev.x + (curr.x - prev.x) / 2;
           const cp1y = prev.y;
           path += ` Q ${cp1x} ${cp1y}, ${curr.x} ${curr.y}`;
         }
       }
-      
       return path;
     };
 
-    // Tạo path cho đường line (dùng smooth curve nếu có nhiều điểm, nếu không dùng line thẳng)
     const pathD = data.length > 2 
       ? createSmoothPath(points)
       : points.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
 
-    // Tạo path cho area fill
     const areaPath = `${pathD} L ${paddingLeft + innerWidth} ${paddingTop + innerHeight} L ${paddingLeft} ${paddingTop + innerHeight} Z`;
 
     const colorMap = {
@@ -279,30 +360,11 @@ const Chart = ({
               </linearGradient>
             </defs>
 
-            {/* Grid lines ngang */}
-            {yAxisValues.map((val, idx) => {
-              const yPos = paddingTop + (idx / yAxisSteps) * innerHeight;
-              return (
-                <line
-                  key={`grid-${idx}`}
-                  x1={paddingLeft}
-                  y1={yPos}
-                  x2={paddingLeft + innerWidth}
-                  y2={yPos}
-                  stroke="#e5e7eb"
-                  strokeWidth="1"
-                  strokeDasharray="2,2"
-                />
-              );
-            })}
-
-            {/* Area fill */}
             <path
               d={areaPath}
               fill={`url(#gradient-line-${color})`}
             />
 
-            {/* Đường line */}
             <path
               d={pathD}
               fill="none"
@@ -312,10 +374,8 @@ const Chart = ({
               strokeLinejoin="round"
             />
 
-            {/* Các điểm trên line */}
             {points.map((point, idx) => (
               <g key={idx}>
-                {/* Vòng tròn ngoài (hover effect) */}
                 <circle
                   cx={point.x}
                   cy={point.y}
@@ -324,7 +384,6 @@ const Chart = ({
                   fillOpacity="0.2"
                   className="hover:fill-opacity-40 transition-opacity"
                 />
-                {/* Vòng tròn trong */}
                 <circle
                   cx={point.x}
                   cy={point.y}
@@ -334,7 +393,6 @@ const Chart = ({
                   strokeWidth="2"
                   className="hover:r-5 transition-all cursor-pointer"
                 />
-                {/* Tooltip hiển thị giá trị */}
                 <g className="opacity-0 hover:opacity-100 transition-opacity">
                   <rect
                     x={point.x - 20}
@@ -360,7 +418,6 @@ const Chart = ({
             ))}
           </svg>
 
-          {/* Trục Y với giá trị */}
           <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-between" 
                style={{ width: `${paddingLeft}px`, paddingTop: `${paddingTop}px`, paddingBottom: `${paddingBottom}px` }}>
             {yAxisValues.map((val, idx) => (
@@ -374,7 +431,6 @@ const Chart = ({
             ))}
           </div>
 
-          {/* Nhãn trục X */}
           <div className="absolute bottom-0 left-0 right-0 flex justify-between"
                style={{ 
                  height: `${paddingBottom}px`, 
@@ -425,18 +481,45 @@ const Chart = ({
     
     const colors = ['blue', 'green', 'purple', 'orange', 'red', 'yellow', 'indigo', 'pink'];
     
+    // Calculate label positions for each segment
+    const segments = data.map((item, idx) => {
+      const value = item[valueKey] || item.value || item.total || item.count || 0;
+      const percentage = total > 0 ? (value / total) * 100 : 0;
+      const angle = (percentage / 100) * 360;
+      
+      const startAngle = currentAngle;
+      const midAngle = currentAngle + angle / 2;
+      currentAngle += angle;
+      
+      // Calculate position for label (middle of segment)
+      const labelRadius = 38; // Distance from center - tăng lên để xa hơn
+      const labelX = 50 + labelRadius * Math.cos((midAngle * Math.PI) / 180);
+      const labelY = 50 + labelRadius * Math.sin((midAngle * Math.PI) / 180);
+      
+      return {
+        value,
+        percentage,
+        angle,
+        startAngle,
+        midAngle,
+        labelX,
+        labelY,
+        label: item[labelKey] || item.label || `Item ${idx + 1}`,
+        color: colorMap[colors[idx % colors.length]],
+      };
+    });
+    
+    currentAngle = 0; // Reset for path drawing
+    
     return (
       <div className="flex flex-col lg:flex-row items-center justify-center gap-8">
-        <div className="relative w-48 h-48">
+        <div className="relative w-80 h-80 lg:w-96 lg:h-96">
           <svg viewBox="0 0 100 100" className="transform -rotate-90 w-full h-full">
-            {data.map((item, idx) => {
-              const value = item[valueKey] || item.value || item.total || item.count || 0;
-              const percentage = total > 0 ? (value / total) * 100 : 0;
-              const angle = (percentage / 100) * 360;
-              const largeArc = angle > 180 ? 1 : 0;
+            {segments.map((segment, idx) => {
+              const largeArc = segment.angle > 180 ? 1 : 0;
               
               const startAngle = currentAngle;
-              const endAngle = currentAngle + angle;
+              const endAngle = currentAngle + segment.angle;
               
               const x1 = 50 + 50 * Math.cos((startAngle * Math.PI) / 180);
               const y1 = 50 + 50 * Math.sin((startAngle * Math.PI) / 180);
@@ -444,37 +527,51 @@ const Chart = ({
               const y2 = 50 + 50 * Math.sin((endAngle * Math.PI) / 180);
               
               const pathD = `M 50 50 L ${x1} ${y1} A 50 50 0 ${largeArc} 1 ${x2} ${y2} Z`;
-              const currentColorName = colors[idx % colors.length];
-              const currentColor = colorMap[currentColorName];
               
-              currentAngle += angle;
+              currentAngle += segment.angle;
               
               return (
-                <path
-                  key={idx}
-                  d={pathD}
-                  fill={currentColor}
-                  opacity="0.8"
-                />
+                <g key={idx}>
+                  <path
+                    d={pathD}
+                    fill={segment.color}
+                    opacity="0.8"
+                  />
+                  {/* Label inside pie chart - chỉ hiển thị số */}
+                  {segment.percentage > 1 && (
+                    <g>
+                      <text
+                        x={segment.labelX}
+                        y={segment.labelY}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fill="white"
+                        fontSize="6"
+                        fontWeight="bold"
+                        stroke="rgba(0,0,0,0.5)"
+                        strokeWidth="0.5"
+                        transform={`rotate(${segment.midAngle + 90} ${segment.labelX} ${segment.labelY})`}
+                      >
+                        <tspan x={segment.labelX} fontSize="6.5" fontWeight="bold">{segment.value}</tspan>
+                      </text>
+                    </g>
+                  )}
+                </g>
               );
             })}
           </svg>
         </div>
         {showLegend && (
           <div className="flex flex-col gap-2">
-            {data.map((item, idx) => {
-              const value = item[valueKey] || item.value || item.total || item.count || 0;
-              const label = item[labelKey] || item.label || `Item ${idx + 1}`;
-              const currentColorName = colors[idx % colors.length];
-              const currentColor = colorMap[currentColorName];
+            {segments.map((segment, idx) => {
               return (
                 <div key={idx} className="flex items-center gap-2">
                   <div 
                     className="w-4 h-4 rounded" 
-                    style={{ backgroundColor: currentColor }}
+                    style={{ backgroundColor: segment.color }}
                   ></div>
-                  <span className="text-sm text-gray-700">{label}</span>
-                  <span className="text-sm font-semibold text-gray-900 ml-2">{formatValue(value)}</span>
+                  <span className="text-sm text-gray-700">{segment.label}</span>
+                  <span className="text-sm font-semibold text-gray-900 ml-2">{segment.percentage.toFixed(1)}%</span>
                 </div>
               );
             })}
@@ -485,14 +582,14 @@ const Chart = ({
   };
 
   return (
-    <div className={`bg-white rounded-xl border border-gray-200 p-6 shadow-sm ${className}`}>
+    <div className={`bg-white rounded-xl border border-gray-200 p-6 shadow-sm w-full ${className}`}>
       {title && (
         <div className="mb-4">
           <h3 className="text-xl font-bold text-gray-900">{title}</h3>
           {subtitle && <p className="text-sm text-gray-500 mt-1">{subtitle}</p>}
         </div>
       )}
-      <div style={{ height }}>
+      <div className="w-full overflow-visible" style={{ height, minHeight: height }}>
         {type === 'bar' && renderBarChart()}
         {type === 'line' && renderLineChart()}
         {type === 'pie' && renderPieChart()}

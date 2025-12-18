@@ -10,24 +10,51 @@ import { searchProductVariants } from '../../services/common/productService';
 const suggestionsFetcher = async (keyword) => {
   if (!keyword || keyword.length < 2) return [];
   
-  const result = await searchProductVariants({
-    name: keyword,
-    page: 0,
-    size: 5,
-  });
+  try {
+    const result = await searchProductVariants({
+      name: keyword.trim(),
+      page: 0,
+      size: 5,
+    });
 
-  if (result.success) {
-    const data = result.data;
-    const products = data.content || data || [];
-    return products.map(p => ({
-      id: p.productId || p.product?.id, // ✅ Dùng productId để navigate đúng
-      variantId: p.id, // Giữ variantId nếu cần
-      name: p.name || p.productName,
-      image: p.images?.[0] || p.image,
-    }));
+    if (result.success && result.data) {
+      const data = result.data;
+      let products = [];
+      
+      // ✅ Xử lý nhiều format response
+      if (data.content && Array.isArray(data.content)) {
+        products = data.content;
+      } else if (Array.isArray(data)) {
+        products = data;
+      } else {
+        console.warn('⚠️ Unexpected suggestions data format:', data);
+        return [];
+      }
+      
+      return products.map(p => {
+        const storeName =
+          p.storeName ||
+          p.store?.storeName ||
+          p.store?.name ||
+          p.store_name ||
+          null;
+
+        return {
+          id: p.id || p.productId || p.product?.id, // ✅ Ưu tiên variant ID (để navigate đến variant detail)
+          variantId: p.id, // Giữ variantId
+          productId: p.productId || p.product?.id, // Giữ productId nếu cần
+          name: p.name || p.productName || 'Sản phẩm không tên',
+          image: p.images?.[0] || p.image || p.primaryImage,
+          storeName,
+        };
+      });
+    }
+    
+    return [];
+  } catch (error) {
+    console.error('❌ Error fetching suggestions:', error);
+    return [];
   }
-  
-  return [];
 };
 
 const SearchBar = ({ onSearch, className = "" }) => {
@@ -161,6 +188,11 @@ const SearchBar = ({ onSearch, className = "" }) => {
               )}
               <div className="flex-1">
                 <p className="text-sm font-medium text-gray-900">{suggestion.name}</p>
+                {suggestion.storeName && (
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Cửa hàng: <span className="font-medium">{suggestion.storeName}</span>
+                  </p>
+                )}
               </div>
             </div>
           ))}

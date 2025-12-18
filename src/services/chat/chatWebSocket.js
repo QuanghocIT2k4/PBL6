@@ -49,7 +49,6 @@ class ChatWebSocketService {
 
       // Handle socket close
       this.socket.onclose = () => {
-        console.log('🔴 [WebSocket] Connection closed');
         this.connected = false;
         this.notifyConnectionHandlers(false);
         this.attemptReconnect(jwtToken);
@@ -63,7 +62,6 @@ class ChatWebSocketService {
    * Callback khi kết nối thành công
    */
   onConnected() {
-    console.log('✅ [WebSocket] Connected!');
     this.connected = true;
     this.reconnectAttempts = 0;
     this.notifyConnectionHandlers(true);
@@ -109,7 +107,6 @@ class ChatWebSocketService {
     const subscription = this.stompClient.subscribe('/user/queue/messages', (message) => {
       try {
         const chatMessage = JSON.parse(message.body);
-        console.log('📨 [WebSocket] Received message:', chatMessage);
         this.notifyMessageHandlers(chatMessage);
       } catch (error) {
         console.error('❌ Error parsing message:', error);
@@ -140,7 +137,6 @@ class ChatWebSocketService {
       (message) => {
         try {
           const chatMessage = JSON.parse(message.body);
-          console.log('📢 [WebSocket] Received from topic:', chatMessage);
           this.notifyMessageHandlers(chatMessage);
         } catch (error) {
           console.error('❌ Error parsing message from topic:', error);
@@ -149,7 +145,6 @@ class ChatWebSocketService {
     );
 
     this.subscriptions.set('conversation-topic', subscription);
-    console.log(`✅ Subscribed to /topic/conversation/${conversationId}`);
   }
 
   /**
@@ -164,7 +159,6 @@ class ChatWebSocketService {
     const subscription = this.stompClient.subscribe('/user/queue/read-receipts', (message) => {
       try {
         const readReceipt = JSON.parse(message.body);
-        console.log('✅ [WebSocket] Received READ receipt:', readReceipt);
         this.notifyReadReceiptHandlers(readReceipt);
       } catch (error) {
         console.error('❌ Error parsing READ receipt:', error);

@@ -11,6 +11,9 @@ import AdminPromotions from '../pages/admin/AdminPromotions';
 import AdminWithdrawals from '../pages/admin/AdminWithdrawals';
 import AdminRevenue from '../pages/admin/AdminRevenue';
 import AdminShippers from '../pages/admin/AdminShippers';
+import AdminDisputesPage from '../pages/admin/AdminDisputesPage';
+import AdminDisputeDetailPage from '../pages/admin/AdminDisputeDetailPage';
+import AdminRefundsPage from '../pages/admin/AdminRefundsPage';
 
 const AdminRoutes = () => {
   return (
@@ -27,6 +30,9 @@ const AdminRoutes = () => {
           <Route path="/statistics" element={<AdminRevenue />} />
           <Route path="/revenue" element={<AdminRevenue />} /> {/* Backward compatibility */}
           <Route path="/shippers" element={<AdminShippers />} />
+          <Route path="/disputes" element={<AdminDisputesPage />} />
+          <Route path="/disputes/:disputeId" element={<AdminDisputeDetailPage />} />
+          <Route path="/refunds" element={<AdminRefundsPage />} />
         </Routes>
       </AdminLayout>
     </AdminAuthGuard>

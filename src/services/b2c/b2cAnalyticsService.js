@@ -13,17 +13,12 @@ import api from '../common/api';
  */
 export const getDashboardAnalytics = async (storeId) => {
   try {
-    console.log('📊 [Analytics] Fetching dashboard for store:', storeId);
     const response = await api.get(`/api/v1/b2c/analytics/dashboard/${storeId}`);
-    console.log('✅ [Analytics] Dashboard response:', response.data);
     return {
       success: true,
       data: response.data.data || response.data,
     };
   } catch (error) {
-    console.error('❌ [Analytics] Dashboard error:', error);
-    console.error('❌ [Analytics] Error response:', error.response?.data);
-    console.error('❌ [Analytics] Error status:', error.response?.status);
     return {
       success: false,
       error: error.message || 'Không thể tải thống kê dashboard',

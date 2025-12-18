@@ -71,9 +71,7 @@ export const getCart = async () => {
  */
 export const getCartCount = async () => {
   try {
-    console.log('🔢 Fetching cart count');
     const response = await cartApi.get('/api/v1/buyer/cart/count');
-    console.log('✅ Cart count response:', response.data);
 
     // Backend có thể trả về số trực tiếp hoặc object {count: X}
     let count = 0;

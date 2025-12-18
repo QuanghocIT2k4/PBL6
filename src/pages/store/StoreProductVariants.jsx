@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 import StoreLayout from '../../layouts/StoreLayout';
@@ -13,7 +13,8 @@ const StoreProductVariants = () => {
   const navigate = useNavigate();
   const { currentStore, loading: storeLoading } = useStoreContext();
   const toast = useToast();
-  const [modal, setModal] = useState({ open: false, type: null, variant: null, value: '', color: null });
+  // Modal dùng để cập nhật giá / tồn kho / xóa biến thể (kèm optional ảnh cho color)
+  const [modal, setModal] = useState({ open: false, type: null, variant: null, value: '', color: null, imageFile: null });
   const [detailModal, setDetailModal] = useState({ open: false, variant: null });
   const [detailSelectedColor, setDetailSelectedColor] = useState(null);
   const [imageModal, setImageModal] = useState({ open: false, variant: null });
@@ -23,8 +24,7 @@ const StoreProductVariants = () => {
   const [uploadingImages, setUploadingImages] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
-  // Tăng page size để load đủ biến thể (tạm đặt 110)
-  const pageSize = 110;
+  const pageSize = 20; // ✅ 20 biến thể mỗi trang
   const [statusFilter, setStatusFilter] = useState('ALL');
 
   // ✅ Fetch inventory analytics
@@ -114,8 +114,7 @@ const StoreProductVariants = () => {
   );
 
   const variants = variantsData?.success ? (variantsData.data?.content || variantsData.data || []) : [];
-  const totalPages = variantsData?.data?.totalPages || 0;
-  const totalElements = variantsData?.data?.totalElements || 0;
+  const totalElements = variantsData?.data?.totalElements || variantsData?.data?.total || 0;
   
   // ✅ Dùng API count-by-status để lấy số lượng chính xác (không phụ thuộc vào search/filter)
   // API trả về: { approved: number, pending: number, rejected: number, outOfStock: number, total: number }
@@ -124,7 +123,34 @@ const StoreProductVariants = () => {
   const rejectedCount = variantCounts?.rejected || variantCounts?.REJECTED || 0;
   const outOfStockCount = variantCounts?.outOfStock || variantCounts?.outOfStockCount || 0;
   const totalVariants = variantCounts?.total || totalElements || 0;
+  
+  // ✅ Tính totalPages từ totalVariants và pageSize để đảm bảo pagination hiển thị đúng
+  const totalPages = variantsData?.data?.totalPages || Math.ceil(totalVariants / pageSize) || 0;
 
+  // ✅ Reset về trang 0 khi đổi store hoặc filter
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [currentStore?.id, statusFilter, searchTerm]);
+
+  // ✅ Hàm xử lý chuyển trang
+  const handlePageChange = (newPage) => {
+    if (newPage >= 0 && newPage < totalPages) {
+      setCurrentPage(newPage);
+      // Scroll to top khi chuyển trang
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  // ✅ Tính toán các trang cần hiển thị - HIỂN THỊ TẤT CẢ (giống ProductList)
+  const getVisiblePages = () => {
+    const pages = [];
+    // Hiển thị tất cả các trang từ 0 đến totalPages - 1 (0-based)
+    for (let i = 0; i < totalPages; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
+  
   // Badge trạng thái duyệt
   const getApprovalBadge = (status) => {
     switch (status) {
@@ -139,16 +165,18 @@ const StoreProductVariants = () => {
     }
   };
 
-  // Filter by search + status
-  const filteredVariants = variants.filter(variant => {
-    const searchLower = searchTerm.trim().toLowerCase();
-    const matchesSearch = searchLower === '' ||
-      variant.productName?.toLowerCase().includes(searchLower) ||
-      variant.name?.toLowerCase().includes(searchLower) ||
-      variant.sku?.toLowerCase().includes(searchLower);
-    const matchesStatus = statusFilter === 'ALL' || deriveApprovalStatus(variant) === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  // ✅ Filter by search + status
+  const filteredVariants = useMemo(() => {
+    return variants.filter(variant => {
+      const searchLower = searchTerm.trim().toLowerCase();
+      const matchesSearch = searchLower === '' ||
+        variant.productName?.toLowerCase().includes(searchLower) ||
+        variant.name?.toLowerCase().includes(searchLower) ||
+        variant.sku?.toLowerCase().includes(searchLower);
+      const matchesStatus = statusFilter === 'ALL' || deriveApprovalStatus(variant) === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [variants, searchTerm, statusFilter]);
 
   // Lấy productId từ variant theo nhiều format khác nhau
   const getProductIdFromVariant = (variant) => {
@@ -182,10 +210,11 @@ const StoreProductVariants = () => {
         : type === 'stock'
           ? (selectedColor?.stock ?? selectedColor?.quantity ?? variant.stock ?? variant.stockQuantity ?? 0)
           : '';
-    setModal({ open: true, type, variant, value: String(initial), color: selectedColor });
+    setModal({ open: true, type, variant, value: String(initial), color: selectedColor, imageFile: null });
   };
 
-  const closeModal = () => setModal({ open: false, type: null, variant: null, value: '', color: null });
+  const closeModal = () =>
+    setModal({ open: false, type: null, variant: null, value: '', color: null, imageFile: null });
 
   // ✅ Image modal handlers
   const openImageModal = (e, variant) => {
@@ -303,6 +332,7 @@ const StoreProductVariants = () => {
           colorName,
           price: newPrice,
           stock: selectedColor?.stock ?? selectedColor?.quantity ?? 0,
+          imageFile: modal.imageFile || undefined,
         };
         res = await updateVariantColor(modal.variant.id, colorId, payload);
       } else {
@@ -331,6 +361,7 @@ const StoreProductVariants = () => {
           colorName,
           price: selectedColor?.price ?? 0,
           stock: newStock,
+          imageFile: modal.imageFile || undefined,
         };
         res = await updateVariantColor(modal.variant.id, colorId, payload);
       } else {
@@ -685,28 +716,73 @@ const StoreProductVariants = () => {
                   ))}
                 </div>
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="mt-6 flex items-center justify-between">
-                    <div className="text-sm text-gray-700">
-                      Trang <span className="font-medium">{currentPage + 1}</span> / <span className="font-medium">{totalPages}</span>
-                    </div>
-                    <div className="flex gap-2">
+                {/* Pagination với số trang - Giống ProductList */}
+                {filteredVariants.length > 0 && totalPages > 1 && (
+                  <div className="flex items-center justify-center mt-8 mb-8">
+                    {/* Pagination Controls */}
+                    <div className="flex items-center justify-center gap-2">
+                      {/* Previous Button */}
                       <button
-                        onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
-                        disabled={currentPage === 0}
-                        className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 0 || isLoading}
+                        className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                          currentPage === 0 || isLoading
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-white text-gray-700 hover:bg-blue-50 hover:text-blue-600 border border-gray-200 shadow-sm hover:shadow-md hover:scale-105'
+                        }`}
+                        aria-label="Trang trước"
                       >
-                        ← Trước
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path>
+                        </svg>
                       </button>
+
+                      {/* Page Numbers */}
+                      <div className="flex items-center gap-1">
+                        {getVisiblePages().map((page) => {
+                          const isActive = page === currentPage;
+                          return (
+                            <button
+                              key={page}
+                              onClick={() => handlePageChange(page)}
+                              disabled={isLoading}
+                              className={`min-w-[40px] h-10 px-4 rounded-lg font-semibold transition-all duration-200 ${
+                                isActive
+                                  ? 'bg-red-500 text-white shadow-lg scale-110'
+                                  : 'bg-white text-gray-700 hover:bg-blue-50 hover:text-blue-600 border border-gray-200 shadow-sm hover:shadow-md hover:scale-105'
+                              } disabled:opacity-50 disabled:cursor-not-allowed`}
+                              aria-label={`Trang ${page + 1}`}
+                              aria-current={isActive ? 'page' : undefined}
+                            >
+                              {page + 1}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Next Button */}
                       <button
-                        onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
-                        disabled={currentPage >= totalPages - 1}
-                        className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage >= totalPages - 1 || isLoading}
+                        className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                          currentPage >= totalPages - 1 || isLoading
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-white text-gray-700 hover:bg-blue-50 hover:text-blue-600 border border-gray-200 shadow-sm hover:shadow-md hover:scale-105'
+                        }`}
+                        aria-label="Trang sau"
                       >
-                        Sau →
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
                       </button>
                     </div>
+                  </div>
+                )}
+                
+                {/* Hiển thị số lượng */}
+                {filteredVariants.length > 0 && (
+                  <div className="mt-4 text-center text-sm text-gray-500">
+                    Trang {currentPage + 1} / {totalPages} - Hiển thị {filteredVariants.length} / {totalVariants} biến thể
                   </div>
                 )}
               </>
@@ -717,7 +793,10 @@ const StoreProductVariants = () => {
         {modal.open && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={closeModal}></div>
-            <div className="relative bg-white w-[90%] max-w-md rounded-3xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="relative bg-white w-[92%] max-w-sm md:max-w-md rounded-3xl shadow-2xl overflow-hidden max-h-[85vh]"
+              onClick={(e) => e.stopPropagation()}
+            >
               {/* Gradient Header */}
               <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 px-6 py-5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -741,10 +820,11 @@ const StoreProductVariants = () => {
                   <span className="text-xl">✕</span>
                 </button>
               </div>
-              <div className="px-6 py-5">
+              {/* Body: cho scroll để không tràn viền khi nhiều attribute */}
+              <div className="px-5 py-4 overflow-y-auto max-h-[60vh] md:max-h-[62vh]">
                 {/* Variant summary */}
                 {modal.variant && (
-                  <div className="flex items-start gap-3 mb-5 p-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl border-2 border-blue-100">
+                  <div className="flex items-start gap-3 mb-4 p-3 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl border-2 border-blue-100">
                     <div className="w-14 h-14 rounded-xl bg-white overflow-hidden border-2 border-white shadow-sm flex-shrink-0">
                       {modal.variant.primaryImage || modal.variant.images?.[0] ? (
                         <img
@@ -761,7 +841,7 @@ const StoreProductVariants = () => {
                         {modal.variant.productName || modal.variant.name}
                       </div>
                       {modal.variant.attributes && Object.keys(modal.variant.attributes).length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1.5">
+                        <div className="mt-2 flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
                           {Object.entries(modal.variant.attributes).map(([k, v]) => (
                             <span key={k} className="px-2 py-1 rounded-lg border-2 border-blue-200 text-xs font-semibold text-blue-700 bg-white">{k}: {v}</span>
                           ))}
@@ -785,16 +865,30 @@ const StoreProductVariants = () => {
                         <div className="flex flex-wrap gap-2">
                           {modal.variant.colors.map((c) => {
                             const colorKey = c._id ?? c.id ?? c.colorId ?? c.colorName ?? c.name;
-                            const selectedKey = modal.color?._id ?? modal.color?.id ?? modal.color?.colorId ?? modal.color?.colorName ?? modal.color?.name;
+                            const selectedKey =
+                              modal.color?._id ??
+                              modal.color?.id ??
+                              modal.color?.colorId ??
+                              modal.color?.colorName ??
+                              modal.color?.name;
                             const isSelected = Boolean(selectedKey && selectedKey === colorKey);
                             return (
                               <button
                                 key={colorKey}
                                 onClick={() => {
-                                  const nextValue = modal.type === 'price'
-                                    ? (c.price ?? modal.variant.price ?? 0)
-                                    : (c.stock ?? c.quantity ?? modal.variant.stock ?? modal.variant.stockQuantity ?? 0);
-                                  setModal(prev => ({ ...prev, color: c, value: String(nextValue) }));
+                                  const nextValue =
+                                    modal.type === 'price'
+                                      ? (c.price ?? modal.variant.price ?? 0)
+                                      : (c.stock ??
+                                          c.quantity ??
+                                          modal.variant.stock ??
+                                          modal.variant.stockQuantity ??
+                                          0);
+                                  setModal((prev) => ({
+                                    ...prev,
+                                    color: c,
+                                    value: String(nextValue),
+                                  }));
                                 }}
                                 className={`px-3 py-2 rounded-lg border text-sm flex items-center gap-2 transition-all ${
                                   isSelected
@@ -803,19 +897,82 @@ const StoreProductVariants = () => {
                                 }`}
                               >
                                 {c.image ? (
-                                  <img src={c.image} alt={c.colorName} className="w-8 h-8 rounded object-cover border border-blue-100" />
+                                  <img
+                                    src={c.image}
+                                    alt={c.colorName}
+                                    className="w-8 h-8 rounded object-cover border border-blue-100"
+                                  />
                                 ) : (
                                   <span className="w-8 h-8 rounded bg-gray-200 inline-block" />
                                 )}
                                 <div className="text-left">
-                                  <div className="font-semibold leading-tight">{c.colorName || c.name || 'Không rõ màu'}</div>
+                                  <div className="font-semibold leading-tight">
+                                    {c.colorName || c.name || 'Không rõ màu'}
+                                  </div>
                                   {c.price != null && (
-                                    <div className="text-[11px] text-gray-600">{formatPrice(c.price)}</div>
+                                    <div className="text-[11px] text-gray-600">
+                                      {formatPrice(c.price)}
+                                    </div>
                                   )}
                                 </div>
                               </button>
                             );
                           })}
+                        </div>
+                      </div>
+                    )}
+                    {/* Upload ảnh màu (tùy chọn khi đã chọn màu) */}
+                    {modal.color && (
+                      <div className="mb-4">
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          Ảnh màu (tùy chọn)
+                        </label>
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-lg overflow-hidden border border-gray-200 bg-gray-100 flex items-center justify-center">
+                            {modal.imageFile ? (
+                              <img
+                                src={URL.createObjectURL(modal.imageFile)}
+                                alt="Preview"
+                                className="w-full h-full object-cover"
+                              />
+                            ) : modal.color?.image ? (
+                              <img
+                                src={modal.color.image}
+                                alt={modal.color.colorName}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <span className="text-gray-400 text-lg">🎨</span>
+                            )}
+                          </div>
+                          <label className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-50">
+                            Chọn ảnh mới
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  setModal((prev) => ({ ...prev, imageFile: file }));
+                                }
+                              }}
+                            />
+                          </label>
+                          {modal.imageFile && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setModal((prev) => ({
+                                  ...prev,
+                                  imageFile: null,
+                                }))
+                              }
+                              className="text-xs text-red-500 hover:underline"
+                            >
+                              Xóa ảnh chọn
+                            </button>
+                          )}
                         </div>
                       </div>
                     )}
@@ -868,7 +1025,7 @@ const StoreProductVariants = () => {
                   </div>
                 )}
               </div>
-              <div className="px-6 py-4 bg-gray-50 border-t-2 border-gray-100 flex items-center justify-end gap-3">
+              <div className="px-5 py-4 bg-gray-50 border-t-2 border-gray-100 flex items-center justify-end gap-3">
                 <button
                   onClick={closeModal}
                   className="px-6 py-3 rounded-xl border-2 border-gray-300 text-gray-700 font-semibold hover:bg-gray-100 transition-colors"

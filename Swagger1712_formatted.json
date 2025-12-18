@@ -50,12 +50,20 @@
   ],
   "tags": [
     {
+      "name": "Admin Refund Management",
+      "description": "APIs for admin to manage refund requests"
+    },
+    {
       "name": "B2C Wallet Management",
       "description": "APIs for store owners to manage wallet balance and withdrawal requests"
     },
     {
       "name": "User Management",
       "description": "APIs for user registration, authentication and profile management"
+    },
+    {
+      "name": "Admin - Shipper Management",
+      "description": "APIs for admin to manage shipper accounts"
     },
     {
       "name": "Brand Management",
@@ -72,6 +80,10 @@
     {
       "name": "Shop Statistics Management",
       "description": "APIs for shop to view revenue statistics"
+    },
+    {
+      "name": "B2C Return Management",
+      "description": "APIs for store to manage return requests"
     },
     {
       "name": "Admin Store Management",
@@ -126,6 +138,10 @@
       "description": "APIs for admin to manage users"
     },
     {
+      "name": "Admin Dispute Management",
+      "description": "APIs for admin to manage disputes"
+    },
+    {
       "name": "Store Browsing",
       "description": "Public APIs for browsing and discovering stores"
     },
@@ -144,6 +160,10 @@
     {
       "name": "Public Promotion APIs",
       "description": "Public APIs to view promotions - No authentication required"
+    },
+    {
+      "name": "Shipper Management",
+      "description": "APIs for shippers to manage pickup and delivery of orders"
     },
     {
       "name": "Ví Điện Tử Khách Hàng",
@@ -252,6 +272,289 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shipper/shipment/{shipmentId}/shipping": {
+      "put": {
+        "tags": [
+          "Shipper Management"
+        ],
+        "summary": "Bắt đầu giao hàng",
+        "description": "Shipper xác nhận đã lấy hàng và bắt đầu vận chuyển (PICKED -> SHIPPING)",
+        "operationId": "startShipping",
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "in": "path",
+            "description": "Shipment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shipper/shipment/{shipmentId}/returning": {
+      "put": {
+        "tags": [
+          "Shipper Management"
+        ],
+        "summary": "Bắt đầu trả hàng về shop",
+        "description": "Shipper bắt đầu trả hàng về shop (DELIVER_FAIL -> RETURNING)",
+        "operationId": "startReturning",
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "in": "path",
+            "description": "Shipment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shipper/shipment/{shipmentId}/returned": {
+      "put": {
+        "tags": [
+          "Shipper Management"
+        ],
+        "summary": "Hoàn thành trả hàng về shop",
+        "description": "Shipper hoàn thành trả hàng về shop (RETURNING -> RETURNED)",
+        "operationId": "completeReturning",
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "in": "path",
+            "description": "Shipment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shipper/shipment/{shipmentId}/picking": {
+      "put": {
+        "tags": [
+          "Shipper Management"
+        ],
+        "summary": "Shipper tới lấy hàng",
+        "description": "Shipper đang tới lấy đơn hàng từ shop",
+        "operationId": "confirmPickup",
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "in": "path",
+            "description": "Shipment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shipper/shipment/{shipmentId}/picked": {
+      "put": {
+        "tags": [
+          "Shipper Management"
+        ],
+        "summary": "Xác nhận đã lấy hàng",
+        "description": "Shipper xác nhận đã lấy hàng từ shop (PICKING -> PICKED)",
+        "operationId": "confirmPickedUp",
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "in": "path",
+            "description": "Shipment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shipper/shipment/{shipmentId}/fail": {
+      "put": {
+        "tags": [
+          "Shipper Management"
+        ],
+        "summary": "Báo giao hàng thất bại",
+        "description": "Shipper báo cáo giao hàng thất bại với lý do (DELIVERED -> DELIVER_FAIL)",
+        "operationId": "failDelivery",
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "in": "path",
+            "description": "Shipment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shipper/shipment/{shipmentId}/delivered": {
+      "put": {
+        "tags": [
+          "Shipper Management"
+        ],
+        "summary": "Hoàn thành giao hàng",
+        "description": "Shipper xác nhận đã giao hàng thành công (SHIPPING -> DELIVERED)",
+        "operationId": "completeDelivery",
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "in": "path",
+            "description": "Shipment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -447,6 +750,45 @@
             "name": "reviewId",
             "in": "path",
             "description": "Review ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "670e8b8b9b3c4a1b2c3d4e5f"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/buyer/orders/{orderId}/complete": {
+      "put": {
+        "tags": [
+          "Buyer Order Management"
+        ],
+        "summary": "Xác nhận hoàn tất đơn hàng",
+        "description": "Buyer xác nhận đã nhận hàng và hoàn tất đơn hàng (chỉ cho đơn hàng DELIVERED)",
+        "operationId": "completeOrder",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "description": "Order ID",
             "required": true,
             "schema": {
               "type": "string"
@@ -1223,37 +1565,104 @@
         ]
       }
     },
-    "/api/v1/b2c/shipments/{shipmentId}/status": {
+    "/api/v1/b2c/returns/store/{storeId}/returnRequest/{returnRequestId}/respond": {
       "put": {
         "tags": [
-          "B2C Shipment Management"
+          "B2C Return Management"
         ],
-        "summary": "Cập nhật trạng thái shipment (chỉ dành cho vận chuyển)",
-        "description": "Cập nhật trạng thái shipment để theo dõi tiến trình giao hàng (PICKING_UP -> SHIPPING -> DELIVERED hoặc FAILED)",
-        "operationId": "updateShipmentStatus",
+        "summary": "Phản hồi yêu cầu trả hàng",
+        "description": "Store chấp nhận hoặc từ chối yêu cầu trả hàng",
+        "operationId": "respondToReturnRequest",
         "parameters": [
           {
-            "name": "shipmentId",
+            "name": "returnRequestId",
             "in": "path",
-            "description": "Shipment ID",
+            "description": "Return Request ID",
             "required": true,
             "schema": {
               "type": "string"
-            },
-            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
+            }
+          },
+          {
+            "name": "storeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
-            "application/json": {
+            "multipart/form-data": {
               "schema": {
-                "type": "string",
-                "description": "New status (PICKING_UP, SHIPPING, DELIVERED, FAILED)"
+                "required": [
+                  "dto"
+                ],
+                "type": "object",
+                "properties": {
+                  "dto": {
+                    "$ref": "#/components/schemas/ReturnResponseDTO"
+                  },
+                  "evidenceFiles": {
+                    "type": "array",
+                    "description": "Ảnh/video minh chứng (tối đa 5 file)",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                }
               }
             }
-          },
-          "required": true
+          }
         },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/b2c/returns/store/{storeId}/returnRequest/{returnRequestId}/confirm-ok": {
+      "put": {
+        "tags": [
+          "B2C Return Management"
+        ],
+        "summary": "Xác nhận hàng trả về OK",
+        "description": "Store xác nhận hàng trả về đạt yêu cầu và đồng ý hoàn tiền cho buyer",
+        "operationId": "confirmReturnedGoodsOk",
+        "parameters": [
+          {
+            "name": "returnRequestId",
+            "in": "path",
+            "description": "Return Request ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "storeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -2168,6 +2577,92 @@
         ]
       }
     },
+    "/api/v1/admin/shipper/{shipperId}/activate": {
+      "put": {
+        "tags": [
+          "Admin - Shipper Management"
+        ],
+        "summary": "Kích hoạt tài khoản shipper",
+        "description": "Admin kích hoạt lại tài khoản shipper",
+        "operationId": "activateShipper",
+        "parameters": [
+          {
+            "name": "shipperId",
+            "in": "path",
+            "description": "Shipper ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/shipper/shipper/{shipperId}": {
+      "put": {
+        "tags": [
+          "Admin - Shipper Management"
+        ],
+        "summary": "Cập nhật thông tin shipper",
+        "description": "Admin cập nhật thông tin cho tài khoản shipper",
+        "operationId": "updateShipperInfo",
+        "parameters": [
+          {
+            "name": "shipperId",
+            "in": "path",
+            "description": "Shipper ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShipperUpdateInfoDTO"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/promotions/{promotionId}/deactivate": {
       "put": {
         "tags": [
@@ -2519,6 +3014,102 @@
         "security": [
           {
             "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/disputes/{disputeId}/resolve": {
+      "put": {
+        "tags": [
+          "Admin Dispute Management"
+        ],
+        "summary": "Giải quyết khiếu nại từ chối đơn trả hàng",
+        "description": "Admin quyết định khiếu nại khi buyer khiếu nại việc store từ chối đơn trả hàng. APPROVE_BUYER = đồng ý với buyer (chấp nhận trả hàng), REJECT_BUYER = đồng ý với store (giữ nguyên từ chối)",
+        "operationId": "resolveDispute",
+        "parameters": [
+          {
+            "name": "disputeId",
+            "in": "path",
+            "description": "Dispute ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisputeDecisionDTO"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/disputes/{disputeId}/resolve-quality": {
+      "put": {
+        "tags": [
+          "Admin Dispute Management"
+        ],
+        "summary": "Giải quyết khiếu nại chất lượng hàng trả về",
+        "description": "Admin quyết định khi store khiếu nại hàng trả về có vấn đề. APPROVE_STORE = đồng ý với store (hoàn tiền cho store), REJECT_STORE = đồng ý với buyer (hoàn tiền cho buyer)",
+        "operationId": "resolveReturnQualityDispute",
+        "parameters": [
+          {
+            "name": "disputeId",
+            "in": "path",
+            "description": "Dispute ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReturnQualityDecisionDTO"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
           }
         ]
       }
@@ -3229,12 +3820,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/buyer/payments/query": {
@@ -3267,12 +3853,105 @@
               }
             }
           }
+        }
+      }
+    },
+    "/api/v1/buyer/payments/momo/refund": {
+      "post": {
+        "tags": [
+          "Buyer Payment Management"
+        ],
+        "summary": "Refund MoMo payment",
+        "description": "Request a refund for a completed MoMo payment transaction. Supports partial and full refund.",
+        "operationId": "refundMomoPayment",
+        "requestBody": {
+          "description": "Refund details including transId, amount and description",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MomoRefundRequest"
+              }
+            }
+          },
+          "required": true
         },
-        "security": [
-          {
-            "bearerAuth": []
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
-        ]
+        }
+      }
+    },
+    "/api/v1/buyer/payments/momo/ipn": {
+      "post": {
+        "tags": [
+          "Buyer Payment Management"
+        ],
+        "summary": "MoMo IPN callback",
+        "description": "Webhook endpoint for MoMo to notify payment results (server-to-server).",
+        "operationId": "momoIpnCallback",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/buyer/payments/momo/create_payment_request": {
+      "post": {
+        "tags": [
+          "Buyer Payment Management"
+        ],
+        "summary": "Create MoMo payment request",
+        "description": "Generate a payment request for EXISTING order via MoMo gateway.",
+        "operationId": "createMomoPaymentRequest",
+        "requestBody": {
+          "description": "Payment details with orderId and amount",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MomoPaymentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/buyer/payments/create_payment_url": {
@@ -3293,6 +3972,236 @@
             }
           },
           "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/buyer/orders/{orderId}/return": {
+      "post": {
+        "tags": [
+          "Buyer Order Management"
+        ],
+        "summary": "Yêu cầu trả hàng",
+        "description": "Tạo yêu cầu trả hàng cho đơn hàng đã giao (DELIVERED). Upload ảnh/video minh chứng. Đơn COD bắt buộc nhập thông tin ngân hàng.",
+        "operationId": "returnOrder",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "description": "Order ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "670e8b8b9b3c4a1b2c3d4e5f"
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "description": "Lý do trả hàng",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "description",
+            "in": "query",
+            "description": "Mô tả chi tiết",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bankName",
+            "in": "query",
+            "description": "Tên ngân hàng (bắt buộc cho COD)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bankAccountNumber",
+            "in": "query",
+            "description": "Số tài khoản ngân hàng (bắt buộc cho COD)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bankAccountName",
+            "in": "query",
+            "description": "Tên chủ tài khoản (bắt buộc cho COD)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "evidenceFiles": {
+                    "type": "array",
+                    "description": "Ảnh/video minh chứng (tối đa 5 file)",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/buyer/orders/returns/{returnRequestId}/dispute": {
+      "post": {
+        "tags": [
+          "Buyer Order Management"
+        ],
+        "summary": "Khiếu nại",
+        "description": "Tạo khiếu nại khi store từ chối yêu cầu trả hàng. Upload ảnh/video minh chứng.",
+        "operationId": "createDispute",
+        "parameters": [
+          {
+            "name": "returnRequestId",
+            "in": "path",
+            "description": "Return Request ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "content",
+            "in": "query",
+            "description": "Nội dung khiếu nại",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "attachmentFiles": {
+                    "type": "array",
+                    "description": "Ảnh/video đính kèm (tối đa 5 file)",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/buyer/orders/disputes/{disputeId}/message": {
+      "post": {
+        "tags": [
+          "Buyer Order Management"
+        ],
+        "summary": "Thêm tin nhắn vào khiếu nại",
+        "description": "Buyer thêm tin nhắn/bằng chứng vào khiếu nại. Upload ảnh/video đính kèm.",
+        "operationId": "addDisputeMessage",
+        "parameters": [
+          {
+            "name": "disputeId",
+            "in": "path",
+            "description": "Dispute ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "content",
+            "in": "query",
+            "description": "Nội dung tin nhắn",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "attachmentFiles": {
+                    "type": "array",
+                    "description": "Ảnh/video đính kèm (tối đa 5 file)",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                }
+              }
+            }
+          }
         },
         "responses": {
           "200": {
@@ -3665,6 +4574,249 @@
         ]
       }
     },
+    "/api/v1/b2c/shipments/order/{orderId}": {
+      "get": {
+        "tags": [
+          "B2C Shipment Management"
+        ],
+        "summary": "Lấy thông tin shipment của đơn hàng",
+        "description": "Lấy thông tin shipment của một đơn hàng cụ thể",
+        "operationId": "getShipmentByOrderId",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "description": "Order ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "B2C Shipment Management"
+        ],
+        "summary": "Tạo shipment cho đơn hàng",
+        "description": "Tạo shipment khi người bán đã chuẩn bị xong đơn hàng và sẵn sàng giao cho shipper",
+        "operationId": "createShipment",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "description": "Order ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
+          },
+          {
+            "name": "storeId",
+            "in": "query",
+            "description": "Store ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/b2c/returns/store/{storeId}/returnRequest/{returnRequestId}/dispute-quality": {
+      "post": {
+        "tags": [
+          "B2C Return Management"
+        ],
+        "summary": "Khiếu nại hàng trả về có vấn đề",
+        "description": "Store khiếu nại khi hàng trả về bị hư hỏng/không đúng. Upload ảnh/video minh chứng. Admin sẽ xem xét và quyết định.",
+        "operationId": "createReturnQualityDispute",
+        "parameters": [
+          {
+            "name": "returnRequestId",
+            "in": "path",
+            "description": "Return Request ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "storeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "description": "Lý do khiếu nại",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "description",
+            "in": "query",
+            "description": "Mô tả chi tiết",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "evidenceFiles": {
+                    "type": "array",
+                    "description": "Ảnh/video minh chứng (tối đa 5 file)",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/b2c/returns/store/{storeId}/disputes/{disputeId}/message": {
+      "post": {
+        "tags": [
+          "B2C Return Management"
+        ],
+        "summary": "Thêm tin nhắn vào khiếu nại",
+        "description": "Store thêm tin nhắn/bằng chứng vào khiếu nại. Upload ảnh/video đính kèm.",
+        "operationId": "addDisputeMessage_1",
+        "parameters": [
+          {
+            "name": "disputeId",
+            "in": "path",
+            "description": "Dispute ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "storeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "content",
+            "in": "query",
+            "description": "Nội dung tin nhắn",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "attachmentFiles": {
+                    "type": "array",
+                    "description": "Ảnh/video đính kèm (tối đa 5 file)",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/b2c/promotions/store/{storeId}": {
       "get": {
         "tags": [
@@ -3855,9 +5007,8 @@
                     }
                   },
                   "primaryImageIndex": {
-                    "type": "integer",
-                    "description": "Index of the primary image in the images list",
-                    "format": "int32"
+                    "type": "string",
+                    "description": "Index of the primary image in the images list"
                   }
                 }
               }
@@ -4058,6 +5209,237 @@
         ]
       }
     },
+    "/api/v1/admin/shipper": {
+      "get": {
+        "tags": [
+          "Admin - Shipper Management"
+        ],
+        "summary": "Lấy danh sách shipper",
+        "description": "Lấy danh sách tất cả tài khoản shipper với phân trang và filter",
+        "operationId": "getAllShippers",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "description": "Filter by name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "description": "Filter by email",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "phone",
+            "in": "query",
+            "description": "Filter by phone",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by status (active/banned)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (0-based)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            },
+            "example": 0
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Page size",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20
+            },
+            "example": 20
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "description": "Sort by field",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "createdAt"
+            }
+          },
+          {
+            "name": "sortDir",
+            "in": "query",
+            "description": "Sort direction: asc or desc",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Admin - Shipper Management"
+        ],
+        "summary": "Tạo tài khoản shipper",
+        "description": "Admin tạo tài khoản mới cho shipper với avatar",
+        "operationId": "createShipper",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "required": [
+                  "dto"
+                ],
+                "type": "object",
+                "properties": {
+                  "dto": {
+                    "$ref": "#/components/schemas/ShipperRegisterDTO"
+                  },
+                  "avatar": {
+                    "type": "string",
+                    "description": "File ảnh đại diện cho shipper",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/shipper/{shipperId}/reset-password": {
+      "post": {
+        "tags": [
+          "Admin - Shipper Management"
+        ],
+        "summary": "Reset mật khẩu shipper",
+        "description": "Admin reset mật khẩu cho shipper về mật khẩu ngẫu nhiên",
+        "operationId": "resetShipperPassword",
+        "parameters": [
+          {
+            "name": "shipperId",
+            "in": "path",
+            "description": "Shipper ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/refunds/process": {
+      "post": {
+        "tags": [
+          "Admin Refund Management"
+        ],
+        "summary": "Xử lý yêu cầu hoàn tiền",
+        "description": "Duyệt (APPROVE) hoặc Từ chối (REJECT) yêu cầu hoàn tiền.\n\n**APPROVE:**\n- Đơn MOMO/VNPAY: Tự động hoàn tiền qua payment gateway\n- Đơn COD: Cần nhập `refundTransactionId` (mã giao dịch chuyển khoản) và `adminNote` sau khi đã chuyển tiền thủ công\n\n**REJECT:** Cần nhập `rejectionReason`",
+        "operationId": "processRefundRequest",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessRefundRequestDTO"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/promotions/platform": {
       "post": {
         "tags": [
@@ -4071,6 +5453,54 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/CreatePromotionDTO"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/disputes/{disputeId}/message": {
+      "post": {
+        "tags": [
+          "Admin Dispute Management"
+        ],
+        "summary": "Thêm tin nhắn vào khiếu nại",
+        "description": "Admin thêm tin nhắn/phản hồi vào khiếu nại",
+        "operationId": "addDisputeMessage_2",
+        "parameters": [
+          {
+            "name": "disputeId",
+            "in": "path",
+            "description": "Dispute ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisputeRequestDTO"
               }
             }
           },
@@ -4295,6 +5725,191 @@
             }
           }
         }
+      }
+    },
+    "/api/v1/shipper/shipments/ready-to-pickup": {
+      "get": {
+        "tags": [
+          "Shipper Management"
+        ],
+        "summary": "Lấy danh sách đơn hàng cần lấy",
+        "description": "Lấy danh sách các đơn hàng đang chờ shipper đến lấy hàng (READY_TO_PICK)",
+        "operationId": "getPickingUpShipments",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (0-based)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            },
+            "example": 0
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Page size",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20
+            },
+            "example": 20
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "description": "Sort by field",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "createdAt"
+            }
+          },
+          {
+            "name": "sortDir",
+            "in": "query",
+            "description": "Sort direction: asc or desc",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shipper/shipment/{shipmentId}": {
+      "get": {
+        "tags": [
+          "Shipper Management"
+        ],
+        "summary": "Lấy chi tiết shipment",
+        "description": "Lấy chi tiết thông tin của một shipment cụ thể",
+        "operationId": "getShipmentDetail",
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "in": "path",
+            "description": "Shipment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shipper/history": {
+      "get": {
+        "tags": [
+          "Shipper Management"
+        ],
+        "summary": "Lịch sử giao hàng của shipper đang đăng nhập",
+        "description": "Lấy lịch sử các đơn hàng đã giao hoàn thành hoặc thất bại (DELIVERED + FAILED)",
+        "operationId": "getDeliveryHistory",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (0-based)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            },
+            "example": 0
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Page size",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20
+            },
+            "example": 20
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "description": "Sort by field",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "updatedAt"
+            }
+          },
+          {
+            "name": "sortDir",
+            "in": "query",
+            "description": "Sort direction: asc or desc",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/reviews/{reviewId}": {
@@ -6356,6 +7971,70 @@
         }
       }
     },
+    "/api/v1/buyer/payments/momo/refund/check_status/{orderId}": {
+      "get": {
+        "tags": [
+          "Buyer Payment Management"
+        ],
+        "summary": "Check MoMo refund status",
+        "description": "Query the status of a MoMo refund transaction. Use system orderId, will lookup momoRefundOrderId automatically.",
+        "operationId": "checkMomoRefundStatus",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/buyer/payments/momo/check_status/{orderId}": {
+      "get": {
+        "tags": [
+          "Buyer Payment Management"
+        ],
+        "summary": "Check MoMo payment status",
+        "description": "Query the status of a MoMo payment transaction.",
+        "operationId": "checkMomoPaymentStatus",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/buyer/orders": {
       "get": {
         "tags": [
@@ -6368,7 +8047,7 @@
           {
             "name": "status",
             "in": "query",
-            "description": "Filter by order status (PENDING, CONFIRMED, SHIPPING, DELIVERED, CANCELLED)",
+            "description": "Filter by order status (PENDING, CONFIRMED, SHIPPING, DELIVERED, CANCELLED, COMPLETED)",
             "required": false,
             "schema": {
               "type": "string"
@@ -6459,6 +8138,155 @@
               "type": "string"
             },
             "example": "670e8b8b9b3c4a1b2c3d4e5f"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/buyer/orders/returns": {
+      "get": {
+        "tags": [
+          "Buyer Order Management"
+        ],
+        "summary": "Danh sách yêu cầu trả hàng",
+        "description": "Lấy danh sách yêu cầu trả hàng của buyer",
+        "operationId": "getReturnRequests",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Page size",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/buyer/orders/returns/{returnRequestId}": {
+      "get": {
+        "tags": [
+          "Buyer Order Management"
+        ],
+        "summary": "Chi tiết yêu cầu trả hàng",
+        "description": "Xem chi tiết yêu cầu trả hàng",
+        "operationId": "getReturnRequestDetail",
+        "parameters": [
+          {
+            "name": "returnRequestId",
+            "in": "path",
+            "description": "Return Request ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/buyer/orders/disputes": {
+      "get": {
+        "tags": [
+          "Buyer Order Management"
+        ],
+        "summary": "Danh sách khiếu nại",
+        "description": "Lấy danh sách khiếu nại của buyer",
+        "operationId": "getDisputes",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Page size",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10
+            }
           }
         ],
         "responses": {
@@ -7230,6 +9058,66 @@
         ]
       }
     },
+    "/api/v1/b2c/statistics/variants/best-selling": {
+      "get": {
+        "tags": [
+          "Shop Statistics Management"
+        ],
+        "operationId": "getBestSellingVariants",
+        "parameters": [
+          {
+            "name": "storeId",
+            "in": "query",
+            "description": "ID của shop",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "shop_001"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Số lượng variant muốn lấy",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10
+            },
+            "example": 10
+          },
+          {
+            "name": "period",
+            "in": "query",
+            "description": "Kỳ thời gian (WEEK, MONTH, YEAR, ALL)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "MONTH"
+            },
+            "example": "MONTH"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
     "/api/v1/b2c/statistics/variant/count-by-stock-status": {
       "get": {
         "tags": [
@@ -7547,24 +9435,158 @@
         ]
       }
     },
-    "/api/v1/b2c/shipments/order/{orderId}": {
+    "/api/v1/b2c/returns/store/{storeId}": {
       "get": {
         "tags": [
-          "B2C Shipment Management"
+          "B2C Return Management"
         ],
-        "summary": "Lấy thông tin shipment của đơn hàng",
-        "description": "Lấy thông tin shipment của một đơn hàng cụ thể",
-        "operationId": "getShipmentByOrderId",
+        "summary": "Danh sách yêu cầu trả hàng",
+        "description": "Lấy danh sách yêu cầu trả hàng của store",
+        "operationId": "getReturnRequests_1",
         "parameters": [
           {
-            "name": "orderId",
+            "name": "status",
+            "in": "query",
+            "description": "Filter by status (PENDING, APPROVED, REJECTED, DISPUTED, RETURNING, RETURNED, REFUNDED, CLOSED)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Page size",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10
+            }
+          },
+          {
+            "name": "storeId",
             "in": "path",
-            "description": "Order ID",
             "required": true,
             "schema": {
               "type": "string"
-            },
-            "example": "64f1a2b3c4d5e6f7a8b9c0d1"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/b2c/returns/store/{storeId}/returnRequest/{returnRequestId}": {
+      "get": {
+        "tags": [
+          "B2C Return Management"
+        ],
+        "summary": "Chi tiết yêu cầu trả hàng",
+        "description": "Xem chi tiết yêu cầu trả hàng",
+        "operationId": "getReturnRequestDetail_1",
+        "parameters": [
+          {
+            "name": "returnRequestId",
+            "in": "path",
+            "description": "Return Request ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "storeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/b2c/returns/store/{storeId}/disputes": {
+      "get": {
+        "tags": [
+          "B2C Return Management"
+        ],
+        "summary": "Danh sách khiếu nại",
+        "description": "Lấy danh sách khiếu nại liên quan đến store",
+        "operationId": "getDisputes_1",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Page size",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10
+            }
+          },
+          {
+            "name": "storeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -8804,14 +10826,14 @@
         ]
       }
     },
-    "/api/v1/admin/statistics/service-fees": {
+    "/api/v1/admin/statistics/shipping-fees": {
       "get": {
         "tags": [
           "Admin Statistics Management"
         ],
-        "summary": "Get service fees",
-        "description": "Retrieve all service fee records",
-        "operationId": "getServiceFees",
+        "summary": "Lấy phí vận chuyển",
+        "description": "Retrieve all shipping fee records collected from completed orders",
+        "operationId": "getShippingFees",
         "parameters": [
           {
             "name": "page",
@@ -8912,6 +10934,79 @@
         "summary": "Get platform discount losses",
         "description": "Retrieve all platform discount loss records",
         "operationId": "getPlatformDiscountLosses",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (0-indexed)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            },
+            "example": 0
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Page size",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10
+            },
+            "example": 10
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "description": "Sort by field",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "createdAt"
+            }
+          },
+          {
+            "name": "sortDir",
+            "in": "query",
+            "description": "Sort direction: asc or desc",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/statistics/platform-commissions": {
+      "get": {
+        "tags": [
+          "Admin Statistics Management"
+        ],
+        "summary": "Lấy phí hoa hồng",
+        "description": "Lấy tất cả các bản ghi phí hoa hồng",
+        "operationId": "getServiceFees",
         "parameters": [
           {
             "name": "page",
@@ -9115,6 +11210,196 @@
             "example": "MONTH"
           }
         ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/shipper/{shipperId}": {
+      "get": {
+        "tags": [
+          "Admin - Shipper Management"
+        ],
+        "summary": "Lấy chi tiết shipper",
+        "description": "Lấy thông tin chi tiết của một shipper",
+        "operationId": "getShipperDetail",
+        "parameters": [
+          {
+            "name": "shipperId",
+            "in": "path",
+            "description": "Shipper ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/shipper/statistics": {
+      "get": {
+        "tags": [
+          "Admin - Shipper Management"
+        ],
+        "summary": "Thống kê shipper",
+        "description": "Lấy thống kê tổng quan về shipper (tổng số, activate, banned)",
+        "operationId": "getShipperStatistics",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/refunds": {
+      "get": {
+        "tags": [
+          "Admin Refund Management"
+        ],
+        "summary": "Lấy danh sách yêu cầu hoàn tiền",
+        "description": "Lấy danh sách tất cả yêu cầu hoàn tiền với filter theo trạng thái và phân trang",
+        "operationId": "getRefundRequests",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Trạng thái filter (PENDING, COMPLETED, REJECTED). Để trống để lấy tất cả",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Số trang (bắt đầu từ 0)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Số lượng mỗi trang",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/refunds/{id}": {
+      "get": {
+        "tags": [
+          "Admin Refund Management"
+        ],
+        "summary": "Xem chi tiết yêu cầu hoàn tiền",
+        "description": "Lấy thông tin chi tiết của một yêu cầu hoàn tiền bao gồm thông tin khách hàng và tài khoản ngân hàng",
+        "operationId": "getRefundRequestDetail",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID của yêu cầu hoàn tiền",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/refunds/statistics": {
+      "get": {
+        "tags": [
+          "Admin Refund Management"
+        ],
+        "summary": "Thống kê yêu cầu hoàn tiền",
+        "description": "Lấy số lượng yêu cầu hoàn tiền theo từng trạng thái",
+        "operationId": "getRefundStatistics",
         "responses": {
           "200": {
             "description": "OK",
@@ -9979,6 +12264,113 @@
         ]
       }
     },
+    "/api/v1/admin/disputes": {
+      "get": {
+        "tags": [
+          "Admin Dispute Management"
+        ],
+        "summary": "Danh sách khiếu nại",
+        "description": "Lấy danh sách tất cả khiếu nại",
+        "operationId": "getAllDisputes",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by status (OPEN, IN_PROGRESS, RESOLVED)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "disputeType",
+            "in": "query",
+            "description": "Filter by dispute type (RETURN_REJECTION, RETURN_QUALITY)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Page size",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/disputes/{disputeId}": {
+      "get": {
+        "tags": [
+          "Admin Dispute Management"
+        ],
+        "summary": "Chi tiết khiếu nại",
+        "description": "Xem chi tiết khiếu nại",
+        "operationId": "getDisputeDetail",
+        "parameters": [
+          {
+            "name": "disputeId",
+            "in": "path",
+            "description": "Dispute ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/chat/messages/{messageId}": {
       "delete": {
         "tags": [
@@ -10318,15 +12710,16 @@
       "UpdateUserDTO": {
         "required": [
           "dateOfBirth",
-          "fullName",
-          "phone"
+          "fullName"
         ],
         "type": "object",
         "properties": {
-          "phone": {
+          "fullName": {
             "type": "string"
           },
-          "fullName": {
+          "phone": {
+            "maxLength": 10,
+            "minLength": 10,
             "type": "string"
           },
           "dateOfBirth": {
@@ -10496,6 +12889,25 @@
           }
         },
         "description": "Updated store information"
+      },
+      "ReturnResponseDTO": {
+        "type": "object",
+        "properties": {
+          "approved": {
+            "type": "boolean"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 0,
+            "type": "string"
+          },
+          "evidenceMedia": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       },
       "PromotionDTO": {
         "required": [
@@ -10699,6 +13111,59 @@
             "type": "string"
           },
           "ownerEmail": {
+            "type": "string"
+          }
+        }
+      },
+      "ShipperUpdateInfoDTO": {
+        "required": [
+          "dateOfBirth",
+          "fullName"
+        ],
+        "type": "object",
+        "properties": {
+          "fullName": {
+            "type": "string"
+          },
+          "phone": {
+            "maxLength": 10,
+            "minLength": 10,
+            "type": "string"
+          },
+          "dateOfBirth": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "DisputeDecisionDTO": {
+        "required": [
+          "decision",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 0,
+            "type": "string"
+          }
+        }
+      },
+      "ReturnQualityDecisionDTO": {
+        "required": [
+          "decision",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string"
+          },
+          "reason": {
             "type": "string"
           }
         }
@@ -11059,6 +13524,34 @@
           }
         }
       },
+      "MomoRefundRequest": {
+        "type": "object",
+        "properties": {
+          "transId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "amount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      },
+      "MomoPaymentRequest": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "PaymentDTO": {
         "type": "object",
         "properties": {
@@ -11365,6 +13858,72 @@
           "durationDays": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "ShipperRegisterDTO": {
+        "required": [
+          "dateOfBirth",
+          "email",
+          "fullName",
+          "password"
+        ],
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "retypePassword": {
+            "type": "string"
+          },
+          "fullName": {
+            "type": "string"
+          },
+          "phone": {
+            "maxLength": 10,
+            "minLength": 10,
+            "type": "string"
+          },
+          "dateOfBirth": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "description": "Thông tin shipper"
+      },
+      "ProcessRefundRequestDTO": {
+        "type": "object",
+        "properties": {
+          "refundRequestId": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "refundTransactionId": {
+            "type": "string"
+          },
+          "adminNote": {
+            "type": "string"
+          },
+          "rejectionReason": {
+            "type": "string"
+          }
+        }
+      },
+      "DisputeRequestDTO": {
+        "required": [
+          "content"
+        ],
+        "type": "object",
+        "properties": {
+          "content": {
+            "maxLength": 2000,
+            "minLength": 0,
+            "type": "string"
           }
         }
       },

@@ -21,3 +21,18 @@ huy123
 TK: truongtmp01012001@gmail.com
 
 MK: huy123
+
+
+https://technova-d3gferhtgdaaaedh.eastasia-01.azurewebsites.net
+
+
+
+ài khoản thanh toán:
+
+Số thẻ: 9704 0000 0000 0018
+
+Tên: NGUYEN VAN A
+
+Hạn ghi trên thẻ: 03/07
+
+OTP: OTP

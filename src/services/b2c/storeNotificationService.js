@@ -32,7 +32,6 @@ export const getStoreNotifications = async (storeId, params = {}) => {
       data: response.data.data || response.data,
     };
   } catch (error) {
-    console.error('❌ Error fetching store notifications:', error);
     return {
       success: false,
       error: error.response?.data?.message || 'Không thể tải thông báo',
@@ -48,13 +47,9 @@ export const getStoreNotifications = async (storeId, params = {}) => {
  */
 export const markStoreNotificationAsRead = async (storeId, notificationId) => {
   try {
-    console.log('📖 Marking store notification as read:', { storeId, notificationId });
-
     const response = await api.put(
       `/api/v1/b2c/stores/${storeId}/notifications/${notificationId}/read`
     );
-
-    console.log('✅ Store notification marked as read:', response.data);
 
     return {
       success: true,
@@ -78,11 +73,7 @@ export const markStoreNotificationAsRead = async (storeId, notificationId) => {
  */
 export const markAllStoreNotificationsAsRead = async (storeId) => {
   try {
-    console.log('📖 Marking all store notifications as read:', storeId);
-
     const response = await api.put(`/api/v1/b2c/stores/${storeId}/notifications/read-all`);
-
-    console.log('✅ All store notifications marked as read:', response.data);
 
     return {
       success: true,
@@ -106,13 +97,9 @@ export const markAllStoreNotificationsAsRead = async (storeId) => {
  */
 export const deleteStoreNotification = async (storeId, notificationId) => {
   try {
-    console.log('🗑️ Deleting store notification:', { storeId, notificationId });
-
     const response = await api.delete(
       `/api/v1/b2c/stores/${storeId}/notifications/${notificationId}`
     );
-
-    console.log('✅ Store notification deleted:', response.data);
 
     return {
       success: true,

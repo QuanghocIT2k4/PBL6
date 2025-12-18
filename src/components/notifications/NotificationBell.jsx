@@ -15,7 +15,8 @@ const NotificationBell = ({
   onLoadMore,
   hasMore = false,
   loading = false,
-  userType = 'buyer' // 'buyer' or 'store'
+  userType = 'buyer', // 'buyer' | 'store' | 'admin'
+  onOpen, // optional: callback khi dropdown được mở lần đầu
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -38,7 +39,14 @@ const NotificationBell = ({
   }, [isOpen]);
 
   const toggleDropdown = () => {
-    setIsOpen(!isOpen);
+    setIsOpen((prev) => {
+      const next = !prev;
+      // Gọi onOpen khi dropdown được mở
+      if (!prev && next && typeof onOpen === 'function') {
+        onOpen();
+      }
+      return next;
+    });
   };
 
   return (

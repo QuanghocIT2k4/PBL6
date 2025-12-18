@@ -34,20 +34,6 @@ export const getStoreOrders = async (params = {}) => {
     // ✅ Validate & force page to be a valid integer >= 0
     const pageNum = parseInt(page, 10);
     const validPage = Number.isNaN(pageNum) ? 0 : Math.max(0, pageNum);
-    
-    console.log('📦 [getStoreOrders] RAW page param:', page, 'type:', typeof page);
-    console.log('📦 [getStoreOrders] PARSED pageNum:', pageNum);
-    console.log('📦 [getStoreOrders] VALID page:', validPage);
-    
-    console.log('📦 [getStoreOrders] Request params:', {
-      storeId,
-      page: validPage,
-      pageType: typeof validPage,
-      size,
-      sortBy,
-      sortDir,
-      status
-    });
 
     const requestParams = {
       storeId: String(storeId),
@@ -57,9 +43,6 @@ export const getStoreOrders = async (params = {}) => {
       sortDir,
       ...(status && { status }),
     };
-    
-    console.log('📦 [getStoreOrders] Actual request params:', requestParams);
-    console.log('📦 [getStoreOrders] Params stringified:', JSON.stringify(requestParams));
 
     // ✅ TRY 1: Send ALL params (original approach)
     const response = await api.get('/api/v1/b2c/orders', {
@@ -377,7 +360,8 @@ export const deliverOrder = async (orderId, storeId) => {
 
 /**
  * 8. ĐẾM ĐƠN HÀNG THEO TRẠNG THÁI (API mới)
- * GET /api/v1/b2c/order/store/{storeId}/count-by-status
+ * GET /api/v1/b2c/orders/store/{storeId}/count-by-status
+ * ⚠️ LƯU Ý: Endpoint là "orders" (số nhiều), không phải "order" (số ít)
  */
 export const countOrdersByStatus = async (storeId) => {
   try {
@@ -385,13 +369,33 @@ export const countOrdersByStatus = async (storeId) => {
       return { success: false, error: 'storeId is required' };
     }
 
-    const response = await api.get(`/api/v1/b2c/order/store/${storeId}/count-by-status`);
+    // ✅ Thử endpoint đúng: /api/v1/b2c/orders/store/{storeId}/count-by-status (orders - số nhiều)
+    const response = await api.get(`/api/v1/b2c/orders/store/${storeId}/count-by-status`);
     return {
       success: true,
       data: response.data.data || response.data,
     };
   } catch (error) {
     console.error('❌ [countOrdersByStatus] Error:', error);
+    console.error('❌ [countOrdersByStatus] Error response:', error.response?.data);
+    console.error('❌ [countOrdersByStatus] Error status:', error.response?.status);
+    
+    // ✅ Fallback: Thử API trong shopStatisticsService nếu endpoint trên fail
+    if (error.response?.status === 404 || error.response?.status === 500) {
+      console.log('⚠️ [countOrdersByStatus] Trying fallback API: /api/v1/b2c/statistics/orders/count-by-status');
+      try {
+        const fallbackResponse = await api.get('/api/v1/b2c/statistics/orders/count-by-status', {
+          params: { storeId },
+        });
+        return {
+          success: true,
+          data: fallbackResponse.data.data || fallbackResponse.data,
+        };
+      } catch (fallbackError) {
+        console.error('❌ [countOrdersByStatus] Fallback API also failed:', fallbackError);
+      }
+    }
+    
     return {
       success: false,
       error: error.response?.data?.message || error.message || 'Không thể đếm đơn hàng theo trạng thái',

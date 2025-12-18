@@ -237,12 +237,17 @@ const StoreWallet = () => {
               <p className="text-xl font-bold text-blue-600">{formatCurrency(wallet?.totalEarned || 0)}</p>
             </div>
             <div className="bg-white rounded-xl p-4 text-center shadow-sm min-w-[140px]">
+              <p className="text-xs text-gray-600 mb-1">Tiền đang chờ xử lý</p>
+              <p className="text-xl font-bold text-yellow-600">{formatCurrency(wallet?.pendingAmount || 0)}</p>
+              <p className="text-xs text-gray-500 mt-1">(Đơn chưa hoàn thành)</p>
+            </div>
+            <div className="bg-white rounded-xl p-4 text-center shadow-sm min-w-[140px]">
               <p className="text-xs text-gray-600 mb-1">Đang chờ rút</p>
-              <p className="text-xl font-bold text-yellow-600">{formatCurrency((wallet?.balance || 0) - getAvailableBalance())}</p>
+              <p className="text-xl font-bold text-orange-600">{formatCurrency((wallet?.balance || 0) - getAvailableBalance())}</p>
             </div>
             <div className="bg-white rounded-xl p-4 text-center shadow-sm min-w-[140px]">
               <p className="text-xs text-gray-600 mb-1">Đã rút</p>
-              <p className="text-xl font-bold text-orange-600">{formatCurrency(wallet?.totalWithdrawn || 0)}</p>
+              <p className="text-xl font-bold text-red-600">{formatCurrency(wallet?.totalWithdrawn || 0)}</p>
             </div>
           </div>
         </div>

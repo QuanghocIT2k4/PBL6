@@ -20,21 +20,156 @@ import api from '../common/api';
  */
 export const getShipmentByOrderId = async (orderId) => {
   try {
-    console.log('📦 Fetching shipment for order:', orderId);
-
+    console.log('🔍 [getShipmentByOrderId] Requesting shipment for orderId:', orderId);
     const response = await api.get(`/api/v1/b2c/shipments/order/${orderId}`);
+    
+    console.log('📦 [getShipmentByOrderId] Response status:', response.status);
+    console.log('📦 [getShipmentByOrderId] Response data:', JSON.stringify(response.data, null, 2));
 
-    console.log('✅ Shipment data:', response.data);
+    // ✅ Kiểm tra nếu response có success: false (backend trả về 200 nhưng với body success: false)
+    if (response.data && response.data.success === false) {
+      // ✅ Kiểm tra xem error message có chứa "Không tìm thấy" hoặc "not found" không
+      const errorMessage = response.data.error || response.data.message || '';
+      const isNotFound = errorMessage.toLowerCase().includes('không tìm thấy') || 
+                         errorMessage.toLowerCase().includes('not found') ||
+                         errorMessage.toLowerCase().includes('không tồn tại');
+      
+      console.log('⚠️ [getShipmentByOrderId] Backend returned success: false');
+      console.log('⚠️ [getShipmentByOrderId] Error message:', errorMessage);
+      console.log('⚠️ [getShipmentByOrderId] Is not found?', isNotFound);
+      
+      // Backend trả về "not found" nhưng với status 200
+      return {
+        success: false,
+        error: null, // ✅ Trả về null để không hiển thị lỗi
+        notFound: true, // ✅ Flag để biết là "chưa có" chứ không phải "lỗi"
+      };
+    }
 
+    console.log('✅ [getShipmentByOrderId] Shipment found:', response.data.data || response.data);
     return {
       success: true,
       data: response.data.data || response.data,
     };
   } catch (error) {
-    console.error('❌ Error fetching shipment:', error);
+    console.error('❌ [getShipmentByOrderId] Error caught:');
+    console.error('❌ [getShipmentByOrderId] Error object:', error);
+    console.error('❌ [getShipmentByOrderId] Error response:', error.response);
+    console.error('❌ [getShipmentByOrderId] Error status:', error.response?.status);
+    console.error('❌ [getShipmentByOrderId] Error data:', error.response?.data);
+    console.error('❌ [getShipmentByOrderId] Error message:', error.message);
+    console.error('❌ [getShipmentByOrderId] Full error:', JSON.stringify({
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message,
+      config: {
+        url: error.config?.url,
+        method: error.config?.method,
+      }
+    }, null, 2));
+    
+    // ✅ Lấy error message từ nhiều nguồn
+    const errorMessage = error.response?.data?.error || 
+                        error.response?.data?.message || 
+                        error.message || 
+                        '';
+    
+    // ✅ Kiểm tra xem có phải "not found" không (từ response data hoặc error message)
+    const isNotFoundMessage = errorMessage.toLowerCase().includes('không tìm thấy') || 
+                              errorMessage.toLowerCase().includes('not found') ||
+                              errorMessage.toLowerCase().includes('không tồn tại') ||
+                              errorMessage.toLowerCase().includes('does not exist');
+    
+    // ✅ Xử lý lỗi 400/404 hoặc error message chứa "not found"
+    if (error.response?.status === 400 || error.response?.status === 404 || isNotFoundMessage) {
+      console.log('ℹ️ [getShipmentByOrderId] Not found case (normal):', {
+        status: error.response?.status,
+        isNotFoundMessage,
+        errorMessage
+      });
+      return {
+        success: false,
+        error: null, // ✅ Trả về null để không hiển thị lỗi
+        notFound: true, // ✅ Flag để biết là "chưa có" chứ không phải "lỗi"
+      };
+    }
+    
+    console.error('❌ [getShipmentByOrderId] Real error (not 400/404/notFound):', errorMessage);
     return {
       success: false,
-      error: error.response?.data?.message || 'Không thể tải thông tin vận đơn',
+      error: errorMessage || 'Không thể tải thông tin vận đơn',
+      notFound: false,
+    };
+  }
+};
+
+/**
+ * 1.5. CREATE SHIPMENT FOR ORDER
+ * POST /api/v1/b2c/shipments/order/{orderId}?storeId={storeId}
+ *
+ * Tạo shipment cho đơn hàng đã xác nhận (bắt buộc truyền storeId theo Swagger 1512)
+ */
+export const createShipmentForOrder = async (orderId, storeId) => {
+  try {
+    console.log('🚀 [createShipmentForOrder] Creating shipment for orderId:', orderId, 'storeId:', storeId);
+
+    if (!orderId) {
+      return {
+        success: false,
+        error: 'orderId is required to create shipment',
+      };
+    }
+
+    if (!storeId) {
+      return {
+        success: false,
+        error: 'storeId is required to create shipment',
+      };
+    }
+
+    // Backend yêu cầu storeId là query param
+    const response = await api.post(
+      `/api/v1/b2c/shipments/order/${orderId}`,
+      null,
+      {
+        params: { storeId },
+      }
+    );
+    
+    console.log('✅ [createShipmentForOrder] Response status:', response.status);
+    console.log('✅ [createShipmentForOrder] Response data:', JSON.stringify(response.data, null, 2));
+    
+    const shipmentData = response.data.data || response.data;
+
+    console.log('✅ [createShipmentForOrder] Shipment created successfully:', shipmentData);
+    return {
+      success: true,
+      data: shipmentData,
+      message: response.data.message || 'Đã tạo vận đơn thành công',
+    };
+  } catch (error) {
+    console.error('❌ [createShipmentForOrder] Error caught:');
+    console.error('❌ [createShipmentForOrder] Error object:', error);
+    console.error('❌ [createShipmentForOrder] Error response:', error.response);
+    console.error('❌ [createShipmentForOrder] Error status:', error.response?.status);
+    console.error('❌ [createShipmentForOrder] Error data:', error.response?.data);
+    console.error('❌ [createShipmentForOrder] Error message:', error.message);
+    console.error('❌ [createShipmentForOrder] Full error:', JSON.stringify({
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message,
+      config: {
+        url: error.config?.url,
+        method: error.config?.method,
+        data: error.config?.data,
+      }
+    }, null, 2));
+    
+    return {
+      success: false,
+      error: error.response?.data?.message || error.response?.data?.error || 'Không thể tạo vận đơn',
     };
   }
 };
@@ -50,12 +185,10 @@ export const getShipmentsByStoreId = async (storeId, params = {}) => {
     const {
       page = 0,
       size = 10,
-      status = null, // PICKING_UP, SHIPPING, DELIVERED, FAILED
+      status = null, // READY_TO_PICK, PICKING_UP, PICKING, PICKED, SHIPPING, DELIVERED, DELIVERED_FAIL, FAILED
       sortBy = 'createdAt',
       sortDir = 'desc',
     } = params;
-
-    console.log('📦 Fetching shipments for store:', { storeId, page, size, status });
 
     const response = await api.get(`/api/v1/b2c/shipments/store/${storeId}`, {
       params: {
@@ -67,14 +200,11 @@ export const getShipmentsByStoreId = async (storeId, params = {}) => {
       },
     });
 
-    console.log('✅ Shipments data:', response.data);
-
     return {
       success: true,
       data: response.data.data || response.data,
     };
   } catch (error) {
-    console.error('❌ Error fetching shipments:', error);
     return {
       success: false,
       error: error.response?.data?.message || 'Không thể tải danh sách vận đơn',
@@ -98,7 +228,6 @@ export const countShipmentsByStatus = async (storeId) => {
       data: response.data.data || response.data,
     };
   } catch (error) {
-    console.error('❌ Error counting shipments by status:', error);
     return {
       success: false,
       error: error.response?.data?.message || 'Không thể đếm shipment theo trạng thái',
@@ -115,8 +244,6 @@ export const countShipmentsByStatus = async (storeId) => {
  */
 export const updateShipmentStatus = async (shipmentId, newStatus) => {
   try {
-    console.log('🔄 [updateShipmentStatus] Updating shipment status:', { shipmentId, newStatus });
-
     // ✅ Thử nhiều format khác nhau vì có thể backend expect format khác
     // Format 1: Gửi string trực tiếp
     let response;
@@ -127,12 +254,10 @@ export const updateShipmentStatus = async (shipmentId, newStatus) => {
         },
       });
     } catch (err1) {
-      console.warn('⚠️ [updateShipmentStatus] Format 1 failed, trying format 2...', err1.response?.data);
       // Format 2: Gửi object với field status
       try {
         response = await api.put(`/api/v1/b2c/shipments/${shipmentId}/status`, { status: newStatus });
       } catch (err2) {
-        console.warn('⚠️ [updateShipmentStatus] Format 2 failed, trying format 3...', err2.response?.data);
         // Format 3: Gửi string không có quotes
         response = await api.put(`/api/v1/b2c/shipments/${shipmentId}/status`, newStatus, {
           headers: {
@@ -142,17 +267,12 @@ export const updateShipmentStatus = async (shipmentId, newStatus) => {
       }
     }
 
-    console.log('✅ [updateShipmentStatus] Shipment status updated:', response.data);
-
     return {
       success: true,
       data: response.data.data || response.data,
       message: 'Đã cập nhật trạng thái vận đơn',
     };
   } catch (error) {
-    console.error('❌ [updateShipmentStatus] Error updating shipment status:', error);
-    console.error('❌ [updateShipmentStatus] Error response:', error.response?.data);
-    console.error('❌ [updateShipmentStatus] Error status:', error.response?.status);
     return {
       success: false,
       error: error.response?.data?.message || error.response?.data?.error || error.message || 'Không thể cập nhật trạng thái vận đơn',
@@ -169,12 +289,33 @@ export const updateShipmentStatus = async (shipmentId, newStatus) => {
  */
 export const getShipmentStatusBadge = (status) => {
   const badges = {
+    READY_TO_PICK: {
+      text: 'Sẵn sàng lấy hàng',
+      color: 'cyan',
+      bgColor: 'bg-cyan-100',
+      textColor: 'text-cyan-800',
+      icon: '📦',
+    },
     PICKING_UP: {
       text: 'Đang lấy hàng',
       color: 'yellow',
       bgColor: 'bg-yellow-100',
       textColor: 'text-yellow-800',
       icon: '📦',
+    },
+    PICKING: {
+      text: 'Đang lấy hàng',
+      color: 'yellow',
+      bgColor: 'bg-yellow-100',
+      textColor: 'text-yellow-800',
+      icon: '📦',
+    },
+    PICKED: {
+      text: 'Đã lấy hàng',
+      color: 'orange',
+      bgColor: 'bg-orange-100',
+      textColor: 'text-orange-800',
+      icon: '✅',
     },
     SHIPPING: {
       text: 'Đang giao',
@@ -189,6 +330,20 @@ export const getShipmentStatusBadge = (status) => {
       bgColor: 'bg-green-100',
       textColor: 'text-green-800',
       icon: '✅',
+    },
+    RETURNED: {
+      text: 'Đã trả hàng',
+      color: 'indigo',
+      bgColor: 'bg-indigo-100',
+      textColor: 'text-indigo-800',
+      icon: '↩️',
+    },
+    DELIVERED_FAIL: {
+      text: 'Giao thất bại',
+      color: 'red',
+      bgColor: 'bg-red-100',
+      textColor: 'text-red-800',
+      icon: '❌',
     },
     FAILED: {
       text: 'Giao thất bại',

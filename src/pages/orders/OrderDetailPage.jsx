@@ -5,8 +5,10 @@ import { getOrderCode } from '../../utils/displayCodeUtils';
 import MainLayout from '../../layouts/MainLayout';
 import ReviewForm from '../../components/reviews/ReviewForm';
 import { getOrderById, cancelOrder, canCancelOrder, canReviewOrder, getOrderStatusBadge, getPaymentMethodLabel } from '../../services/buyer/orderService';
+import { getAdminOrderById } from '../../services/admin/adminOrderService';
 import { checkExistingReview } from '../../services/buyer/reviewService';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 import { confirmCancelOrder } from '../../utils/sweetalert';
 import SEO from '../../components/seo/SEO';
 
@@ -41,15 +43,31 @@ const OrderDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { success, error: showError } = useToast();
+  const { user } = useAuth();
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [reviewedItems, setReviewedItems] = useState({}); // Track which items have been reviewed
   const [existingReviews, setExistingReviews] = useState({}); // Store existing reviews for editing
 
-  // Fetch order details
+  // ✅ Check if user is admin (check nhiều cách)
+  const isAdmin = 
+    user?.role === 'ADMIN' || 
+    user?.roles?.includes('ADMIN') ||
+    user?.authorities?.some(auth => auth.authority === 'ADMIN') ||
+    window.location.pathname.includes('/admin-dashboard');
+
+  // Fetch order details - thử admin API trước nếu có thể là admin
   const { data: orderData, error, mutate } = useSWR(
-    id ? ['order-detail', id] : null,
-    () => getOrderById(id),
+    id ? ['order-detail', id, isAdmin] : null,
+    async () => {
+      // Nếu là admin, chỉ dùng admin API (không fallback về buyer API vì sẽ fail)
+      if (isAdmin) {
+        const adminResult = await getAdminOrderById(id);
+        return adminResult; // Trả về kết quả dù success hay fail
+      }
+      // Nếu không phải admin, dùng buyer API
+      return await getOrderById(id);
+    },
     {
       revalidateOnFocus: false,
     }
@@ -138,6 +156,8 @@ const OrderDetailPage = () => {
 
   // Error state
   if (error || !order) {
+    // Nếu là admin và không tìm thấy, có thể do API chưa có hoặc order không tồn tại
+    const isAdminView = isAdmin;
     return (
       <MainLayout>
         <SEO 
@@ -149,12 +169,16 @@ const OrderDetailPage = () => {
         <div className="max-w-5xl mx-auto px-4 py-16 text-center">
           <div className="text-red-500 text-5xl mb-4">⚠️</div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Không tìm thấy đơn hàng</h2>
-          <p className="text-gray-600 mb-6">Đơn hàng này không tồn tại hoặc đã bị xóa.</p>
+          <p className="text-gray-600 mb-6">
+            {isAdminView 
+              ? 'Đơn hàng này không tồn tại hoặc API admin chưa được hỗ trợ. Vui lòng liên hệ backend để thêm API /api/v1/admin/orders/{id}'
+              : 'Đơn hàng này không tồn tại hoặc đã bị xóa.'}
+          </p>
           <button
-            onClick={() => navigate('/orders')}
+            onClick={() => navigate(isAdminView ? '/admin-dashboard/refunds' : '/orders')}
             className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
           >
-            ← Quay lại danh sách
+            ← Quay lại
           </button>
         </div>
       </MainLayout>
@@ -196,8 +220,52 @@ const OrderDetailPage = () => {
   // Totals breakdown
   const subtotal = items.reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 0)), 0);
   const shippingFeeValue = order.shippingFee ?? order.shippingCost ?? 0;
-  const serviceFee = order.serviceFee ?? 5000; // fallback nếu backend chưa trả về
-  const discountValue = order.discount ?? order.discountAmount ?? 0;
+  // 💰 Hoa hồng nền tảng (platformCommission) - ưu tiên field mới, fallback field cũ nếu còn
+  const platformCommission = order.platformCommission ?? order.serviceFee ?? 0;
+  
+  // ✅ Tính discount - ƯU TIÊN dùng discount từ backend, KHÔNG tính ngược (tránh sai số)
+  // Backend đã tính discount chính xác, chỉ cần lấy từ field
+  let discountValue = parseFloat(
+    order.discount ?? 
+    order.discountAmount ?? 
+    order.promotionDiscount ?? 
+    order.appliedDiscount ?? 
+    order.promotionAmount ??
+    order.appliedPromotion?.discountAmount ??
+    order.appliedPromotion?.discountValue ??
+    0
+  );
+  
+  // ✅ Chỉ tính ngược từ totalPrice nếu KHÔNG có discount field nào (fallback cuối cùng)
+  // Và chỉ tính khi có promotion để tránh tính sai
+  if (discountValue === 0 && (order.appliedPromotion || order.promotionCode)) {
+    const calculatedTotal = subtotal + shippingFeeValue + platformCommission;
+    const actualTotal = parseFloat(finalTotal ?? totalAmount ?? totalPrice ?? 0);
+    // ✅ Chỉ tính nếu actualTotal hợp lý và nhỏ hơn calculatedTotal
+    if (actualTotal > 0 && calculatedTotal > actualTotal && (calculatedTotal - actualTotal) > 0) {
+      discountValue = calculatedTotal - actualTotal;
+      console.log('[OrderDetailPage] Calculated discount from totalPrice:', discountValue, {
+        calculatedTotal,
+        actualTotal,
+        difference: calculatedTotal - actualTotal
+      });
+    }
+  }
+  
+  // ✅ Debug log để kiểm tra
+  console.log('[OrderDetailPage] Order breakdown:', {
+    subtotal,
+    shippingFeeValue,
+    platformCommission,
+    discountValue,
+    finalTotal,
+    totalAmount,
+    totalPrice,
+    calculatedTotal: subtotal + shippingFeeValue + platformCommission - discountValue,
+    appliedPromotion: order.appliedPromotion,
+    promotionCode: order.promotionCode,
+    orderKeys: Object.keys(order).filter(k => k.toLowerCase().includes('discount') || k.toLowerCase().includes('promotion'))
+  });
 
   const parseTotalPrice = () => {
     if (finalTotal && !isNaN(finalTotal)) return finalTotal;
@@ -206,13 +274,39 @@ const OrderDetailPage = () => {
       const parsed = parseFloat(totalPrice);
       if (!isNaN(parsed)) return parsed;
     }
-    return Math.max(0, subtotal + shippingFeeValue + serviceFee - discountValue);
+    return Math.max(0, subtotal + shippingFeeValue + platformCommission - discountValue);
   };
 
   const calculatedTotal = parseTotalPrice();
   const statusBadge = getOrderStatusBadge(status);
   const canCancel = canCancelOrder(status);
   const canReview = canReviewOrder(status);
+
+  // Helper: build display name with color (productName - ColorName)
+  const buildItemDisplayName = (item) => {
+    const baseName = item.productName || item.name || '';
+    const colorName =
+      item.colorName ||
+      item.color ||
+      item.variantColor ||
+      item.options?.color ||
+      null;
+    if (baseName && colorName) {
+      return `${baseName} - ${colorName}`;
+    }
+    return baseName || colorName || '';
+  };
+
+  // Helper: get image for colored product
+  const getItemImage = (item) => {
+    return (
+      item.colorImage ||
+      item.imageUrl ||
+      item.productImage ||
+      item.image ||
+      null
+    );
+  };
 
   const handlePrintInvoice = () => {
     if (!order) return;
@@ -233,7 +327,7 @@ const OrderDetailPage = () => {
         (item, idx) => `
           <tr>
             <td>${idx + 1}</td>
-            <td>${item.productName || item.name || ''}${item.variantName ? `<div style="color:#555;font-size:12px;">${item.variantName}</div>` : ''}</td>
+            <td>${buildItemDisplayName(item)}${item.variantName ? `<div style="color:#555;font-size:12px;">${item.variantName}</div>` : ''}</td>
             <td style="text-align:center;">${item.quantity}</td>
             <td style="text-align:right;">${formatCurrency(item.price || 0)}</td>
             <td style="text-align:right;">${formatCurrency((item.price || 0) * item.quantity)}</td>
@@ -308,8 +402,8 @@ const OrderDetailPage = () => {
               <td class="text-right">${formatCurrency(shippingFeeValue)}</td>
             </tr>
             <tr>
-              <td class="text-right muted">Phụ thu dịch vụ:</td>
-              <td class="text-right">${formatCurrency(serviceFee)}</td>
+              <td class="text-right muted">Hoa hồng nền tảng:</td>
+              <td class="text-right">${formatCurrency(platformCommission)}</td>
             </tr>
             ${discountValue ? `
             <tr>
@@ -432,10 +526,10 @@ const OrderDetailPage = () => {
                   <div className="flex items-start gap-4">
                     {/* Image */}
                     <div className="w-20 h-20 bg-gray-100 rounded-md overflow-hidden flex-shrink-0">
-                      {item.image || item.productImage ? (
+                      {getItemImage(item) ? (
                         <img
-                          src={item.image || item.productImage}
-                          alt={item.productName || item.name}
+                          src={getItemImage(item)}
+                          alt={buildItemDisplayName(item)}
                           className="w-full h-full object-cover"
                         />
                       ) : (
@@ -450,7 +544,7 @@ const OrderDetailPage = () => {
                     {/* Info */}
                     <div className="flex-1">
                       <h3 className="text-sm font-medium text-gray-900 mb-2">
-                        {item.productName || item.name}
+                        {buildItemDisplayName(item)}
                       </h3>
                       {item.variantName && (
                         <p className="text-xs text-gray-600 mb-1">
@@ -518,8 +612,8 @@ const OrderDetailPage = () => {
                   <span className="font-medium">{formatCurrency(shippingFeeValue)}</span>
                 </div>
                 <div className="flex justify-end gap-2">
-                  <span className="text-gray-600">Phụ thu dịch vụ:</span>
-                  <span className="font-medium">{formatCurrency(serviceFee)}</span>
+                  <span className="text-gray-600">Hoa hồng nền tảng:</span>
+                  <span className="font-medium">{formatCurrency(platformCommission)}</span>
                 </div>
                 {discountValue > 0 && (
                   <div className="flex justify-end gap-2 text-green-600">

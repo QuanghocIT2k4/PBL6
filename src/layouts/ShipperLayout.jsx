@@ -30,11 +30,17 @@ const ShipperLayout = ({ children }) => {
       const result = await logout();
       if (result.success) {
         showSuccess('Đăng xuất thành công!');
-        navigate('/auth');
+        // ✅ Force reload page để đảm bảo clear hoàn toàn state và cache
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 100);
       }
     } catch (error) {
       console.error('Logout error:', error);
-      navigate('/auth');
+      // ✅ Vẫn force reload dù có lỗi để đảm bảo logout
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 100);
     } finally {
       setLoggingOut(false);
     }

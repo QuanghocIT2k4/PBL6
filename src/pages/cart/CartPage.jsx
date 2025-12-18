@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
 import { useCart } from '../../context/CartContext';
 import { useToast } from '../../context/ToastContext';
 import MainLayout from '../../layouts/MainLayout';
@@ -6,12 +7,140 @@ import CartItem from '../../components/cart/CartItem';
 import CartSummary from '../../components/cart/CartSummary';
 import Button from '../../components/ui/Button';
 import SEO from '../../components/seo/SEO';
+import { getProductVariantById } from '../../services/common/productService';
 
 const CartPage = () => {
   const navigate = useNavigate();
-  const { cartItems, clearCart, getTotalItems, selectAll, getSelectedItems } = useCart();
+  const { cartItems, clearCart, getTotalItems, selectAll, getSelectedItems, setItemSelected } = useCart();
   const totalItems = getTotalItems();
   const distinctItems = cartItems.length; // Số lượng items riêng biệt
+
+  // Map cartItemId -> { storeId, storeName } đã resolve (từ cart API hoặc variant API)
+  const [storeInfoMap, setStoreInfoMap] = useState({});
+
+  // 🔍 Nếu cart API không trả storeId/storeName, gọi thêm API variant để lấy
+  useEffect(() => {
+    const loadStoreInfoForCart = async () => {
+      const missingItems = cartItems.filter((item) => {
+        const product = item.product || {};
+        const hasStoreFromProduct =
+          product.storeId ||
+          product.store?.id ||
+          product.storeName ||
+          product.store?.name;
+        const hasStoreFromMap = !!storeInfoMap[item.id];
+        return !hasStoreFromProduct && !hasStoreFromMap;
+      });
+
+      if (missingItems.length === 0) return;
+
+      const variantIdToCartItemIds = {};
+      missingItems.forEach((item) => {
+        const variantId = item.productVariantId || item.product?.id;
+        if (!variantId) return;
+        if (!variantIdToCartItemIds[variantId]) {
+          variantIdToCartItemIds[variantId] = [];
+        }
+        variantIdToCartItemIds[variantId].push(item.id);
+      });
+
+      const variantIds = Object.keys(variantIdToCartItemIds);
+      if (variantIds.length === 0) return;
+
+      const newStoreInfo = { ...storeInfoMap };
+
+      for (const variantId of variantIds) {
+        try {
+          const result = await getProductVariantById(variantId);
+          if (result?.success && result.data) {
+            const store = result.data.store || {};
+            const resolvedStoreId = store.id || null;
+            const resolvedStoreName = store.storeName || store.name || null;
+
+            console.log('🏪[CartPage] Resolved store from variant API:', {
+              variantId,
+              resolvedStoreId,
+              resolvedStoreName,
+            });
+
+            variantIdToCartItemIds[variantId].forEach((cartItemId) => {
+              newStoreInfo[cartItemId] = {
+                storeId: resolvedStoreId,
+                storeName: resolvedStoreName,
+              };
+            });
+          }
+        } catch (e) {
+          console.error('❌[CartPage] Failed to load variant for cart store info:', {
+            variantId,
+            error: e,
+          });
+        }
+      }
+
+      setStoreInfoMap(newStoreInfo);
+    };
+
+    if (cartItems.length > 0) {
+      loadStoreInfoForCart();
+    }
+  }, [cartItems, storeInfoMap]);
+
+  // ✅ Group items theo store thực tế (không hard-code TechStore)
+  const groupedItems = useMemo(() => {
+    const groups = {};
+
+    cartItems.forEach((item) => {
+      const product = item.product || {};
+
+      const fromMap = storeInfoMap[item.id] || {};
+
+      const storeId =
+        product.storeId ||
+        product.store?.id ||
+        item.storeId ||
+        item.store?.id ||
+        fromMap.storeId ||
+        'unknown';
+
+      const storeName =
+        product.storeName ||
+        product.store?.storeName ||
+        product.store?.name ||
+        item.storeName ||
+        item.store?.storeName ||
+        item.store?.name ||
+        fromMap.storeName ||
+        (storeId && storeId !== 'unknown'
+          ? `Cửa hàng #${String(storeId).slice(-6)}`
+          : 'Cửa hàng chưa xác định');
+
+      console.log('🛒[CartPage] Grouping item by store:', {
+        cartItemId: item.id,
+        productVariantId: item.productVariantId || product.id,
+        productName: product.name,
+        storeId,
+        storeName,
+        productStoreId: product.storeId,
+        productStoreName: product.storeName,
+        rawStoreObj: product.store,
+        fromMap,
+      });
+
+      if (!groups[storeId]) {
+        groups[storeId] = {
+          storeId,
+          storeName,
+          items: [],
+        };
+      }
+
+      groups[storeId].items.push(item);
+    });
+
+    // Chuyển object thành array để map
+    return Object.values(groups);
+  }, [cartItems, storeInfoMap]);
   
   // ✅ Toast notification
   const { warning, success } = useToast();
@@ -132,11 +261,44 @@ const CartPage = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Cart Items */}
+          {/* Cart Items - Grouped by Store */}
           <div className="lg:col-span-2">
-            <div className="space-y-4">
-              {cartItems.map((item) => (
-                <CartItem key={item.id} item={item} />
+            <div className="space-y-6">
+              {groupedItems.map((group) => (
+                <div key={group.storeId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                  {/* Store Header */}
+                  <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <input 
+                        type="checkbox" 
+                        checked={group.items.length > 0 && group.items.every(it => it.selected !== false)}
+                        onChange={(e) => {
+                          group.items.forEach(it => setItemSelected(it.id, e.target.checked));
+                        }}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                      />
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xl">🏪</span>
+                        <button 
+                          onClick={() => navigate(`/store/${group.storeId}`)}
+                          className="font-bold text-gray-800 hover:text-blue-600 transition flex items-center gap-1"
+                        >
+                          {group.storeName}
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Store Items */}
+                  <div className="divide-y divide-gray-100">
+                    {group.items.map((item) => (
+                      <CartItem key={item.id} item={item} />
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </div>

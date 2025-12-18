@@ -288,6 +288,10 @@ const AddProductVariant = () => {
         // ✅ Nếu CÓ ẢNH → Dùng API create với multipart/form-data
         formData.append('dto', new Blob([JSON.stringify(dto)], { type: 'application/json' }));
 
+        // ✅ primaryImageIndex yêu cầu dạng string
+        const primaryIdx = Math.max(0, Math.min(primaryImageIndex, images.length - 1));
+        formData.append('primaryImageIndex', String(primaryIdx));
+
         // Append images
         images.forEach(image => {
           formData.append('images', image);

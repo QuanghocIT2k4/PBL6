@@ -53,6 +53,28 @@ export const getMyOrders = async (params = {}) => {
 };
 
 /**
+ * Complete order - Xác nhận hoàn tất đơn hàng
+ * @param {string} orderId - Order ID
+ * @returns {Promise} Updated order
+ */
+export const completeOrder = async (orderId) => {
+  try {
+    const response = await api.put(`/api/v1/buyer/orders/${orderId}/complete`);
+
+    return {
+      success: true,
+      data: response.data.data || response.data,
+    };
+  } catch (error) {
+    console.error('Error completing order:', error);
+    return {
+      success: false,
+      error: error.response?.data?.message || error.message || 'Không thể xác nhận hoàn tất đơn hàng',
+    };
+  }
+};
+
+/**
  * Get order details by ID
  * @param {string} orderId - Order ID
  * @returns {Promise} Order details
@@ -62,13 +84,53 @@ export const getOrderById = async (orderId) => {
     const response = await api.get(`/api/v1/buyer/orders/${orderId}`);
     return {
       success: true,
-      data: response.data.data,
+      data: response.data.data || response.data,
     };
   } catch (error) {
     console.error('Error fetching order:', error);
     return {
       success: false,
       error: error.message || 'Không thể tải chi tiết đơn hàng',
+    };
+  }
+};
+
+/**
+ * Get refund status of an order
+ * GET /api/v1/buyer/orders/{orderId}/refund-status
+ */
+export const getOrderRefundStatus = async (orderId) => {
+  try {
+    const response = await api.get(`/api/v1/buyer/orders/${orderId}/refund-status`);
+    return {
+      success: true,
+      data: response.data.data || response.data,
+    };
+  } catch (error) {
+    console.error('Error fetching order refund status:', error);
+    return {
+      success: false,
+      error: error.response?.data?.message || error.message || 'Không thể tải thông tin hoàn tiền',
+    };
+  }
+};
+
+/**
+ * Get return shipment info for an order (only for return orders)
+ * GET /api/v1/buyer/orders/{orderId}/return-shipment
+ */
+export const getReturnShipmentInfo = async (orderId) => {
+  try {
+    const response = await api.get(`/api/v1/buyer/orders/${orderId}/return-shipment`);
+    return {
+      success: true,
+      data: response.data.data || response.data,
+    };
+  } catch (error) {
+    console.error('Error fetching return shipment info:', error);
+    return {
+      success: false,
+      error: error.response?.data?.message || error.message || 'Không thể tải thông tin vận chuyển trả hàng',
     };
   }
 };
@@ -165,6 +227,13 @@ export const getOrderStatusBadge = (status) => {
       label: 'Đã giao',
       icon: '✅',
     },
+    // Đơn đã trả hàng (chờ/đang hoàn tiền hoặc đã hoàn tiền nhưng BE vẫn trả status RETURNED)
+    RETURNED: {
+      bg: 'bg-blue-100',
+      text: 'text-blue-800',
+      label: 'Đã trả hàng / Hoàn tiền',
+      icon: '↩️',
+    },
     CANCELLED: {
       bg: 'bg-red-100',
       text: 'text-red-800',
@@ -190,10 +259,12 @@ export const getOrderStatusBadge = (status) => {
 export const getPaymentMethodLabel = (method) => {
   const methods = {
     COD: 'Thanh toán khi nhận hàng (COD)',
-    BANK_TRANSFER: 'Chuyển khoản ngân hàng',
+    VNPAY: 'Thanh toán qua VNPay',
+    MOMO: 'Thanh toán qua MoMo',
+    // Các method cũ (deprecated) - giữ lại để backward compatibility
+    BANK_TRANSFER: 'Thanh toán qua VNPay', // Map cũ sang mới
+    E_WALLET: 'Thanh toán qua MoMo', // Map cũ sang mới
     CREDIT_CARD: 'Thẻ tín dụng/Ghi nợ',
-    MOMO: 'Ví MoMo',
-    VNPAY: 'VNPay',
     ZALOPAY: 'ZaloPay',
   };
 
@@ -245,6 +316,8 @@ export default {
   getOrderById,
   createOrder,
   cancelOrder,
+  getOrderRefundStatus,
+  getReturnShipmentInfo,
   getOrderStatusBadge,
   getPaymentMethodLabel,
   canCancelOrder,
