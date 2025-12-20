@@ -8,6 +8,7 @@ import CartSummary from '../../components/cart/CartSummary';
 import Button from '../../components/ui/Button';
 import SEO from '../../components/seo/SEO';
 import { getProductVariantById } from '../../services/common/productService';
+import { confirmDelete } from '../../utils/sweetalert';
 
 const CartPage = () => {
   const navigate = useNavigate();
@@ -17,6 +18,7 @@ const CartPage = () => {
 
   // Map cartItemId -> { storeId, storeName } đã resolve (từ cart API hoặc variant API)
   const [storeInfoMap, setStoreInfoMap] = useState({});
+  const [isLoadingStoreInfo, setIsLoadingStoreInfo] = useState(false);
 
   // 🔍 Nếu cart API không trả storeId/storeName, gọi thêm API variant để lấy
   useEffect(() => {
@@ -32,7 +34,12 @@ const CartPage = () => {
         return !hasStoreFromProduct && !hasStoreFromMap;
       });
 
-      if (missingItems.length === 0) return;
+      if (missingItems.length === 0) {
+        setIsLoadingStoreInfo(false);
+        return;
+      }
+
+      setIsLoadingStoreInfo(true);
 
       const variantIdToCartItemIds = {};
       missingItems.forEach((item) => {
@@ -45,7 +52,10 @@ const CartPage = () => {
       });
 
       const variantIds = Object.keys(variantIdToCartItemIds);
-      if (variantIds.length === 0) return;
+      if (variantIds.length === 0) {
+        setIsLoadingStoreInfo(false);
+        return;
+      }
 
       const newStoreInfo = { ...storeInfoMap };
 
@@ -57,12 +67,6 @@ const CartPage = () => {
             const resolvedStoreId = store.id || null;
             const resolvedStoreName = store.storeName || store.name || null;
 
-            console.log('🏪[CartPage] Resolved store from variant API:', {
-              variantId,
-              resolvedStoreId,
-              resolvedStoreName,
-            });
-
             variantIdToCartItemIds[variantId].forEach((cartItemId) => {
               newStoreInfo[cartItemId] = {
                 storeId: resolvedStoreId,
@@ -71,18 +75,18 @@ const CartPage = () => {
             });
           }
         } catch (e) {
-          console.error('❌[CartPage] Failed to load variant for cart store info:', {
-            variantId,
-            error: e,
-          });
+          // Silent fail - không log để tránh spam console
         }
       }
 
       setStoreInfoMap(newStoreInfo);
+      setIsLoadingStoreInfo(false);
     };
 
     if (cartItems.length > 0) {
       loadStoreInfoForCart();
+    } else {
+      setIsLoadingStoreInfo(false);
     }
   }, [cartItems, storeInfoMap]);
 
@@ -114,18 +118,6 @@ const CartPage = () => {
         (storeId && storeId !== 'unknown'
           ? `Cửa hàng #${String(storeId).slice(-6)}`
           : 'Cửa hàng chưa xác định');
-
-      console.log('🛒[CartPage] Grouping item by store:', {
-        cartItemId: item.id,
-        productVariantId: item.productVariantId || product.id,
-        productName: product.name,
-        storeId,
-        storeName,
-        productStoreId: product.storeId,
-        productStoreName: product.storeName,
-        rawStoreObj: product.store,
-        fromMap,
-      });
 
       if (!groups[storeId]) {
         groups[storeId] = {
@@ -160,7 +152,8 @@ const CartPage = () => {
   };
 
   const handleClearCart = async () => {
-    if (window.confirm('Bạn có chắc muốn xóa tất cả sản phẩm khỏi giỏ hàng?')) {
+    const confirmed = await confirmDelete('tất cả sản phẩm khỏi giỏ hàng');
+    if (confirmed) {
       await clearCart();
       success('🗑️ Đã xóa tất cả sản phẩm khỏi giỏ hàng');
     }
@@ -263,8 +256,14 @@ const CartPage = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Cart Items - Grouped by Store */}
           <div className="lg:col-span-2">
-            <div className="space-y-6">
-              {groupedItems.map((group) => (
+            {isLoadingStoreInfo ? (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                <p className="mt-4 text-gray-600">Đang tải thông tin cửa hàng...</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {groupedItems.map((group) => (
                 <div key={group.storeId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                   {/* Store Header */}
                   <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex items-center justify-between">
@@ -300,7 +299,8 @@ const CartPage = () => {
                   </div>
                 </div>
               ))}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Cart Summary */}

@@ -1,18 +1,26 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import useSWR from 'swr';
 import MainLayout from '../../layouts/MainLayout';
 import { getDisputeDetail, addDisputeMessage } from '../../services/buyer/disputeService';
 import { useToast } from '../../context/ToastContext';
 import SEO from '../../components/seo/SEO';
+import { confirmAction } from '../../utils/sweetalert';
 
 const BuyerDisputeDetailPage = () => {
   const { disputeId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { success: showSuccess, error: showError } = useToast();
   const [messageContent, setMessageContent] = useState('');
   const [attachmentFiles, setAttachmentFiles] = useState([]);
   const [previewAttachment, setPreviewAttachment] = useState(null); // { url, type }
+  const infoSectionRef = useRef(null);
+  const chatSectionRef = useRef(null);
+
+  // Xác định view mode: 'detail' | 'chat' (mặc định chat)
+  const searchParams = new URLSearchParams(location.search);
+  const viewMode = searchParams.get('view') === 'detail' ? 'detail' : 'chat';
 
   const { data, error, isLoading, mutate } = useSWR(
     ['buyer-dispute-detail', disputeId],
@@ -162,6 +170,17 @@ const BuyerDisputeDetailPage = () => {
     }
   };
 
+  // Scroll theo query ?view=detail|chat
+  useEffect(() => {
+    if (!dispute) return;
+
+    if (viewMode === 'chat' && chatSectionRef.current) {
+      chatSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else if (viewMode === 'detail' && infoSectionRef.current) {
+      infoSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [dispute, viewMode]);
+
   if (error || (data && !data.success)) {
     return (
       <MainLayout>
@@ -216,7 +235,7 @@ const BuyerDisputeDetailPage = () => {
           ) : dispute ? (
             <div className="space-y-6">
               {/* Dispute Info Card */}
-              <div className="bg-white rounded-lg shadow p-6">
+              <div ref={infoSectionRef} className="bg-white rounded-lg shadow p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <span
                     className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadge(
@@ -246,11 +265,43 @@ const BuyerDisputeDetailPage = () => {
                     </div>
                   )}
                   {dispute.finalDecision && (
-                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <span className="font-semibold text-gray-700">Kết quả:</span>{' '}
-                      <span className="font-semibold text-green-700">
-                        {getComplaintResult(dispute) || dispute.finalDecision}
-                      </span>
+                    <div className="space-y-2">
+                      <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <span className="font-semibold text-gray-700">Kết quả:</span>{' '}
+                        <span className="font-semibold text-green-700">
+                          {getComplaintResult(dispute) || dispute.finalDecision}
+                        </span>
+                      </div>
+
+                      {/* Nếu có thông tin hoàn tiền một phần thì show rõ cho buyer */}
+                      {(typeof dispute.partialRefundAmount === 'number' && dispute.partialRefundAmount > 0) ||
+                        (dispute.returnRequest &&
+                          typeof dispute.returnRequest.partialRefundToBuyer === 'number' &&
+                          dispute.returnRequest.partialRefundToBuyer > 0) ? (
+                        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm">
+                          <p className="font-semibold text-emerald-800 mb-1">
+                            Thông tin hoàn tiền một phần
+                          </p>
+                          {typeof dispute.partialRefundAmount === 'number' && dispute.partialRefundAmount > 0 && (
+                            <p className="text-emerald-800">
+                              <span className="font-medium">Số tiền hoàn một phần cho bạn:</span>{' '}
+                              <span className="font-semibold">
+                                {formatCurrency(dispute.partialRefundAmount)}
+                              </span>
+                            </p>
+                          )}
+                          {dispute.returnRequest &&
+                            typeof dispute.returnRequest.partialRefundToBuyer === 'number' &&
+                            dispute.returnRequest.partialRefundToBuyer > 0 && (
+                              <p className="text-emerald-800">
+                                <span className="font-medium">Đã ghi nhận vào yêu cầu trả hàng:</span>{' '}
+                                <span className="font-semibold">
+                                  {formatCurrency(dispute.returnRequest.partialRefundToBuyer)}
+                                </span>
+                              </p>
+                            )}
+                        </div>
+                      ) : null}
                     </div>
                   )}
                   
@@ -266,7 +317,8 @@ const BuyerDisputeDetailPage = () => {
                       </ul>
                       <button
                         onClick={async () => {
-                          if (window.confirm('Bạn có chắc chắn muốn gửi tin nhắn xác nhận rút khiếu nại và giữ hàng không? Admin sẽ vào giải quyết để đóng khiếu nại.')) {
+                          const confirmed = await confirmAction('gửi tin nhắn xác nhận rút khiếu nại và giữ hàng? Admin sẽ vào giải quyết để đóng khiếu nại');
+                          if (confirmed) {
                             const result = await addDisputeMessage(disputeId, {
                               content: 'Tôi đồng ý rút khiếu nại và giữ hàng. Cảm ơn cửa hàng đã giải thích.',
                               attachmentFiles: [],
@@ -288,8 +340,8 @@ const BuyerDisputeDetailPage = () => {
                 </div>
               </div>
 
-              {/* Messages Section */}
-              <div className="bg-white rounded-lg shadow p-6">
+              {/* Messages Section - luôn hiển thị, nhưng nút Xem chi tiết / Xem đoạn chat chỉ scroll tới phần tương ứng */}
+              <div ref={chatSectionRef} className="bg-white rounded-lg shadow p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">
                   Tin nhắn ({dispute.messages?.length || 0})
                 </h2>

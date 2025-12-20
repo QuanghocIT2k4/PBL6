@@ -399,13 +399,13 @@ export const CartProvider = ({ children }) => {
   };
 
   // Tổng theo các sản phẩm đã chọn
-  const getSelectedItems = () => cartItems.filter(item => item.selected);
+  const getSelectedItems = useCallback(() => cartItems.filter(item => item.selected), [cartItems]);
 
-  const getSelectedTotalItems = () => {
+  const getSelectedTotalItems = useCallback(() => {
     return cartItems.reduce((total, item) => total + (item.selected ? item.quantity : 0), 0);
-  };
+  }, [cartItems]);
 
-  const getSelectedTotalPrice = () => {
+  const getSelectedTotalPrice = useCallback(() => {
     return cartItems.reduce((total, item) => {
       if (!item.selected) return total;
       const price = typeof item.product.price === 'string' 
@@ -413,7 +413,7 @@ export const CartProvider = ({ children }) => {
         : parseFloat(item.product.price) || 0;
       return total + (price * item.quantity);
     }, 0);
-  };
+  }, [cartItems]);
 
   // Tính tổng tiết kiệm
   const getTotalSavings = () => {

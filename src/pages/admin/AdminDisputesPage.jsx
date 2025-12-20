@@ -84,19 +84,31 @@ const AdminDisputesPage = () => {
     return initiatorTab === 'STORE_DISPUTES' ? 'Người bán' : 'Người mua';
   };
 
-  // Kết quả khiếu nại: Chấp nhận khiếu nại / Từ chối khiếu nại
+  // Kết quả khiếu nại: Phân biệt theo loại khiếu nại
   const getComplaintResult = (dispute) => {
     const decision = dispute.finalDecision;
     if (!decision) return null;
 
-    const type = dispute.disputeType || dispute.dispute_type || dispute.type;
+    const disputeType = detectDisputeType(dispute);
 
-    // Nhóm quyết định theo ý nghĩa chung
-    const acceptCodes = ['APPROVE_RETURN', 'REJECT_STORE'];
-    const rejectCodes = ['REJECT_RETURN', 'APPROVE_STORE'];
-
-    if (acceptCodes.includes(decision)) return 'Chấp nhận khiếu nại';
-    if (rejectCodes.includes(decision)) return 'Từ chối khiếu nại';
+    // Phân biệt theo loại khiếu nại
+    if (disputeType === 'RETURN_QUALITY') {
+      // Store khiếu nại chất lượng hàng trả
+      if (decision === 'APPROVE_STORE') {
+        return 'Khiếu nại thành công (hàng trả về không đạt)';
+      }
+      if (decision === 'REJECT_STORE') {
+        return 'Khiếu nại thất bại (hàng trả về đạt)';
+      }
+    } else {
+      // RETURN_REJECTION: Người mua khiếu nại từ chối trả hàng
+      if (decision === 'APPROVE_RETURN') {
+        return 'Chấp nhận khiếu nại của người mua (cho phép trả hàng)';
+      }
+      if (decision === 'REJECT_RETURN') {
+        return 'Từ chối khiếu nại của người mua (từ chối trả hàng)';
+      }
+    }
 
     return decision;
   };
@@ -275,7 +287,6 @@ const AdminDisputesPage = () => {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-3 mt-2">
-                        {/* Gộp chi tiết + đoạn chat vào cùng một màn */}
                         <Link
                           to={`/admin-dashboard/disputes/${dispute.id || dispute._id}`}
                           className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm"

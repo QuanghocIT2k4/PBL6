@@ -176,7 +176,10 @@ const LoginForm = ({ onSwitchToSignUp, onSwitchToForgotPassword }) => {
             <div className="mt-6 grid grid-cols-2 gap-3">
               <Button
                 variant="outline"
-                onClick={() => alert('Đăng nhập với Google - Tính năng sẽ được phát triển sau')}
+                onClick={async () => {
+                  const { infoAlert } = await import('../../utils/sweetalert');
+                  await infoAlert('Thông báo', 'Đăng nhập với Google - Tính năng sẽ được phát triển sau');
+                }}
                 className="w-full"
               >
                 <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
@@ -190,7 +193,10 @@ const LoginForm = ({ onSwitchToSignUp, onSwitchToForgotPassword }) => {
 
               <Button
                 variant="outline"
-                onClick={() => alert('Đăng nhập với Facebook - Tính năng sẽ được phát triển sau')}
+                onClick={async () => {
+                  const { infoAlert } = await import('../../utils/sweetalert');
+                  await infoAlert('Thông báo', 'Đăng nhập với Facebook - Tính năng sẽ được phát triển sau');
+                }}
                 className="w-full"
               >
                 <svg className="w-5 h-5 mr-2" fill="#1877F2" viewBox="0 0 24 24">

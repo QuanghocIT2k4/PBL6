@@ -8,7 +8,9 @@ import {
   formatFullAddress,
   validateAddressData 
 } from '../../services/buyer/addressService';
+import { getProvinces, getDistrictsByProvince, getWardsByDistrict } from '../../services/common/provinceService';
 import { useToast } from '../../context/ToastContext';
+import { confirmDelete } from '../../utils/sweetalert';
 
 const AddressSelector = ({ onAddressSelect, selectedAddressId = null }) => {
   const [addresses, setAddresses] = useState([]);
@@ -20,18 +22,126 @@ const AddressSelector = ({ onAddressSelect, selectedAddressId = null }) => {
   // Form state
   const [formData, setFormData] = useState({
     province: '',
+    provinceCode: '',
+    district: '',
+    districtCode: '',
     ward: '',
+    wardCode: '',
     homeAddress: '',
     suggestedName: '',
     phone: '',
     isDefault: false,
   });
 
-  // Load addresses khi component mount
+  // Dropdown data
+  const [provinces, setProvinces] = useState([]);
+  const [districts, setDistricts] = useState([]);
+  const [wards, setWards] = useState([]);
+  const [loadingProvinces, setLoadingProvinces] = useState(false);
+  const [loadingDistricts, setLoadingDistricts] = useState(false);
+  const [loadingWards, setLoadingWards] = useState(false);
+
+  // Load addresses và provinces khi component mount
   useEffect(() => {
     loadAddresses();
+    loadProvinces();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Load provinces từ API
+  const loadProvinces = async () => {
+    try {
+      setLoadingProvinces(true);
+      const result = await getProvinces();
+      console.log('📦 [AddressSelector] Provinces result:', result);
+      if (result.success && result.data) {
+        // API có thể trả về array hoặc object với data bên trong
+        const provincesData = Array.isArray(result.data) 
+          ? result.data 
+          : (result.data.data || result.data.provinces || []);
+        console.log('📦 [AddressSelector] Provinces data:', provincesData);
+        setProvinces(provincesData);
+      } else {
+        console.error('❌ [AddressSelector] Failed to load provinces:', result.error);
+      }
+    } catch (err) {
+      console.error('❌ [AddressSelector] Error loading provinces:', err);
+    } finally {
+      setLoadingProvinces(false);
+    }
+  };
+
+  // Load districts khi chọn province
+  useEffect(() => {
+    if (formData.provinceCode) {
+      loadDistricts(formData.provinceCode);
+    } else {
+      setDistricts([]);
+      setWards([]);
+      setFormData(prev => ({ ...prev, district: '', districtCode: '', ward: '', wardCode: '' }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.provinceCode]);
+
+  // Load wards khi chọn province (vì file JSON không có district riêng)
+  useEffect(() => {
+    if (formData.provinceCode) {
+      // File JSON local không có district, nên load wards trực tiếp từ provinceCode
+      loadWards(formData.provinceCode);
+    } else {
+      setWards([]);
+      setFormData(prev => ({ ...prev, ward: '', wardCode: '' }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.provinceCode]);
+
+  const loadDistricts = async (provinceCode) => {
+    try {
+      setLoadingDistricts(true);
+      const result = await getDistrictsByProvince(provinceCode);
+      console.log('📦 [AddressSelector] Districts result:', result);
+      if (result.success && result.data) {
+        // API có thể trả về array hoặc object với data bên trong
+        const districtsData = Array.isArray(result.data) 
+          ? result.data 
+          : (result.data.data || result.data.districts || []);
+        console.log('📦 [AddressSelector] Districts data:', districtsData);
+        setDistricts(districtsData);
+      } else {
+        console.error('❌ [AddressSelector] Failed to load districts:', result.error);
+        setDistricts([]);
+      }
+    } catch (err) {
+      console.error('❌ [AddressSelector] Error loading districts:', err);
+      setDistricts([]);
+    } finally {
+      setLoadingDistricts(false);
+    }
+  };
+
+  const loadWards = async (districtCode) => {
+    try {
+      setLoadingWards(true);
+      const result = await getWardsByDistrict(districtCode);
+      console.log('📦 [AddressSelector] Wards result:', result);
+      if (result.success && result.data) {
+        // API có thể trả về array hoặc object với data bên trong
+        const wardsData = Array.isArray(result.data) 
+          ? result.data 
+          : (result.data.data || result.data.wards || []);
+        console.log('📦 [AddressSelector] Wards data:', wardsData);
+        setWards(wardsData);
+      } else {
+        console.error('❌ [AddressSelector] Failed to load wards:', result.error);
+        setWards([]);
+      }
+    } catch (err) {
+      console.error('❌ [AddressSelector] Error loading wards:', err);
+      setWards([]);
+    } finally {
+      setLoadingWards(false);
+    }
+  };
 
   const loadAddresses = async () => {
     try {
@@ -73,10 +183,35 @@ const AddressSelector = ({ onAddressSelect, selectedAddressId = null }) => {
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
+    
+    if (name === 'provinceCode') {
+      // Khi chọn province, tìm tên province
+      const selectedProvince = provinces.find(p => 
+        (p.code || p.idProvince || p.id) === value
+      );
+      setFormData(prev => ({
+        ...prev,
+        provinceCode: value,
+        province: selectedProvince?.name || selectedProvince?.provinceName || selectedProvince?.province || '',
+        ward: '',
+        wardCode: '',
+      }));
+    } else if (name === 'wardCode') {
+      // Khi chọn ward (commune), tìm tên ward
+      const selectedWard = wards.find(w => 
+        (w.code || w.idCommune || w.id) === value
+      );
+      setFormData(prev => ({
+        ...prev,
+        wardCode: value,
+        ward: selectedWard?.name || selectedWard?.communeName || selectedWard?.commune || '',
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: type === 'checkbox' ? checked : value
+      }));
+    }
   };
 
   const handleSubmitAddress = async (e) => {
@@ -123,8 +258,18 @@ const AddressSelector = ({ onAddressSelect, selectedAddressId = null }) => {
     }
   };
 
-  const handleDeleteAddress = async (addressId) => {
-    if (!window.confirm('Bạn có chắc muốn xóa địa chỉ này?')) return;
+  const handleDeleteAddress = async (address) => {
+    // Lấy ID từ address object (ưu tiên _id, sau đó id)
+    const addressId = address._id || address.id;
+    
+    if (!addressId) {
+      error('Không tìm thấy ID địa chỉ');
+      return;
+    }
+
+    // Hiển thị confirmation dialog bằng SweetAlert
+    const confirmed = await confirmDelete('địa chỉ này');
+    if (!confirmed) return;
 
     try {
       const response = await deleteAddress(addressId);
@@ -135,19 +280,38 @@ const AddressSelector = ({ onAddressSelect, selectedAddressId = null }) => {
       }
     } catch (err) {
       console.error('Error deleting address:', err);
-      error('Không thể xóa địa chỉ');
+      error(err.response?.data?.message || err.message || 'Không thể xóa địa chỉ');
     }
   };
 
-  const handleEditAddress = (address, index) => {
+  const handleEditAddress = async (address, index) => {
+    // Tìm province code từ tên province
+    let provinceCode = '';
+    if (address.province) {
+      const foundProvince = provinces.find(p => 
+        p.name === address.province || 
+        p.name.toLowerCase().includes(address.province.toLowerCase())
+      );
+      if (foundProvince) {
+        provinceCode = foundProvince.code;
+        // Load districts cho province này
+        await loadDistricts(provinceCode);
+      }
+    }
+
     setFormData({
       province: address.province || '',
+      provinceCode: provinceCode,
+      district: address.district || '',
+      districtCode: '',
       ward: address.ward || '',
+      wardCode: '',
       homeAddress: address.homeAddress || '',
       suggestedName: address.suggestedName || '',
       phone: address.phone || '',
-      isDefault: address.default || address.isDefault || false, // Backend dùng "default"
+      isDefault: address.default || address.isDefault || false,
     });
+    
     // Backend dùng INDEX theo Swagger spec
     setEditingId(index);
     setShowAddForm(true);
@@ -156,12 +320,15 @@ const AddressSelector = ({ onAddressSelect, selectedAddressId = null }) => {
   const resetForm = () => {
     setFormData({
       province: '',
+      provinceCode: '',
       ward: '',
+      wardCode: '',
       homeAddress: '',
       suggestedName: '',
       phone: '',
       isDefault: false,
     });
+    setWards([]);
     setEditingId(null);
     setShowAddForm(false);
   };
@@ -228,32 +395,53 @@ const AddressSelector = ({ onAddressSelect, selectedAddressId = null }) => {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium mb-1">Tỉnh/Thành phố *</label>
-              <input
-                type="text"
-                name="province"
-                value={formData.province}
-                onChange={handleInputChange}
-                placeholder="VD: Đà Nẵng"
-                required
-                className="w-full border rounded px-3 py-2 text-sm"
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Tỉnh/Thành phố *</label>
+            <select
+              name="provinceCode"
+              value={formData.provinceCode}
+              onChange={handleInputChange}
+              required
+              disabled={loadingProvinces}
+              className="w-full border rounded px-3 py-2 text-sm"
+            >
+              <option value="">-- Chọn Tỉnh/Thành phố --</option>
+              {loadingProvinces ? (
+                <option disabled>Đang tải...</option>
+              ) : (
+                provinces.map((province) => (
+                  <option key={province.code || province.idProvince || province.id} value={province.code || province.idProvince || province.id}>
+                    {province.name || province.provinceName || province.province}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+
+          {formData.provinceCode && (
             <div>
               <label className="block text-sm font-medium mb-1">Phường/Xã *</label>
-              <input
-                type="text"
-                name="ward"
-                value={formData.ward}
+              <select
+                name="wardCode"
+                value={formData.wardCode}
                 onChange={handleInputChange}
-                placeholder="VD: Liên Chiểu"
                 required
+                disabled={loadingWards || wards.length === 0}
                 className="w-full border rounded px-3 py-2 text-sm"
-              />
+              >
+                <option value="">-- Chọn Phường/Xã --</option>
+                {loadingWards ? (
+                  <option disabled>Đang tải...</option>
+                ) : (
+                  wards.map((ward) => (
+                    <option key={ward.code || ward.idCommune || ward.id} value={ward.code || ward.idCommune || ward.id}>
+                      {ward.name || ward.communeName || ward.commune}
+                    </option>
+                  ))
+                )}
+              </select>
             </div>
-          </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium mb-1">Số nhà, tên đường *</label>
@@ -364,8 +552,7 @@ const AddressSelector = ({ onAddressSelect, selectedAddressId = null }) => {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      // Backend dùng INDEX theo Swagger spec, không phải UUID
-                      handleDeleteAddress(index);
+                      handleDeleteAddress(address);
                     }}
                     className="text-red-600 hover:text-red-700 text-xs"
                   >

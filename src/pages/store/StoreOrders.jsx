@@ -6,23 +6,120 @@ import { useStoreContext } from '../../context/StoreContext';
 import StoreStatusGuard from '../../components/store/StoreStatusGuard';
 import StorePageHeader from '../../components/store/StorePageHeader';
 import { getStoreOrders, getStoreOrderById, confirmOrder, shipOrder, deliverOrder, countOrdersByStatus } from '../../services/b2c/b2cOrderService';
-import { updateShipmentStatus, createShipmentForOrder, getShipmentByOrderId } from '../../services/b2c/shipmentService';
+import { updateShipmentStatus, createShipmentForOrder, getShipmentByOrderId, getShipmentsByStoreId } from '../../services/b2c/shipmentService';
 import { useToast } from '../../context/ToastContext';
 import { confirmAction } from '../../utils/sweetalert';
 
 /**
  * OrderShipmentButton Component
- * Nút tạo vận đơn cho đơn hàng (giả định: đơn có icon này chắc chắn chưa có shipment)
+ * Nút tạo vận đơn cho đơn hàng
+ * - Nếu chưa có vận đơn: hiển thị icon tạo vận đơn
+ * - Nếu đã có vận đơn: hiển thị icon đã tạo và tooltip "Đã tạo vận đơn"
  */
 const OrderShipmentButton = ({ orderId, storeId, onNavigate, onCreating, onCreated, onError, isUpdating }) => {
+  const [hasShipment, setHasShipment] = useState(false);
+  const [checkingShipment, setCheckingShipment] = useState(true);
+
+  // Kiểm tra xem đơn hàng đã có vận đơn chưa
+  useEffect(() => {
+    const checkShipment = async () => {
+      if (!orderId || !storeId) {
+        console.log('[OrderShipmentButton] Missing orderId or storeId:', { orderId, storeId });
+        setCheckingShipment(false);
+        return;
+      }
+
+      console.log('[OrderShipmentButton] 🔍 Bắt đầu kiểm tra shipment cho orderId:', orderId, 'storeId:', storeId);
+
+      // ✅ Cách 1: Thử lấy danh sách shipment của store và filter theo orderId
+      try {
+        console.log('[OrderShipmentButton] 📦 Đang lấy danh sách shipment của store...');
+        const storeShipmentsResult = await getShipmentsByStoreId(storeId, { size: 100 });
+        console.log('[OrderShipmentButton] 📦 Kết quả lấy danh sách shipment:', storeShipmentsResult);
+
+        if (storeShipmentsResult.success && storeShipmentsResult.data) {
+          const shipments = Array.isArray(storeShipmentsResult.data) 
+            ? storeShipmentsResult.data 
+            : (storeShipmentsResult.data.content || storeShipmentsResult.data.data || []);
+          
+          console.log('[OrderShipmentButton] 📦 Danh sách shipment:', shipments);
+          console.log('[OrderShipmentButton] 📦 Số lượng shipment:', shipments.length);
+
+          // Tìm shipment có order.id hoặc order._id hoặc order.$id trùng với orderId
+          const foundShipment = shipments.find(shipment => {
+            const orderRef = shipment.order || shipment.orderRef;
+            const orderIdFromShipment = orderRef?.id || orderRef?._id || orderRef?.$id || orderRef;
+            const orderIdStr = String(orderId);
+            const orderIdFromShipmentStr = String(orderIdFromShipment);
+            
+            console.log('[OrderShipmentButton] 🔍 So sánh:', {
+              orderId: orderIdStr,
+              orderIdFromShipment: orderIdFromShipmentStr,
+              match: orderIdStr === orderIdFromShipmentStr
+            });
+
+            return orderIdStr === orderIdFromShipmentStr;
+          });
+
+          if (foundShipment) {
+            console.log('[OrderShipmentButton] ✅ TÌM THẤY SHIPMENT!', foundShipment);
+            setHasShipment(true);
+            setCheckingShipment(false);
+            return;
+          } else {
+            console.log('[OrderShipmentButton] ❌ Không tìm thấy shipment trong danh sách');
+          }
+        }
+      } catch (err) {
+        console.warn('[OrderShipmentButton] ⚠️ Lỗi khi lấy danh sách shipment:', err);
+      }
+
+      // ✅ Cách 2: Fallback - thử dùng getShipmentByOrderId (có thể không hỗ trợ)
+      try {
+        console.log('[OrderShipmentButton] 🔄 Thử cách 2: getShipmentByOrderId...');
+        const checkResult = await getShipmentByOrderId(orderId);
+        console.log('[OrderShipmentButton] 🔄 Kết quả getShipmentByOrderId:', checkResult);
+        
+        if (checkResult.data && !checkResult.notFound) {
+          console.log('[OrderShipmentButton] ✅ Shipment found via getShipmentByOrderId, setting hasShipment = true');
+          setHasShipment(true);
+        } else if (checkResult.success && checkResult.data) {
+          console.log('[OrderShipmentButton] ✅ Shipment found (success=true), setting hasShipment = true');
+          setHasShipment(true);
+        } else {
+          console.log('[OrderShipmentButton] ❌ No shipment found via getShipmentByOrderId, setting hasShipment = false');
+          setHasShipment(false);
+        }
+      } catch (err) {
+        console.warn('[OrderShipmentButton] ⚠️ Lỗi khi dùng getShipmentByOrderId:', err);
+        setHasShipment(false);
+      } finally {
+        setCheckingShipment(false);
+      }
+    };
+
+    checkShipment();
+  }, [orderId, storeId]);
+
   const handleClick = async () => {
-    // ✅ TRƯỚC KHI TẠO: kiểm tra xem đơn đã có vận đơn chưa
+    // ✅ Nếu đã có vận đơn thì điều hướng sang trang vận đơn
+    if (hasShipment) {
+      if (typeof onNavigate === 'function') {
+        onNavigate();
+      }
+      return;
+    }
+
+    // ✅ TRƯỚC KHI TẠO: kiểm tra lại xem đơn đã có vận đơn chưa
     try {
       const checkResult = await getShipmentByOrderId(orderId);
-      if (checkResult.success && checkResult.data && !checkResult.notFound) {
-        // Đã có vận đơn → không cho tạo nữa
-        onError?.('Đơn hàng này đã có vận đơn, hãy xem ở mục Vận chuyển.');
-        // Optional: điều hướng sang trang vận đơn
+      console.log('[OrderShipmentButton] Pre-create check result:', checkResult);
+      
+      // ✅ Nếu có data (dù success hay không) và không phải notFound thì coi như có shipment
+      if ((checkResult.data && !checkResult.notFound) || (checkResult.success && checkResult.data)) {
+        // Đã có vận đơn → cập nhật state và điều hướng
+        console.log('[OrderShipmentButton] Shipment already exists, navigating...');
+        setHasShipment(true);
         if (typeof onNavigate === 'function') {
           onNavigate();
         }
@@ -46,6 +143,7 @@ const OrderShipmentButton = ({ orderId, storeId, onNavigate, onCreating, onCreat
       const createResult = await createShipmentForOrder(orderId, storeId);
 
       if (createResult.success) {
+        setHasShipment(true); // Cập nhật state sau khi tạo thành công
         onCreated();
       } else {
         onError(createResult.error || 'Không thể tạo vận đơn. Vui lòng thử lại.');
@@ -55,29 +153,41 @@ const OrderShipmentButton = ({ orderId, storeId, onNavigate, onCreating, onCreat
     }
   };
 
-  // Nút luôn ở trạng thái "tạo vận đơn" (chỉ render khi chưa có shipment theo design)
-  const buttonColor = 'bg-cyan-500 hover:bg-cyan-600';
-  const tooltip = 'Tạo vận đơn cho shipper';
+  // Đổi màu và tooltip dựa trên trạng thái
+  const buttonColor = hasShipment 
+    ? 'bg-green-500 hover:bg-green-600' 
+    : 'bg-cyan-500 hover:bg-cyan-600';
+  const tooltip = hasShipment 
+    ? 'Đã tạo vận đơn' 
+    : 'Tạo vận đơn cho shipper';
 
-  return (
-    <button
-      onClick={handleClick}
-      disabled={isUpdating}
-      className={`w-10 h-10 flex items-center justify-center ${buttonColor} text-white rounded-lg transition-colors disabled:opacity-50 relative`}
-      title={tooltip}
-    >
-      {isUpdating ? (
+  // Icon khác nhau dựa trên trạng thái
+  const renderIcon = () => {
+    if (isUpdating || checkingShipment) {
+      return (
         <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>
-      ) : (
-        <>
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
-          </svg>
-        </>
-      )}
+      );
+    }
+
+    // Icon xe tải cho cả hai trạng thái (màu sẽ được điều khiển bởi buttonColor)
+    return (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
+      </svg>
+    );
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={isUpdating || checkingShipment}
+      className={`w-10 h-10 flex items-center justify-center ${buttonColor} text-white rounded-lg transition-colors disabled:opacity-50 relative`}
+      title={tooltip}
+    >
+      {renderIcon()}
     </button>
   );
 };
@@ -642,6 +752,7 @@ const StoreOrders = () => {
                       </button>
                       
                       {/* Nút Tạo vận đơn - chỉ hiển thị khi đã xác nhận và chưa giao */}
+                      {/* KHÔNG hiển thị cho DELIVERED, SHIPPING, COMPLETED, CANCELLED */}
                       {order.status === 'CONFIRMED' && (
                         <OrderShipmentButton 
                           orderId={order.id}
@@ -986,8 +1097,11 @@ const StoreOrders = () => {
                         handleShipOrder(selectedOrder.id);
                         setSelectedOrder(null);
                       }}
-                      className="flex-1 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors font-medium"
+                      className="flex-1 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors font-medium flex items-center justify-center gap-2"
                     >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
+                      </svg>
                       Bắt đầu giao hàng
                     </button>
                   )}

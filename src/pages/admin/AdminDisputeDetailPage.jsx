@@ -14,6 +14,7 @@ const AdminDisputeDetailPage = () => {
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [decision, setDecision] = useState('');
   const [adminNote, setAdminNote] = useState('');
+  const [partialRefundAmount, setPartialRefundAmount] = useState('');
   const [isResolving, setIsResolving] = useState(false);
   const messagesEndRef = useRef(null);
   const infoSectionRef = useRef(null);
@@ -60,13 +61,27 @@ const AdminDisputeDetailPage = () => {
     return labels[type] || type;
   };
 
-  const getDecisionLabel = (decision) => {
-    // Map quyết định sang: Chấp nhận khiếu nại / Từ chối khiếu nại
-    const acceptCodes = ['APPROVE_RETURN', 'REJECT_STORE'];
-    const rejectCodes = ['REJECT_RETURN', 'APPROVE_STORE'];
-
-    if (acceptCodes.includes(decision)) return 'Chấp nhận khiếu nại';
-    if (rejectCodes.includes(decision)) return 'Từ chối khiếu nại';
+  const getDecisionLabel = (decision, disputeType) => {
+    if (!decision) return '';
+    
+    // Phân biệt theo loại khiếu nại để hiển thị đúng
+    if (disputeType === 'RETURN_QUALITY') {
+      // Store khiếu nại chất lượng hàng trả
+      if (decision === 'APPROVE_STORE') {
+        return 'Khiếu nại thành công (hàng trả về không đạt)';
+      }
+      if (decision === 'REJECT_STORE') {
+        return 'Khiếu nại thất bại (hàng trả về đạt)';
+      }
+    } else {
+      // RETURN_REJECTION: Người mua khiếu nại từ chối trả hàng
+      if (decision === 'APPROVE_RETURN') {
+        return 'Chấp nhận khiếu nại của người mua (cho phép trả hàng)';
+      }
+      if (decision === 'REJECT_RETURN') {
+        return 'Từ chối khiếu nại của người mua (từ chối trả hàng)';
+      }
+    }
 
     return decision || '';
   };
@@ -152,6 +167,7 @@ const AdminDisputeDetailPage = () => {
   const handleOpenResolveModal = () => {
     setDecision('');
     setAdminNote('');
+    setPartialRefundAmount('');
     setShowResolveModal(true);
   };
 
@@ -165,6 +181,15 @@ const AdminDisputeDetailPage = () => {
       return;
     }
 
+    // Validate số tiền hoàn một phần (nếu chọn PARTIAL_REFUND)
+    if (decision === 'PARTIAL_REFUND') {
+      const amount = Number(partialRefundAmount);
+      if (!partialRefundAmount || Number.isNaN(amount) || amount <= 0) {
+        showError('Vui lòng nhập số tiền hoàn một phần hợp lệ (> 0)');
+        return;
+      }
+    }
+
     const confirmed = await confirmAction('giải quyết khiếu nại này');
     if (!confirmed) return;
 
@@ -175,15 +200,6 @@ const AdminDisputeDetailPage = () => {
       
       // Xác định loại khiếu nại
       disputeType = detectDisputeType(dispute);
-      
-      console.log('🔍 [AdminDisputeDetailPage] Resolving dispute:', {
-        disputeId,
-        disputeType,
-        decision,
-        hasReason: !!adminNote,
-        returnRequestStatus: dispute.returnRequest?.status,
-      });
-
       let result;
       const decisionIsStore = decision === 'APPROVE_STORE' || decision === 'REJECT_STORE';
       const decisionIsReturn = decision === 'APPROVE_RETURN' || decision === 'REJECT_RETURN';
@@ -200,8 +216,16 @@ const AdminDisputeDetailPage = () => {
         return;
       }
 
-      if (decisionIsStore) {
-        result = await resolveQualityDispute(disputeId, { decision, reason: adminNote });
+      if (decisionIsStore || decision === 'PARTIAL_REFUND') {
+        // Khiếu nại chất lượng hàng trả (store khởi tạo) + hoàn tiền 1 phần
+        const payload = {
+          decision,
+          reason: adminNote,
+        };
+        if (decision === 'PARTIAL_REFUND') {
+          payload.partialRefundAmount = Number(partialRefundAmount);
+        }
+        result = await resolveQualityDispute(disputeId, payload);
       } else if (decisionIsReturn) {
         result = await resolveDispute(disputeId, { decision, reason: adminNote });
       } else {
@@ -214,7 +238,8 @@ const AdminDisputeDetailPage = () => {
       }
 
       if (result.success) {
-        const decisionLabel = getDecisionLabel(decision);
+        const disputeType = detectDisputeType(dispute);
+        const decisionLabel = getDecisionLabel(decision, disputeType);
         showSuccess(`Đã giải quyết khiếu nại: ${decisionLabel}`);
         setShowResolveModal(false);
         mutate();
@@ -342,14 +367,65 @@ const AdminDisputeDetailPage = () => {
         </div>
 
         {dispute.finalDecision && (
-          <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-            <p className="text-sm text-green-800">
-              <span className="font-medium">Kết quả khiếu nại:</span>{' '}
-              {getDecisionLabel(dispute.finalDecision)}
-            </p>
-            {dispute.adminNote && (
-              <p className="text-sm text-green-700 mt-1">{dispute.adminNote}</p>
-            )}
+          <div className="mt-4 space-y-2">
+            <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-sm text-green-800">
+                <span className="font-medium">Kết quả khiếu nại:</span>{' '}
+                {getDecisionLabel(dispute.finalDecision, detectDisputeType(dispute))}
+              </p>
+              {dispute.adminNote && (
+                <p className="text-sm text-green-700 mt-1">{dispute.adminNote}</p>
+              )}
+            </div>
+
+            {/* Admin xem rõ thông tin hoàn tiền 1 phần nếu có */}
+            {(typeof dispute.partialRefundAmount === 'number' && dispute.partialRefundAmount > 0) ||
+              (dispute.returnRequest &&
+                (typeof dispute.returnRequest.partialRefundToBuyer === 'number' ||
+                  typeof dispute.returnRequest.partialRefundToStore === 'number')) ? (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm">
+                <p className="font-semibold text-emerald-800 mb-1">
+                  Thông tin hoàn tiền một phần
+                </p>
+                {typeof dispute.partialRefundAmount === 'number' && dispute.partialRefundAmount > 0 && (
+                  <p className="text-emerald-800">
+                    <span className="font-medium">Tổng số tiền hoàn một phần:</span>{' '}
+                    <span className="font-semibold">
+                      {new Intl.NumberFormat('vi-VN', {
+                        style: 'currency',
+                        currency: 'VND',
+                      }).format(dispute.partialRefundAmount)}
+                    </span>
+                  </p>
+                )}
+                {dispute.returnRequest &&
+                  typeof dispute.returnRequest.partialRefundToBuyer === 'number' &&
+                  dispute.returnRequest.partialRefundToBuyer > 0 && (
+                    <p className="text-emerald-800">
+                      <span className="font-medium">Hoàn cho người mua:</span>{' '}
+                      <span className="font-semibold">
+                        {new Intl.NumberFormat('vi-VN', {
+                          style: 'currency',
+                          currency: 'VND',
+                        }).format(dispute.returnRequest.partialRefundToBuyer)}
+                      </span>
+                    </p>
+                  )}
+                {dispute.returnRequest &&
+                  typeof dispute.returnRequest.partialRefundToStore === 'number' &&
+                  dispute.returnRequest.partialRefundToStore > 0 && (
+                    <p className="text-emerald-800">
+                      <span className="font-medium">Hoàn lại cho cửa hàng:</span>{' '}
+                      <span className="font-semibold">
+                        {new Intl.NumberFormat('vi-VN', {
+                          style: 'currency',
+                          currency: 'VND',
+                        }).format(dispute.returnRequest.partialRefundToStore)}
+                      </span>
+                    </p>
+                  )}
+              </div>
+            ) : null}
           </div>
         )}
       </div>
@@ -491,13 +567,9 @@ const AdminDisputeDetailPage = () => {
                 >
                   <option value="">Chọn quyết định</option>
                   {(() => {
-                    const disputeType = dispute.disputeType || dispute.dispute_type || dispute.type;
-                    const isReturnRejection = disputeType === 'RETURN_REJECTION' || 
-                                             disputeType === 'ReturnRejection' ||
-                                             dispute.returnRequest?.status === 'DISPUTED' ||
-                                             (!disputeType && !dispute.dispute_type && !dispute.type); // Mặc định cho test
-                    
-                    if (detectDisputeType(dispute) === 'RETURN_QUALITY') {
+                    const disputeTypeDetected = detectDisputeType(dispute);
+                    if (disputeTypeDetected === 'RETURN_QUALITY') {
+                      // Khiếu nại chất lượng hàng trả (Store khởi tạo) – có thêm option hoàn tiền 1 phần
                       return (
                         <>
                           <option value="APPROVE_STORE">
@@ -506,9 +578,13 @@ const AdminDisputeDetailPage = () => {
                           <option value="REJECT_STORE">
                             Khiếu nại thất bại (hàng trả về đạt)
                           </option>
+                          <option value="PARTIAL_REFUND">
+                            Hoàn tiền một phần cho người mua
+                          </option>
                         </>
                       );
                     }
+                    // Khiếu nại từ chối trả hàng (Buyer khởi tạo)
                     return (
                       <>
                         <option value="APPROVE_RETURN">
@@ -522,6 +598,30 @@ const AdminDisputeDetailPage = () => {
                   })()}
                 </select>
               </div>
+
+              {/* Nhập số tiền hoàn một phần khi chọn PARTIAL_REFUND */}
+              {decision === 'PARTIAL_REFUND' && (
+                <div>
+                  <label
+                    htmlFor="partialRefundAmount"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    Số tiền hoàn một phần cho người mua (VND)
+                  </label>
+                  <input
+                    type="number"
+                    id="partialRefundAmount"
+                    min={0}
+                    value={partialRefundAmount}
+                    onChange={(e) => setPartialRefundAmount(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Nhập số tiền hoàn một phần"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Số tiền này sẽ được hoàn lại cho người mua và ghi nhận vào Return Request.
+                  </p>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Lý do quyết định <span className="text-red-500">*</span>

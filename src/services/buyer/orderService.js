@@ -286,7 +286,8 @@ export const canCancelOrder = (status) => {
  * @returns {boolean} Can review
  */
 export const canReviewOrder = (status) => {
-  return status === 'DELIVERED';
+  // Cho phép review khi đơn hàng đã giao (DELIVERED) hoặc hoàn thành (COMPLETED)
+  return status === 'DELIVERED' || status === 'COMPLETED';
 };
 
 /**

@@ -18,6 +18,7 @@ import {
   deletePromotion
 } from '../../services/b2c/b2cPromotionService';
 import { getCategories } from '../../services/common/productService';
+import { confirmDelete } from '../../utils/sweetalert';
 
 const StorePromotions = () => {
   const { currentStore, loading: storeLoading } = useStoreContext();
@@ -224,7 +225,8 @@ const StorePromotions = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Bạn có chắc muốn xóa khuyến mãi này?')) return;
+    const confirmed = await confirmDelete('khuyến mãi này');
+    if (!confirmed) return;
     
     const result = await deletePromotion(id);
     if (result.success) {

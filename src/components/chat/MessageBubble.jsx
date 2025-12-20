@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { formatMessageTime } from '../../services/chat/chatService';
+import { confirmDelete } from '../../utils/sweetalert';
 
 /**
  * MessageBubble Component
@@ -18,8 +19,9 @@ const MessageBubble = ({
   const displayName = senderName;
   const [showMenu, setShowMenu] = useState(false);
 
-  const handleDelete = () => {
-    if (window.confirm('Bạn có chắc muốn xóa tin nhắn này?')) {
+  const handleDelete = async () => {
+    const confirmed = await confirmDelete('tin nhắn này');
+    if (confirmed) {
       onDelete(message.id);
     }
     setShowMenu(false);

@@ -5,6 +5,7 @@ import StoreStatusGuard from '../../components/store/StoreStatusGuard';
 import { useStoreContext } from '../../context/StoreContext';
 import { getProductVariantsByStore, updateVariantPrice, updateVariantStock, deleteProductVariant, updateVariantImages } from '../../services/b2c';
 import { useToast } from '../../hooks/useToast';
+import { confirmDelete } from '../../utils/sweetalert';
 
 const StoreVariants = () => {
   const { currentStore, loading: storeLoading } = useStoreContext();
@@ -133,7 +134,8 @@ const StoreVariants = () => {
   };
 
   const handleDelete = async (variantId) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa biến thể này?')) return;
+    const confirmed = await confirmDelete('biến thể này');
+    if (!confirmed) return;
 
     try {
       const result = await deleteProductVariant(variantId);

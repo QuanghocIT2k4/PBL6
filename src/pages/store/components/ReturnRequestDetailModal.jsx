@@ -123,6 +123,38 @@ const ReturnRequestDetailModal = ({ open, loading, data, onClose }) => {
               </div>
             )}
 
+            {/* Thông tin hoàn tiền 1 phần (nếu có) */}
+            {(typeof data?.partialRefundToBuyer === 'number' && data.partialRefundToBuyer > 0) ||
+              (typeof data?.partialRefundToStore === 'number' && data.partialRefundToStore > 0) ? (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-1">
+                <p className="text-xs text-emerald-700 uppercase font-semibold">
+                  Thông tin hoàn tiền một phần
+                </p>
+                {typeof data.partialRefundToBuyer === 'number' && data.partialRefundToBuyer > 0 && (
+                  <p className="text-sm text-emerald-800">
+                    <span className="font-medium">Hoàn cho người mua:</span>{' '}
+                    <span className="font-semibold">
+                      {new Intl.NumberFormat('vi-VN', {
+                        style: 'currency',
+                        currency: 'VND',
+                      }).format(data.partialRefundToBuyer)}
+                    </span>
+                  </p>
+                )}
+                {typeof data.partialRefundToStore === 'number' && data.partialRefundToStore > 0 && (
+                  <p className="text-sm text-emerald-800">
+                    <span className="font-medium">Hoàn lại cho cửa hàng:</span>{' '}
+                    <span className="font-semibold">
+                      {new Intl.NumberFormat('vi-VN', {
+                        style: 'currency',
+                        currency: 'VND',
+                      }).format(data.partialRefundToStore)}
+                    </span>
+                  </p>
+                )}
+              </div>
+            ) : null}
+
             {(media && media.length > 0) && (
               <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
                 <p className="text-xs text-gray-500 uppercase font-semibold mb-3">Ảnh/Video minh chứng</p>

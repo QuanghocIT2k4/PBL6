@@ -33,9 +33,17 @@ const ConfirmModal = ({
         {/* Header */}
         <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-              <span className="text-2xl">{icon}</span>
-            </div>
+            {icon === '🚚' ? (
+              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+            ) : (
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                <span className="text-2xl">{icon}</span>
+              </div>
+            )}
             <h3 className="text-lg font-bold text-gray-900">{title}</h3>
           </div>
         </div>
@@ -49,7 +57,11 @@ const ConfirmModal = ({
         <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-2.5 bg-white border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-semibold transition-all"
+            className={`flex-1 px-4 py-2.5 bg-white border-2 rounded-lg font-semibold transition-all ${
+              confirmColor === 'purple' 
+                ? 'border-purple-500 text-purple-700 hover:bg-purple-50' 
+                : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+            }`}
           >
             {cancelText}
           </button>

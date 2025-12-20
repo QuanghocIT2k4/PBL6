@@ -18,31 +18,69 @@ const ShipmentTimeline = ({ shipment }) => {
   const timeline = getShipmentTimeline(shipment);
 
   // Chuẩn hóa history từ backend: có thể là array object hoặc array string
+  console.log('[ShipmentTimeline] 🔍 Component received shipment:', shipment);
+  console.log('[ShipmentTimeline] 🔍 Shipment.history:', shipment?.history);
+  console.log('[ShipmentTimeline] 🔍 Shipment.history type:', typeof shipment?.history);
+  console.log('[ShipmentTimeline] 🔍 Shipment.history is array?', Array.isArray(shipment?.history));
+  
   const rawHistory = Array.isArray(shipment.history) ? shipment.history : [];
+  console.log('[ShipmentTimeline] 📋 Raw history:', rawHistory);
+  console.log('[ShipmentTimeline] 📋 Raw history length:', rawHistory.length);
+  
   const isStringHistory = rawHistory.length > 0 && typeof rawHistory[0] === 'string';
+  console.log('[ShipmentTimeline] 📋 Is string history?', isStringHistory);
+  if (rawHistory.length > 0) {
+    console.log('[ShipmentTimeline] 📋 First item:', rawHistory[0]);
+    console.log('[ShipmentTimeline] 📋 First item type:', typeof rawHistory[0]);
+  }
 
   const parsedStringHistory = isStringHistory
     ? rawHistory.map((line) => {
-        // Format ví dụ: "2025-12-15T23:12:00.247955989: Đã giao hàng thành công (DELIVERED)"
-        const [timestampPart, ...rest] = line.split(': ');
-        const message = rest.join(': ');
-        let time = timestampPart;
-        let date = null;
-        try {
-          const d = new Date(timestampPart);
-          if (!isNaN(d.getTime())) {
-            date = d.toLocaleString('vi-VN');
+        // Format ví dụ: "2025-12-16T21:24:01.151920443: Tạo đơn vận chuyển (READY_TO_PICK)"
+        // Tìm vị trí dấu hai chấm đầu tiên sau timestamp (sau phần giây và nanoseconds)
+        // Timestamp format: 2025-12-16T21:24:01.151920443
+        // Tách bằng regex để tìm pattern: timestamp + ": " + message
+        const match = line.match(/^(.+?):\s(.+)$/);
+        if (match) {
+          const timestampPart = match[1];
+          const message = match[2];
+          let date = null;
+          try {
+            // Thử parse timestamp (có thể có nanoseconds)
+            const d = new Date(timestampPart);
+            if (!isNaN(d.getTime())) {
+              date = d.toLocaleString('vi-VN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+              });
+            }
+          } catch (e) {
+            console.warn('[ShipmentTimeline] Error parsing timestamp:', timestampPart, e);
           }
-        } catch (e) {
-          // ignore parse error, fallback to raw string
+          return {
+            raw: line,
+            timestamp: date || timestampPart,
+            message,
+          };
         }
+        // Fallback: nếu không match được, trả về toàn bộ line
         return {
           raw: line,
-          timestamp: date,
-          message,
+          timestamp: null,
+          message: line,
         };
       })
     : [];
+  
+  console.log('[ShipmentTimeline] ✅ Parsed history:', parsedStringHistory);
+  console.log('[ShipmentTimeline] ✅ Parsed history length:', parsedStringHistory.length);
+  
+  // Log để kiểm tra điều kiện hiển thị
+  console.log('[ShipmentTimeline] 🎨 Will show history section?', parsedStringHistory.length > 0);
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-6">
@@ -129,27 +167,6 @@ const ShipmentTimeline = ({ shipment }) => {
         ))}
       </div>
 
-      {/* Lịch sử vận đơn chi tiết từ backend (history array) */}
-      {parsedStringHistory.length > 0 && (
-        <div className="mt-8">
-          <h4 className="text-sm font-semibold text-gray-900 mb-3">Lịch sử vận đơn</h4>
-          <div className="space-y-2 text-sm text-gray-700 max-h-60 overflow-y-auto border border-gray-100 rounded-lg p-3 bg-gray-50">
-            {parsedStringHistory.map((entry, idx) => (
-              <div key={idx} className="flex items-start gap-2">
-                <span className="mt-1 text-xs text-gray-400">•</span>
-                <div>
-                  {entry.timestamp && (
-                    <p className="text-xs text-gray-500">{entry.timestamp}</p>
-                  )}
-                  <p className="text-sm">
-                    {entry.message || entry.raw}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Additional Info */}
       {shipment.status === 'FAILED' && (

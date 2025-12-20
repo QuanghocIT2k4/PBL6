@@ -6,6 +6,7 @@ import {
   formatCurrency,
   isPromotionValid,
   getPromotionErrorMessage,
+  calculateDiscount,
 } from '../../services/admin/promotionService';
 import { 
   getStoreAvailablePromotions, 
@@ -187,9 +188,7 @@ const PromotionList = ({
                   const isValid = isPromotionValid(promotion);
                   const isSelected = selectedCode === promotion.code;
                   const errorMsg = !isValid ? getPromotionErrorMessage(promotion, orderTotal) : null;
-                  const discount = promotion.discountType === 'PERCENTAGE' 
-                    ? (orderTotal * promotion.discountValue) / 100
-                    : promotion.discountValue;
+                  const discount = calculateDiscount(promotion, orderTotal);
 
                   return (
                     <div

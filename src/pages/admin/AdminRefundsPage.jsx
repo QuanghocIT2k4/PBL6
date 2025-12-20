@@ -105,14 +105,24 @@ const AdminRefundsPage = () => {
     setProcessingId(refund.id || refund._id);
     try {
       const detailResult = await getAdminRefundDetail(refund.id || refund._id);
+      
       if (detailResult.success) {
-        setSelectedRefund(detailResult.data);
+        // Merge dữ liệu từ refund ban đầu và detail để đảm bảo có đầy đủ thông tin
+        // Backend trả về: bankName, accountNumber, accountName
+        const mergedData = {
+          ...refund,
+          ...detailResult.data,
+          // Ưu tiên thông tin từ detail, nhưng giữ lại từ refund nếu detail không có
+          bankName: detailResult.data.bankName || detailResult.data.bank_name || refund.bankName || refund.bank_name,
+          bankAccountNumber: detailResult.data.accountNumber || detailResult.data.bankAccountNumber || detailResult.data.bank_account_number || refund.accountNumber || refund.bankAccountNumber || refund.bank_account_number,
+          bankAccountName: detailResult.data.accountName || detailResult.data.bankAccountName || detailResult.data.bank_account_name || refund.accountName || refund.bankAccountName || refund.bank_account_name,
+        };
+        setSelectedRefund(mergedData);
       } else {
         setSelectedRefund(refund);
         showError(detailResult.error || 'Không thể tải chi tiết yêu cầu hoàn tiền');
       }
     } catch (err) {
-      console.error('Error fetching refund detail:', err);
       setSelectedRefund(refund);
     } finally {
       setProcessingId(null);
@@ -161,7 +171,6 @@ const AdminRefundsPage = () => {
         showError(result.error || 'Không thể xử lý yêu cầu hoàn tiền');
       }
     } catch (err) {
-      console.error('Error processing refund request:', err);
       showError('Có lỗi xảy ra khi xử lý yêu cầu hoàn tiền');
     } finally {
       setProcessingId(null);
@@ -342,13 +351,26 @@ const AdminRefundsPage = () => {
               {getRefundMethod(selectedRefund) === 'BANK_TRANSFER' && (
                 <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <p className="text-xs font-semibold text-blue-900 mb-2">🏦 Thông tin tài khoản nhận hoàn tiền</p>
-                  <p className="text-xs text-blue-700 mb-2">
-                    <strong>Lưu ý:</strong> Đơn COD thanh toán bằng tiền mặt. Đây là thông tin tài khoản Buyer để Admin chuyển khoản hoàn tiền.
-                  </p>
                   <div className="text-sm text-gray-700 space-y-0.5">
-                    <p><span className="font-semibold">{selectedRefund.bankName || selectedRefund.bank_name || 'N/A'}</span></p>
-                    <p className="font-mono">{selectedRefund.bankAccountNumber || selectedRefund.bank_account_number || 'N/A'}</p>
-                    <p>{selectedRefund.bankAccountName || selectedRefund.bank_account_name || 'N/A'}</p>
+                    <p>
+                      <span className="font-semibold">
+                        {selectedRefund.bankName || 
+                         selectedRefund.bank_name || 
+                         'N/A'}
+                      </span>
+                    </p>
+                    <p className="font-mono">
+                      {selectedRefund.accountNumber || 
+                       selectedRefund.bankAccountNumber || 
+                       selectedRefund.bank_account_number || 
+                       'N/A'}
+                    </p>
+                    <p>
+                      {selectedRefund.accountName || 
+                       selectedRefund.bankAccountName || 
+                       selectedRefund.bank_account_name || 
+                       'N/A'}
+                    </p>
                   </div>
                 </div>
               )}
@@ -382,13 +404,6 @@ const AdminRefundsPage = () => {
                           : "Mã giao dịch từ MoMo/VNPay (tự động sau khi hoàn tiền)"
                       }
                     />
-                    <p className="mt-1 text-xs text-gray-500">
-                      {getRefundMethod(selectedRefund) === 'BANK_TRANSFER' ? (
-                        <>Mã giao dịch ngân hàng sau khi Admin đã chuyển khoản vào tài khoản Buyer</>
-                      ) : (
-                        <>Mã giao dịch do cổng thanh toán (MoMo/VNPay) trả về sau khi hoàn tiền thành công</>
-                      )}
-                    </p>
                   </div>
                 )}
 

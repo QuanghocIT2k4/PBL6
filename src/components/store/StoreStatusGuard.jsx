@@ -98,8 +98,9 @@ const StoreStatusGuard = ({ children, currentStore, pageName = 'chức năng nà
             Quản lý chi nhánh
           </Link>
           <button
-            onClick={() => {
-              alert('Chức năng liên hệ Admin sẽ được implement sau');
+            onClick={async () => {
+              const { infoAlert } = await import('../../utils/sweetalert');
+              await infoAlert('Thông báo', 'Chức năng liên hệ Admin sẽ được implement sau');
             }}
             className="inline-flex items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
           >

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { commentService } from '../../services/buyer/commentService';
 import { useAuth } from '../../context/AuthContext';
+import { confirmDelete, errorAlert } from '../../utils/sweetalert';
 
 const ProductComments = ({ productId }) => {
   const [comments, setComments] = useState([]);
@@ -47,13 +48,14 @@ const ProductComments = ({ productId }) => {
 
   const handleDelete = async (commentId) => {
     if (!isAuthenticated) return;
-    if (!window.confirm('Xóa bình luận này?')) return;
+    const confirmed = await confirmDelete('bình luận này');
+    if (!confirmed) return;
     
     const res = await commentService.deleteComment(productId, commentId, user?.id);
     if (res.success) {
       await load();
     } else {
-      alert(res.error || 'Không thể xóa bình luận');
+      await errorAlert('Lỗi', res.error || 'Không thể xóa bình luận');
     }
   };
 

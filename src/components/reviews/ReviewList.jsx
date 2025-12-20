@@ -5,6 +5,7 @@ import ReviewStats from './ReviewStats';
 import { getProductVariantReviews, getProductVariantReviewStats, deleteReview } from '../../services/buyer/reviewService';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
+import { confirmDelete } from '../../utils/sweetalert';
 
 /**
  * ReviewList Component
@@ -56,7 +57,8 @@ const ReviewList = ({ productVariantId, onWriteReview, allowEdit = false }) => {
 
   // Handle delete review
   const handleDelete = async (reviewId) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa đánh giá này?')) {
+    const confirmed = await confirmDelete('đánh giá này');
+    if (!confirmed) {
       return;
     }
 

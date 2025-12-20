@@ -296,4 +296,36 @@ export const getStoreDisputeDetail = async (storeId, disputeId) => {
   }
 };
 
+/**
+ * Đếm số lượng yêu cầu trả hàng theo trạng thái cho store
+ * GET /api/v1/b2c/returns/store/{storeId}/count-by-status
+ */
+export const getReturnRequestCounts = async (storeId) => {
+  try {
+    if (!storeId) {
+      throw new Error('storeId là bắt buộc');
+    }
+
+    const response = await api.get(
+      `/api/v1/b2c/returns/store/${storeId}/count-by-status`
+    );
+
+    const data = response.data?.data ?? response.data;
+
+    return {
+      success: true,
+      data,
+    };
+  } catch (error) {
+    console.error('Error fetching return request counts:', error);
+    return {
+      success: false,
+      error:
+        error.response?.data?.message ||
+        error.message ||
+        'Không thể tải thống kê yêu cầu trả hàng',
+    };
+  }
+};
+
 

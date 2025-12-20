@@ -169,7 +169,7 @@ export const updateAddress = async (addressId, addressData) => {
 /**
  * API #5: Xóa địa chỉ
  * DELETE /api/v1/buyer/address/{addressId}
- * @param {string|number} addressId - ID của địa chỉ (index trong list, bắt đầu từ 0)
+ * @param {string} addressId - UUID của địa chỉ (address._id hoặc address.id)
  * @returns {Promise} Success message
  */
 export const deleteAddress = async (addressId) => {

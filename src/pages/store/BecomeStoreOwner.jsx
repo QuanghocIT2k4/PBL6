@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useStoreContext } from '../../context/StoreContext';
 import { createStore } from '../../services/b2c/b2cStoreService';
 import { useToast } from '../../hooks/useToast';
+import { getProvinces, getWardsByDistrict } from '../../services/common/provinceService';
 import MainLayout from '../../layouts/MainLayout';
 import SEO from '../../components/seo/SEO';
 
@@ -19,12 +20,20 @@ const BecomeStoreOwner = () => {
     description: '',
     address: {
       province: '',
+      provinceCode: '',
       ward: '',
+      wardCode: '',
       homeAddress: '',
     },
     logo: null, // File object
   });
   const [logoPreview, setLogoPreview] = useState(null);
+  
+  // Dropdown data
+  const [provinces, setProvinces] = useState([]);
+  const [wards, setWards] = useState([]);
+  const [loadingProvinces, setLoadingProvinces] = useState(false);
+  const [loadingWards, setLoadingWards] = useState(false);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -43,19 +52,111 @@ const BecomeStoreOwner = () => {
     }
   }, [stores, storesLoading, navigate, toast]);
 
+  // Load provinces khi component mount
+  useEffect(() => {
+    loadProvinces();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Load wards khi chọn province
+  useEffect(() => {
+    if (formData.address.provinceCode) {
+      loadWards(formData.address.provinceCode);
+    } else {
+      setWards([]);
+      setFormData(prev => ({
+        ...prev,
+        address: {
+          ...prev.address,
+          ward: '',
+          wardCode: '',
+        },
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.address.provinceCode]);
+
+  const loadProvinces = async () => {
+    try {
+      setLoadingProvinces(true);
+      const result = await getProvinces();
+      if (result.success && result.data) {
+        const provincesData = Array.isArray(result.data) 
+          ? result.data 
+          : (result.data.data || result.data.provinces || []);
+        setProvinces(provincesData);
+      }
+    } catch (err) {
+      console.error('Error loading provinces:', err);
+    } finally {
+      setLoadingProvinces(false);
+    }
+  };
+
+  const loadWards = async (provinceCode) => {
+    try {
+      setLoadingWards(true);
+      const result = await getWardsByDistrict(provinceCode);
+      if (result.success && result.data) {
+        const wardsData = Array.isArray(result.data) 
+          ? result.data 
+          : (result.data.data || result.data.wards || []);
+        setWards(wardsData);
+      } else {
+        setWards([]);
+      }
+    } catch (err) {
+      console.error('Error loading wards:', err);
+      setWards([]);
+    } finally {
+      setLoadingWards(false);
+    }
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     
     // Handle nested address fields
     if (name.startsWith('address.')) {
       const addressField = name.split('.')[1];
-      setFormData({
-        ...formData,
-        address: {
-          ...formData.address,
-          [addressField]: value,
-        },
-      });
+      
+      if (addressField === 'provinceCode') {
+        // Khi chọn province, tìm tên province
+        const selectedProvince = provinces.find(p => 
+          (p.code || p.idProvince || p.id) === value
+        );
+        setFormData({
+          ...formData,
+          address: {
+            ...formData.address,
+            provinceCode: value,
+            province: selectedProvince?.name || selectedProvince?.provinceName || selectedProvince?.province || '',
+            ward: '',
+            wardCode: '',
+          },
+        });
+      } else if (addressField === 'wardCode') {
+        // Khi chọn ward, tìm tên ward
+        const selectedWard = wards.find(w => 
+          (w.code || w.idCommune || w.id) === value
+        );
+        setFormData({
+          ...formData,
+          address: {
+            ...formData.address,
+            wardCode: value,
+            ward: selectedWard?.name || selectedWard?.communeName || selectedWard?.commune || '',
+          },
+        });
+      } else {
+        setFormData({
+          ...formData,
+          address: {
+            ...formData.address,
+            [addressField]: value,
+          },
+        });
+      }
     } else {
       setFormData({
         ...formData,
@@ -99,8 +200,8 @@ const BecomeStoreOwner = () => {
       return;
     }
     
-    if (!formData.address.province.trim() || !formData.address.ward.trim() || !formData.address.homeAddress.trim()) {
-      toast?.error('Vui lòng nhập đầy đủ địa chỉ cửa hàng');
+    if (!formData.address.province || !formData.address.ward || !formData.address.homeAddress.trim()) {
+      toast?.error('Vui lòng chọn đầy đủ địa chỉ cửa hàng');
       return;
     }
 
@@ -209,26 +310,53 @@ const BecomeStoreOwner = () => {
                   Địa chỉ cửa hàng <span className="text-red-500">*</span>
                 </label>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <input
-                    type="text"
-                    name="address.province"
-                    value={formData.address.province}
+                <div>
+                  <label className="block text-sm font-medium mb-2">Tỉnh/Thành phố *</label>
+                  <select
+                    name="address.provinceCode"
+                    value={formData.address.provinceCode}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all"
-                    placeholder="Tỉnh/Thành phố (VD: Đà Nẵng)"
                     required
-                  />
-                  <input
-                    type="text"
-                    name="address.ward"
-                    value={formData.address.ward}
-                    onChange={handleInputChange}
+                    disabled={loadingProvinces}
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all"
-                    placeholder="Phường/Xã (VD: Hải Châu)"
-                    required
-                  />
+                  >
+                    <option value="">-- Chọn Tỉnh/Thành phố --</option>
+                    {loadingProvinces ? (
+                      <option disabled>Đang tải...</option>
+                    ) : (
+                      provinces.map((province) => (
+                        <option key={province.code || province.idProvince || province.id} value={province.code || province.idProvince || province.id}>
+                          {province.name || province.provinceName || province.province}
+                        </option>
+                      ))
+                    )}
+                  </select>
                 </div>
+
+                {formData.address.provinceCode && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Phường/Xã *</label>
+                    <select
+                      name="address.wardCode"
+                      value={formData.address.wardCode}
+                      onChange={handleInputChange}
+                      required
+                      disabled={loadingWards || wards.length === 0}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all"
+                    >
+                      <option value="">-- Chọn Phường/Xã --</option>
+                      {loadingWards ? (
+                        <option disabled>Đang tải...</option>
+                      ) : (
+                        wards.map((ward) => (
+                          <option key={ward.code || ward.idCommune || ward.id} value={ward.code || ward.idCommune || ward.id}>
+                            {ward.name || ward.communeName || ward.commune}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                )}
                 
                 <input
                   type="text"

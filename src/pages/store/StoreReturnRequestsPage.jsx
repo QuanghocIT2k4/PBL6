@@ -4,7 +4,15 @@ import useSWR from 'swr';
 import StoreLayout from '../../layouts/StoreLayout';
 import { useStoreContext } from '../../context/StoreContext';
 import StoreStatusGuard from '../../components/store/StoreStatusGuard';
-import { getStoreReturnRequests, getStoreReturnRequestDetail, respondToReturnRequest, confirmReturnOK, disputeQuality, getStoreDisputes } from '../../services/b2c/returnService';
+import {
+  getStoreReturnRequests,
+  getStoreReturnRequestDetail,
+  respondToReturnRequest,
+  confirmReturnOK,
+  disputeQuality,
+  getStoreDisputes,
+  getReturnRequestCounts,
+} from '../../services/b2c/returnService';
 import { useToast } from '../../context/ToastContext';
 import { confirmAction } from '../../utils/sweetalert';
 import ReturnRequestDetailModal from './components/ReturnRequestDetailModal';
@@ -51,9 +59,16 @@ const StoreReturnRequestsPage = () => {
     { revalidateOnFocus: false }
   );
 
+  // Fetch thống kê count-by-status (theo Swagger mới)
+  const { data: countsData, isLoading: isLoadingCounts } = useSWR(
+    storeKey ? ['store-return-counts', storeKey] : null,
+    () => getReturnRequestCounts(storeKey),
+    { revalidateOnFocus: false }
+  );
+
   const returnRequests = data?.success ? (data.data?.content || data.data || []) : [];
   const totalPages = data?.data?.totalPages || 0;
-  
+
   // Tạo map dispute theo returnRequestId
   const disputes = disputesData?.success ? (disputesData.data?.content || disputesData.data || []) : [];
   const disputeMap = new Map();
@@ -64,16 +79,10 @@ const StoreReturnRequestsPage = () => {
     }
   });
 
-  // Đếm số lượng theo trạng thái để làm header
-  const statusCounts = returnRequests.reduce(
-    (acc, item) => {
-      const key = item.status || 'UNKNOWN';
-      acc[key] = (acc[key] || 0) + 1;
-      acc.TOTAL = (acc.TOTAL || 0) + 1;
-      return acc;
-    },
-    { TOTAL: 0 }
-  );
+  // Thống kê theo API count-by-status (ưu tiên dùng BE tính sẵn)
+  const statusCounts = countsData?.success
+    ? countsData.data || {}
+    : countsData || {};
 
   const getStatusBadge = (status) => {
     const badges = {
@@ -281,23 +290,64 @@ const StoreReturnRequestsPage = () => {
               </Link>
             </div>
 
-            {/* Summary cards */}
+            {/* Summary cards - dùng dữ liệu count-by-status từ BE */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-              {[
-                { label: 'Tổng yêu cầu', value: statusCounts.TOTAL || 0, color: 'from-slate-200 to-slate-100', text: 'text-slate-800' },
-                { label: 'Chờ xử lý', value: statusCounts.PENDING || 0, color: 'from-yellow-100 to-yellow-50', text: 'text-yellow-800' },
-                { label: 'Đã chấp nhận', value: statusCounts.APPROVED || 0, color: 'from-blue-100 to-blue-50', text: 'text-blue-800' },
-                { label: 'Chuẩn bị / Đang / Đã trả', value: (statusCounts.READY_TO_RETURN || 0) + (statusCounts.RETURNING || 0) + (statusCounts.RETURNED || 0), color: 'from-purple-100 to-purple-50', text: 'text-purple-800' },
-                { label: 'Đã hoàn tiền', value: statusCounts.REFUNDED || 0, color: 'from-green-100 to-green-50', text: 'text-green-800' },
-              ].map((card, idx) => (
-                <div
-                  key={idx}
-                  className={`rounded-xl border border-gray-200 bg-gradient-to-br ${card.color} p-4 shadow-sm`}
-                >
-                  <p className="text-xs font-medium text-gray-500">{card.label}</p>
-                  <p className={`text-2xl font-bold mt-1 ${card.text}`}>{card.value}</p>
-                </div>
-              ))}
+              {isLoadingCounts ? (
+                [...Array(5)].map((_, idx) => (
+                  <div
+                    key={idx}
+                    className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm animate-pulse"
+                  >
+                    <div className="h-3 w-1/2 bg-gray-200 rounded mb-2" />
+                    <div className="h-6 w-1/3 bg-gray-200 rounded" />
+                  </div>
+                ))
+              ) : (
+                [
+                  {
+                    label: 'Tổng yêu cầu',
+                    value: statusCounts.total || statusCounts.TOTAL || 0,
+                    color: 'from-slate-200 to-slate-100',
+                    text: 'text-slate-800',
+                  },
+                  {
+                    label: 'Chờ xử lý',
+                    value: statusCounts.pending || statusCounts.PENDING || 0,
+                    color: 'from-yellow-100 to-yellow-50',
+                    text: 'text-yellow-800',
+                  },
+                  {
+                    label: 'Đã chấp nhận',
+                    value: statusCounts.approved || statusCounts.APPROVED || 0,
+                    color: 'from-blue-100 to-blue-50',
+                    text: 'text-blue-800',
+                  },
+                  {
+                    label: 'Chuẩn bị / Đang / Đã trả',
+                    value:
+                      statusCounts.returning ||
+                      (statusCounts.READY_TO_RETURN || 0) +
+                        (statusCounts.RETURNING || 0) +
+                        (statusCounts.RETURNED || 0),
+                    color: 'from-purple-100 to-purple-50',
+                    text: 'text-purple-800',
+                  },
+                  {
+                    label: 'Đã hoàn tiền',
+                    value: statusCounts.refunded || statusCounts.REFUNDED || 0,
+                    color: 'from-green-100 to-green-50',
+                    text: 'text-green-800',
+                  },
+                ].map((card, idx) => (
+                  <div
+                    key={idx}
+                    className={`rounded-xl border border-gray-200 bg-gradient-to-br ${card.color} p-4 shadow-sm`}
+                  >
+                    <p className="text-xs font-medium text-gray-500">{card.label}</p>
+                    <p className={`text-2xl font-bold mt-1 ${card.text}`}>{card.value}</p>
+                  </div>
+                ))
+              )}
             </div>
 
             {/* Filters */}
@@ -392,13 +442,37 @@ const StoreReturnRequestsPage = () => {
                               )}
                             </div>
 
-                            <div className="flex items-center gap-4 text-sm mb-3">
+                            <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4 text-sm mb-3">
                               <span className="text-gray-700">
                                 <span className="font-semibold">Số tiền hoàn:</span>{' '}
                                 <span className="text-green-600 font-bold">
                                   {formatCurrency(request.refundAmount || 0)}
                                 </span>
                               </span>
+
+                              {/* Khiếu nại liên quan (nếu BE trả về) */}
+                              {Array.isArray(request.relatedDisputes) && request.relatedDisputes.length > 0 && (
+                                <div className="mt-1 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded px-2 py-1 sm:ml-auto">
+                                  <span className="font-semibold">Khiếu nại liên quan:</span>{' '}
+                                  <span>{request.relatedDisputes.length} khiếu nại</span>
+                                  <div className="mt-1 space-y-0.5">
+                                    {request.relatedDisputes.slice(0, 2).map((d) => (
+                                      <Link
+                                        key={d.disputeId || d.id}
+                                        to={`/store-dashboard/returns/disputes/${d.disputeId || d.id || d}`}
+                                        className="block text-blue-600 hover:underline"
+                                      >
+                                        #{String(d.disputeId || d.id || d).slice(-6)} – {d.disputeType || d.type || 'N/A'}
+                                      </Link>
+                                    ))}
+                                    {request.relatedDisputes.length > 2 && (
+                                      <span className="block text-[11px] text-gray-500">
+                                        … và {request.relatedDisputes.length - 2} khiếu nại khác
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                             </div>
 
                             {/* Action Buttons */}

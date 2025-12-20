@@ -27,67 +27,47 @@ import api from '../common/api';
  */
 export const calculateDiscount = (promotion, orderTotal) => {
   if (!promotion || !orderTotal) {
-    console.warn('⚠️ calculateDiscount: Missing promotion or orderTotal', { promotion, orderTotal });
     return 0;
   }
 
-  // Theo Swagger: PromotionDTO có:
-  // - type: "PERCENTAGE" | "FIXED_AMOUNT" (loại giảm giá)
-  // - discountType: "PRODUCT" | "ORDER" | "CATEGORY" (loại áp dụng)
-  // - discountValue: integer (giá trị giảm)
-  // - maxDiscountValue: integer (giảm tối đa) - KHÔNG PHẢI maxDiscountAmount!
-  const discountType = promotion.type || promotion.discountType || 'PERCENTAGE';
-  const discountValue = promotion.discountValue || promotion.value || 0;
-  const maxDiscountAmount = promotion.maxDiscountValue || promotion.maxDiscountAmount || promotion.maxDiscount || null;
+  // Chuẩn hóa loại giảm giá (PERCENTAGE hoặc FIXED_AMOUNT)
+  // Trong hệ thống này:
+  // - type thường là: PERCENTAGE, FIXED_AMOUNT
+  // - discountType thường là: ORDER, PRODUCT, CATEGORY (nhưng đôi khi backend gửi nhầm type vào đây)
+  const typeValue = (promotion.type || '').toUpperCase();
+  const discTypeValue = (promotion.discountType || '').toUpperCase();
 
-  console.log('💰 calculateDiscount:', {
-    promotion: {
-      code: promotion.code,
-      discountType,
-      discountValue,
-      maxDiscountAmount,
-      fullPromotion: promotion
-    },
-    orderTotal,
-    calculatedDiscount: 0
-  });
+  let discountType = 'PERCENTAGE'; // Mặc định
+  if (typeValue === 'PERCENTAGE' || typeValue === 'PERCENT' || discTypeValue === 'PERCENTAGE' || discTypeValue === 'PERCENT') {
+    discountType = 'PERCENTAGE';
+  } else if (typeValue === 'FIXED_AMOUNT' || typeValue === 'FIXED' || typeValue === 'AMOUNT' || 
+             discTypeValue === 'FIXED_AMOUNT' || discTypeValue === 'FIXED' || discTypeValue === 'AMOUNT') {
+    discountType = 'FIXED_AMOUNT';
+  }
+
+  // Chuẩn hóa giá trị giảm
+  const discountValue = promotion.discountValue || promotion.value || 0;
+  
+  // Chuẩn hóa giá trị giảm tối đa
+  const maxDiscountAmount = promotion.maxDiscountValue || promotion.maxDiscountAmount || promotion.maxDiscount || null;
 
   let discount = 0;
 
   if (discountType === 'PERCENTAGE') {
     // Giảm theo phần trăm
     discount = (orderTotal * discountValue) / 100;
-    console.log('💰 Percentage discount calculated:', {
-      orderTotal,
-      discountValue,
-      percentageDiscount: discount,
-      maxDiscountAmount
-    });
+    
     // Giới hạn maxDiscountAmount nếu có
-    if (maxDiscountAmount && discount > maxDiscountAmount) {
-      console.log('💰 Applying max discount limit:', {
-        calculated: discount,
-        max: maxDiscountAmount,
-        final: maxDiscountAmount
-      });
+    if (maxDiscountAmount && maxDiscountAmount > 0 && discount > maxDiscountAmount) {
       discount = maxDiscountAmount;
     }
-  } else if (discountType === 'FIXED_AMOUNT' || discountType === 'FIXED') {
+  } else if (discountType === 'FIXED_AMOUNT') {
     // Giảm cố định
     discount = discountValue;
-    console.log('💰 Fixed amount discount:', discount);
   }
 
   // Đảm bảo discount không vượt quá orderTotal
-  const finalDiscount = Math.min(discount, orderTotal);
-  
-  console.log('💰 Final discount:', {
-    calculated: discount,
-    orderTotal,
-    final: finalDiscount
-  });
-
-  return finalDiscount;
+  return Math.min(discount, orderTotal);
 };
 
 /**
@@ -98,30 +78,38 @@ export const calculateDiscount = (promotion, orderTotal) => {
 export const formatDiscountValue = (promotion) => {
   if (!promotion) return '';
 
-  const { discountType, discountValue, maxDiscountAmount } = promotion;
+  const typeValue = (promotion.type || '').toUpperCase();
+  const discTypeValue = (promotion.discountType || '').toUpperCase();
+
+  let discountType = 'PERCENTAGE';
+  if (typeValue === 'PERCENTAGE' || typeValue === 'PERCENT' || discTypeValue === 'PERCENTAGE' || discTypeValue === 'PERCENT') {
+    discountType = 'PERCENTAGE';
+  } else if (typeValue === 'FIXED_AMOUNT' || typeValue === 'FIXED' || typeValue === 'AMOUNT' || 
+             discTypeValue === 'FIXED_AMOUNT' || discTypeValue === 'FIXED' || discTypeValue === 'AMOUNT') {
+    discountType = 'FIXED_AMOUNT';
+  }
+                       
+  const discountValue = promotion.discountValue || promotion.value || 0;
+  const maxDiscountAmount = promotion.maxDiscountValue || promotion.maxDiscountAmount || promotion.maxDiscount || null;
 
   if (discountType === 'PERCENTAGE') {
     let text = `${discountValue}%`;
-    if (maxDiscountAmount) {
+    if (maxDiscountAmount && maxDiscountAmount > 0) {
       text += ` (tối đa ${formatCurrency(maxDiscountAmount)})`;
     }
     return text;
-  } else if (discountType === 'FIXED_AMOUNT') {
+  } else {
     return formatCurrency(discountValue);
   }
-
-  return '';
 };
 
 /**
  * Format currency (VNĐ)
  */
 export const formatCurrency = (amount) => {
-  if (!amount) return '0đ';
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-  }).format(amount).replace('₫', 'đ');
+  if (amount === undefined || amount === null) return '0đ';
+  const formatted = new Intl.NumberFormat('vi-VN').format(amount);
+  return `${formatted}đ`;
 };
 
 /**

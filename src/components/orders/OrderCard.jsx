@@ -95,53 +95,100 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
     orderDetail?.shippingFee ?? order.shippingFee ?? order.shippingCost ?? 0
   );
 
-  // 💰 Hoa hồng nền tảng (platformCommission) - ưu tiên field mới, fallback các field cũ
+  // 💰 Hoa hồng nền tảng (platformCommission) - CHỈ DÙNG ĐỂ HIỂN THỊ NẾU CẦN, KHÔNG CỘNG VÀO TỔNG CỦA BUYER
   const platformCommissionValue = parseFloat(
     orderDetail?.platformCommission ??
     order.platformCommission ??
-    orderDetail?.serviceFee ?? // backward-compat
+    orderDetail?.serviceFee ??
     order.serviceFee ??
     order.platformFee ??
     0
   );
   
+  // ✅ Helper function để extract promotion code từ nhiều nguồn
+  const getPromotionCode = (order, orderDetail) => {
+    // 1. Kiểm tra promotions array (DBRef hoặc populated)
+    if (order.promotions && Array.isArray(order.promotions) && order.promotions.length > 0) {
+      const firstPromo = order.promotions[0];
+      // Nếu là DBRef, có thể có $id hoặc id
+      if (firstPromo.code) return firstPromo.code;
+      if (firstPromo.$id) {
+        // DBRef chưa populate, có thể cần gọi API để lấy code
+        // Tạm thời return null, sẽ check các nguồn khác
+      }
+    }
+    if (orderDetail?.promotions && Array.isArray(orderDetail.promotions) && orderDetail.promotions.length > 0) {
+      const firstPromo = orderDetail.promotions[0];
+      if (firstPromo.code) return firstPromo.code;
+    }
+    
+    // 2. Kiểm tra các field promotion khác
+    return (
+      order.promotion?.code || 
+      orderDetail?.promotion?.code || 
+      order.promotionCode || 
+      orderDetail?.promotionCode || 
+      order.appliedPromotion?.code || 
+      orderDetail?.appliedPromotion?.code ||
+      order.platformPromotions?.orderPromotionCode ||
+      order.platformPromotions?.shippingPromotionCode ||
+      orderDetail?.platformPromotions?.orderPromotionCode ||
+      orderDetail?.platformPromotions?.shippingPromotionCode ||
+      null
+    );
+  };
+
   // ✅ Tính discount - ƯU TIÊN dùng discount từ backend, KHÔNG tính ngược (tránh sai số)
-  // Backend đã tính discount chính xác, chỉ cần lấy từ field
   let discountValue = 0;
-  let discountSource = 'none';
   
-  // Ưu tiên 1: discount field trực tiếp
-  if (order.discount || orderDetail?.discount || order.discountAmount || orderDetail?.discountAmount) {
-    discountValue = parseFloat(order.discount ?? orderDetail?.discount ?? order.discountAmount ?? orderDetail?.discountAmount ?? 0);
-    discountSource = 'discount/discountAmount';
-  }
-  // Ưu tiên 2: promotion discount fields
-  else if (order.promotionDiscount || orderDetail?.promotionDiscount || order.appliedDiscount || orderDetail?.appliedDiscount) {
-    discountValue = parseFloat(order.promotionDiscount ?? orderDetail?.promotionDiscount ?? order.appliedDiscount ?? orderDetail?.appliedDiscount ?? 0);
-    discountSource = 'promotionDiscount/appliedDiscount';
-  }
-  // Ưu tiên 3: promotion amount
-  else if (order.promotionAmount || orderDetail?.promotionAmount) {
-    discountValue = parseFloat(order.promotionAmount ?? orderDetail?.promotionAmount ?? 0);
-    discountSource = 'promotionAmount';
-  }
-  // Ưu tiên 4: appliedPromotion object
-  else if (order.appliedPromotion?.discountAmount || orderDetail?.appliedPromotion?.discountAmount) {
-    discountValue = parseFloat(order.appliedPromotion?.discountAmount ?? orderDetail?.appliedPromotion?.discountAmount ?? 0);
-    discountSource = 'appliedPromotion.discountAmount';
-  }
-  else if (order.appliedPromotion?.discountValue || orderDetail?.appliedPromotion?.discountValue) {
-    discountValue = parseFloat(order.appliedPromotion?.discountValue ?? orderDetail?.appliedPromotion?.discountValue ?? 0);
-    discountSource = 'appliedPromotion.discountValue';
+  // 1. Lấy từ các fields discount trực tiếp (bao gồm cả các field mới từ BE)
+  // Ưu tiên: totalDiscountAmount > storeDiscountAmount + platformDiscountAmount
+  if (order.totalDiscountAmount !== undefined && order.totalDiscountAmount !== null) {
+    discountValue = parseFloat(order.totalDiscountAmount);
+  } else if (orderDetail?.totalDiscountAmount !== undefined && orderDetail?.totalDiscountAmount !== null) {
+    discountValue = parseFloat(orderDetail.totalDiscountAmount);
+  } else {
+    // Tính tổng từ storeDiscountAmount + platformDiscountAmount
+    const storeDiscount = parseFloat(order.storeDiscountAmount || orderDetail?.storeDiscountAmount || 0);
+    const platformDiscount = parseFloat(order.platformDiscountAmount || orderDetail?.platformDiscountAmount || 0);
+    discountValue = storeDiscount + platformDiscount;
   }
   
-  // ✅ Debug log để kiểm tra discount đến từ đâu
-  // Không log debug discount ở môi trường production
+  // 2. Nếu vẫn = 0, check các field discount khác
+  if (discountValue === 0) {
+    const discountFields = [
+      'discount',
+      'discountAmount',
+      'promotionDiscount',
+      'appliedDiscount',
+      'promotionAmount',
+      'promotionValue',
+      'discountValue',
+    ];
+    
+    for (const field of discountFields) {
+      if (order[field] !== undefined && order[field] !== null) {
+        discountValue = parseFloat(order[field]);
+        if (discountValue > 0) break;
+      }
+      if (orderDetail && orderDetail[field] !== undefined && orderDetail[field] !== null) {
+        discountValue = parseFloat(orderDetail[field]);
+        if (discountValue > 0) break;
+      }
+    }
+  }
   
-  // ✅ Chỉ tính ngược từ totalPrice nếu KHÔNG có discount field nào (fallback cuối cùng)
-  // Và chỉ tính khi có promotion để tránh tính sai
-  if (discountValue === 0 && (order.appliedPromotion || orderDetail?.appliedPromotion || order.promotionCode || orderDetail?.promotionCode)) {
-    const calculatedTotal = subtotal + shippingFeeValue + platformCommissionValue;
+  // 3. Nếu vẫn = 0, check trong promotion hoặc appliedPromotion object
+  if (discountValue === 0) {
+    const promo = orderDetail?.promotion || order.promotion || orderDetail?.appliedPromotion || order.appliedPromotion;
+    if (promo) {
+      discountValue = parseFloat(promo.discountAmount || promo.discountValue || promo.value || 0);
+    }
+  }
+  
+  // 3. Nếu vẫn = 0 và có dấu hiệu có promotion, tính ngược từ totalAmount
+  if (discountValue === 0 && (order.promotion || orderDetail?.promotion || order.appliedPromotion || orderDetail?.appliedPromotion || order.promotionCode || order.promotionId)) {
+    const expectedTotal = subtotal + shippingFeeValue;
     const actualTotal = parseFloat(
       order.finalTotal ?? 
       orderDetail?.finalTotal ?? 
@@ -151,9 +198,9 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
       orderDetail?.totalPrice ?? 
       0
     );
-    // ✅ Chỉ tính nếu actualTotal hợp lý và nhỏ hơn calculatedTotal
-    if (actualTotal > 0 && calculatedTotal > actualTotal && (calculatedTotal - actualTotal) > 0) {
-      discountValue = calculatedTotal - actualTotal;
+    
+    if (actualTotal > 0 && expectedTotal > actualTotal) {
+      discountValue = expectedTotal - actualTotal;
     }
   }
   
@@ -162,9 +209,9 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
     : !isNaN(totalPrice) && totalPrice ? parseFloat(totalPrice)
     : NaN;
 
-  // Fallback: tự tính lại từ breakdown (bao gồm platformCommission)
-  const fallbackTotal = Math.max(0, subtotal + shippingFeeValue + platformCommissionValue - discountValue);
-  const calculatedTotal = Number.isNaN(baseTotal) ? fallbackTotal : Math.max(baseTotal, fallbackTotal);
+  // Fallback: tự tính lại từ breakdown (KHÔNG bao gồm platformCommission cho buyer)
+  const fallbackTotal = Math.max(0, subtotal + shippingFeeValue - discountValue);
+  const calculatedTotal = !Number.isNaN(baseTotal) && baseTotal > 0 ? baseTotal : fallbackTotal;
 
   // Map trạng thái hiển thị cho badge: RETURNED + refundStatus COMPLETED => REFUNDED
   let displayStatus = status;
@@ -179,9 +226,8 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
   const canReturn = status === 'DELIVERED' || status === 'COMPLETED';
   // Đơn đang có yêu cầu trả hàng/khiếu nại trả hàng
   const hasActiveReturnRequest =
-    !!order.hasReturnRequest ||
-    !!order.returnRequestId ||
-    !!order.returnRequest ||
+    !!order.returnRequestId || // Swagger mới: dùng returnRequestId là chính
+    !!order.returnRequest || // Backward-compat: BE có thể embed cả object
     order.returnStatus === 'REQUESTED' ||
     order.returnRequestStatus === 'PENDING' ||
     order.returnRequestStatus === 'REQUESTED';
@@ -219,12 +265,15 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
     // Tính discount từ order object
     let discount = 0;
     
-    // 1. Lấy từ discount fields
+    // 1. Lấy từ discount fields (bao gồm các field mới: storeDiscountAmount, platformDiscountAmount, totalDiscountAmount)
     if (order.discount) discount = parseFloat(order.discount);
     else if (order.discountAmount) discount = parseFloat(order.discountAmount);
     else if (order.promotionDiscount) discount = parseFloat(order.promotionDiscount);
     else if (order.appliedDiscount) discount = parseFloat(order.appliedDiscount);
     else if (order.promotionAmount) discount = parseFloat(order.promotionAmount);
+    else if (order.storeDiscountAmount) discount = parseFloat(order.storeDiscountAmount);
+    else if (order.platformDiscountAmount) discount = parseFloat(order.platformDiscountAmount);
+    else if (order.totalDiscountAmount) discount = parseFloat(order.totalDiscountAmount);
     else if (order.appliedPromotion?.discountAmount) discount = parseFloat(order.appliedPromotion.discountAmount);
     else if (order.appliedPromotion?.discountValue) discount = parseFloat(order.appliedPromotion.discountValue);
     
@@ -235,6 +284,9 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
       else if (orderDetail.promotionDiscount) discount = parseFloat(orderDetail.promotionDiscount);
       else if (orderDetail.appliedDiscount) discount = parseFloat(orderDetail.appliedDiscount);
       else if (orderDetail.promotionAmount) discount = parseFloat(orderDetail.promotionAmount);
+      else if (orderDetail.storeDiscountAmount) discount = parseFloat(orderDetail.storeDiscountAmount);
+      else if (orderDetail.platformDiscountAmount) discount = parseFloat(orderDetail.platformDiscountAmount);
+      else if (orderDetail.totalDiscountAmount) discount = parseFloat(orderDetail.totalDiscountAmount);
       else if (orderDetail.appliedPromotion?.discountAmount) discount = parseFloat(orderDetail.appliedPromotion.discountAmount);
       else if (orderDetail.appliedPromotion?.discountValue) discount = parseFloat(orderDetail.appliedPromotion.discountValue);
     }
@@ -334,14 +386,11 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
               </svg>
               <span>{formatDate(createdAt)}</span>
-              <span className="ml-2 text-xs text-gray-500">
-                Mã đơn: <span className="font-mono text-gray-700">{getOrderCode(id)}</span>
-                {refundStatus === 'COMPLETED' && refundTransactionId && (
-                  <span className="ml-1 text-emerald-600">
-                    · Đã hoàn tiền ({refundTransactionId})
-                  </span>
-                )}
-              </span>
+              {refundStatus === 'COMPLETED' && refundTransactionId && (
+                <span className="ml-2 text-xs text-emerald-600">
+                  · Đã hoàn tiền ({refundTransactionId})
+                </span>
+              )}
             </div>
 
             {/* Status Badge - Simple */}
@@ -564,6 +613,51 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
           </div>
         </div>
 
+        {/* Shipping Address */}
+        {(shippingAddress || order.address || orderDetail?.shippingAddress || orderDetail?.address) && (
+          <div className="px-5 py-4 bg-white border-t border-gray-200">
+            <h4 className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-2">
+              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+              </svg>
+              Địa chỉ giao hàng
+            </h4>
+            <div className="text-sm text-gray-700">
+              {(() => {
+                const address = shippingAddress || order.address || orderDetail?.shippingAddress || orderDetail?.address;
+                
+                // Format địa chỉ đầy đủ
+                const addressParts = [];
+                
+                if (address.homeAddress || address.street || address.houseAddress) {
+                  addressParts.push(address.homeAddress || address.street || address.houseAddress);
+                }
+                if (address.ward) {
+                  addressParts.push(address.ward);
+                }
+                if (address.district) {
+                  addressParts.push(address.district);
+                }
+                if (address.province) {
+                  addressParts.push(address.province);
+                }
+                
+                if (addressParts.length > 0) {
+                  return <p className="text-gray-600">{addressParts.join(', ')}</p>;
+                }
+                
+                // Fallback: nếu address là string
+                if (typeof address === 'string') {
+                  return <p className="text-gray-600">{address}</p>;
+                }
+                
+                return null;
+              })()}
+            </div>
+          </div>
+        )}
+
         {/* Footer - With Price Breakdown */}
         <div className="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 px-5 py-4 border-t border-gray-200">
           <div className="flex items-start justify-between gap-4">
@@ -681,51 +775,42 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
                 sum + (parseFloat(item.price || 0) * parseInt(item.quantity || 0)), 0
               );
               const shippingFee = parseFloat(order.shippingFee ?? orderDetail?.shippingFee ?? order.shippingCost ?? 0);
-              const serviceFee = parseFloat(
-                orderDetail?.platformCommission ??
-                order.platformCommission ??
-                orderDetail?.serviceFee ?? // backward-compat
-                order.serviceFee ??
-                order.platformFee ??
-                0
-              );
-              const calculatedTotal = subtotal + shippingFee + serviceFee;
               
-              // Tính discount từ các field có sẵn
+              // Tính discount giống logic ở trên
               let displayDiscount = 0;
+              const discountFields = [
+                'discount',
+                'discountAmount',
+                'promotionDiscount',
+                'appliedDiscount',
+                'promotionAmount',
+                'promotionValue',
+                'discountValue',
+                'storeDiscountAmount',
+                'platformDiscountAmount',
+                'totalDiscountAmount',
+              ];
               
-              // 1. Ưu tiên lấy từ discount fields trực tiếp
-              if (order.discount || orderDetail?.discount) {
-                displayDiscount = parseFloat(order.discount ?? orderDetail?.discount ?? 0);
-              }
-              else if (order.discountAmount || orderDetail?.discountAmount) {
-                displayDiscount = parseFloat(order.discountAmount ?? orderDetail?.discountAmount ?? 0);
-              }
-              else if (order.promotionDiscount || orderDetail?.promotionDiscount) {
-                displayDiscount = parseFloat(order.promotionDiscount ?? orderDetail?.promotionDiscount ?? 0);
-              }
-              else if (order.appliedDiscount || orderDetail?.appliedDiscount) {
-                displayDiscount = parseFloat(order.appliedDiscount ?? orderDetail?.appliedDiscount ?? 0);
-              }
-              else if (order.promotionAmount || orderDetail?.promotionAmount) {
-                displayDiscount = parseFloat(order.promotionAmount ?? orderDetail?.promotionAmount ?? 0);
-              }
-              else if (order.appliedPromotion?.discountAmount || orderDetail?.appliedPromotion?.discountAmount) {
-                displayDiscount = parseFloat(order.appliedPromotion?.discountAmount ?? orderDetail?.appliedPromotion?.discountAmount ?? 0);
-              }
-              else if (order.appliedPromotion?.discountValue || orderDetail?.appliedPromotion?.discountValue) {
-                displayDiscount = parseFloat(order.appliedPromotion?.discountValue ?? orderDetail?.appliedPromotion?.discountValue ?? 0);
-              }
-              
-              // 2. Nếu không có discount field, dùng cached discount
-              if (displayDiscount === 0 && cachedDiscount && cachedDiscount > 0) {
-                displayDiscount = cachedDiscount;
+              for (const field of discountFields) {
+                if (order[field] !== undefined && order[field] !== null) {
+                  displayDiscount = parseFloat(order[field]);
+                  if (displayDiscount > 0) break;
+                }
+                if (orderDetail && orderDetail[field] !== undefined && orderDetail[field] !== null) {
+                  displayDiscount = parseFloat(orderDetail[field]);
+                  if (displayDiscount > 0) break;
+                }
               }
               
-              // 3. Nếu vẫn = 0 và có promotion, tính ngược từ totalPrice
-              const hasPromotion = !!(order.promotionCode || orderDetail?.promotionCode || order.appliedPromotion || orderDetail?.appliedPromotion);
-              if (displayDiscount === 0 && hasPromotion) {
-                const orderTotal = parseFloat(
+              if (displayDiscount === 0) {
+                const promo = orderDetail?.appliedPromotion || order.appliedPromotion;
+                if (promo) {
+                  displayDiscount = parseFloat(promo.discountAmount || promo.discountValue || promo.value || 0);
+                }
+              }
+              
+              if (displayDiscount === 0 && (order.appliedPromotion || orderDetail?.appliedPromotion || order.promotionCode)) {
+                const actualTotal = parseFloat(
                   order.finalTotal ?? 
                   orderDetail?.finalTotal ?? 
                   order.totalAmount ?? 
@@ -734,26 +819,13 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
                   orderDetail?.totalPrice ?? 
                   0
                 );
-                
-                // Nếu items rỗng, dùng orderTotal trực tiếp để tính discount
-                if (items.length === 0 && orderTotal > 0) {
-                  // Ước tính discount từ totalAmount
-                  const estimatedSubtotal = orderTotal - shippingFee - serviceFee;
-                  if (estimatedSubtotal > 0) {
-                    // Nếu có promotion nhưng totalAmount nhỏ hơn expected, có discount
-                    const expectedTotal = estimatedSubtotal + shippingFee + serviceFee;
-                    if (expectedTotal > orderTotal) {
-                      displayDiscount = expectedTotal - orderTotal;
-                    }
-                  }
-                }
-                // Nếu có items, tính từ calculatedTotal
-                else if (orderTotal > 0 && calculatedTotal > orderTotal) {
-                  displayDiscount = calculatedTotal - orderTotal;
+                const expectedTotal = subtotal + shippingFee;
+                if (actualTotal > 0 && expectedTotal > actualTotal) {
+                  displayDiscount = expectedTotal - actualTotal;
                 }
               }
               
-              const total = calculatedTotal - displayDiscount;
+              const total = Math.max(0, subtotal + shippingFee - displayDiscount);
 
               return (
                 <div className="space-y-2">
@@ -766,14 +838,6 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
                     <span className="text-gray-600">Phí vận chuyển:</span>
                     <span className="font-medium text-gray-900">{formatCurrency(shippingFee)}</span>
                   </div>
-                  
-                  {/* Hoa hồng nền tảng nếu có */}
-                  {serviceFee > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Hoa hồng nền tảng:</span>
-                      <span className="font-medium text-gray-900">{formatCurrency(serviceFee)}</span>
-                    </div>
-                  )}
                   
                   {/* Hiển thị giảm giá/khuyến mãi nếu có */}
                   {displayDiscount > 0 && (
@@ -791,14 +855,27 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
                   )}
                   
                   {/* Hiển thị mã khuyến mãi nếu có */}
-                  {(order.promotionCode || orderDetail?.promotionCode || order.appliedPromotion || orderDetail?.appliedPromotion) && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Mã khuyến mãi:</span>
-                      <span className="font-medium text-blue-600">
-                        {order.promotionCode || orderDetail?.promotionCode || order.appliedPromotion?.code || orderDetail?.appliedPromotion?.code || 'N/A'}
-                      </span>
-                    </div>
-                  )}
+                  {(() => {
+                    const promotionCode = getPromotionCode(order, orderDetail);
+                    
+                    // Hiển thị nếu có mã hoặc có discount
+                    if (promotionCode || displayDiscount > 0) {
+                      return (
+                        <div className="flex justify-between items-center text-sm bg-blue-50 border border-blue-200 rounded-lg p-2 mt-2">
+                          <span className="text-gray-700 flex items-center gap-1.5">
+                            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/>
+                            </svg>
+                            <span className="font-medium">Mã khuyến mãi đã áp dụng:</span>
+                          </span>
+                          <span className="font-bold text-blue-700 bg-white px-2 py-1 rounded border border-blue-300">
+                            {promotionCode || 'Đã áp dụng'}
+                          </span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                   
                   <div className="border-t-2 border-dashed border-gray-300 pt-2 mt-2">
                     <div className="flex justify-between items-center">
@@ -810,7 +887,7 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
                   </div>
                 </div>
               );
-            }, [items, order, orderDetail, cachedDiscount])}
+            }, [items, order, orderDetail])}
           </div>
         </div>
       </div>

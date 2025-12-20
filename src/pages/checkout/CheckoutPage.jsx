@@ -11,11 +11,16 @@ import { calculateDiscount } from '../../services/admin/promotionService';
 import { createPaymentUrl } from '../../services/buyer/paymentService';
 import { createMoMoPayment } from '../../services/buyer/momoPaymentService';
 import { getProductVariantById } from '../../services/common/productService';
+import { getStoreById } from '../../services/common/storeService';
+import { calculateShippingFee } from '../../services/common/provinceService';
 import SEO from '../../components/seo/SEO';
 
 const CheckoutPage = () => {
   const { getSelectedItems, getSelectedTotalItems, getSelectedTotalPrice, formatPrice, removeSelectedItems } = useCart();
-  const items = getSelectedItems();
+  
+  // ✅ Memoize items để tránh infinite loop trong useEffect
+  const items = useMemo(() => getSelectedItems(), [getSelectedItems]);
+  
   const navigate = useNavigate();
   
   // ✅ Toast notification
@@ -29,6 +34,7 @@ const CheckoutPage = () => {
   const [note, setNote] = useState('');
   const [appliedPromotion, setAppliedPromotion] = useState(null); // { code, promotion, discount }
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [storeAddresses, setStoreAddresses] = useState({}); // { storeId: { province } }
   const { profile, createOrder } = useProfile();
 
   // Format address object to string
@@ -83,23 +89,14 @@ const CheckoutPage = () => {
 
   const productTotal = getSelectedTotalPrice();
   const discount = appliedPromotion?.discount || 0;
-  const shippingFee = 30000; // Phí vận chuyển cố định 30k
-
-  // ❌ KHÔNG cộng hoa hồng nền tảng vào tiền khách trả
-  // Hoa hồng nền tảng (serviceFee/platformCommission) sẽ do backend tính trên doanh thu của người bán
-  // Tổng tiền khách phải trả chỉ gồm: tiền hàng - giảm giá + phí vận chuyển
-  const finalTotal = Math.max(0, productTotal - discount + shippingFee);
   
-  // Debug log (có thể bật lại khi cần)
-  useEffect(() => {
-    // console.log('[Checkout] Totals:', { productTotal, discount, shippingFee, finalTotal });
-  }, [productTotal, discount, appliedPromotion, shippingFee, finalTotal]);
-
   // 🔁 Map variantId -> { storeId, storeName } được resolve từ API (nếu thiếu)
   // ⚠️ PHẢI KHAI BÁO TRƯỚC groupedItems vì groupedItems sử dụng nó
   const [resolvedStoreMap, setResolvedStoreMap] = useState({});
+  const [isLoadingStoreInfo, setIsLoadingStoreInfo] = useState(false);
 
   // ✅ Group sản phẩm theo từng store để hiển thị tách biệt
+  // ⚠️ PHẢI KHAI BÁO TRƯỚC shippingFee vì shippingFee sử dụng nó
   const groupedItems = useMemo(() => {
     if (!items || items.length === 0) return [];
 
@@ -175,6 +172,46 @@ const CheckoutPage = () => {
     return null;
   }, [uniqueStores]);
 
+  // ✅ Tính phí ship động dựa trên địa chỉ
+  const selectedAddress = addresses.find(addr => addr.id === selectedAddressId);
+  const shippingFee = useMemo(() => {
+    if (!selectedAddress?.province) {
+      return 30000; // Default nếu chưa chọn địa chỉ
+    }
+    
+    // Tính tổng trọng lượng (mặc định 1sp = 500g)
+    const totalWeight = items.reduce((sum, item) => {
+      return sum + ((item.quantity || 1) * 0.5); // 0.5kg per item
+    }, 0);
+    
+    // Nếu có nhiều cửa hàng, tính phí ship cho cửa hàng đầu tiên hoặc tính trung bình
+    // Ưu tiên: lấy store đầu tiên từ groupedItems
+    if (groupedItems.length > 0) {
+      const firstStore = groupedItems[0];
+      const storeId = firstStore.storeId;
+      
+      if (storeId && storeAddresses[storeId]?.province) {
+        const storeProvince = storeAddresses[storeId].province;
+        return calculateShippingFee(storeProvince, selectedAddress.province, totalWeight);
+      }
+    }
+    
+    // Fallback: dùng default
+    return 30000;
+  }, [selectedAddress, items, groupedItems, storeAddresses]);
+  
+  // ❌ KHÔNG cộng hoa hồng nền tảng vào tiền khách trả
+  // Hoa hồng nền tảng (serviceFee/platformCommission) sẽ do backend tính trên doanh thu của người bán
+  // Tổng tiền khách phải trả chỉ gồm: tiền hàng - giảm giá + phí vận chuyển
+  const finalTotal = Math.max(0, productTotal - discount + shippingFee);
+  
+  // Debug log (có thể bật lại khi cần)
+  useEffect(() => {
+    // console.log('[Checkout] Totals:', { productTotal, discount, shippingFee, finalTotal });
+  }, [productTotal, discount, appliedPromotion, shippingFee, finalTotal]);
+
+  const itemsKey = useMemo(() => items.map(it => it.id).join(','), [items]);
+
   // Nếu thiếu thông tin store trên item, gọi API variant để bổ sung (giống CartPage)
   useEffect(() => {
     if (!items || items.length === 0) return;
@@ -203,9 +240,12 @@ const CheckoutPage = () => {
       }
     });
 
-    if (needResolve.length === 0) return;
+    if (needResolve.length === 0) {
+      setIsLoadingStoreInfo(false);
+      return;
+    }
 
-    console.log('🧾[Checkout] Need resolve store from variant API for variantIds:', needResolve);
+    setIsLoadingStoreInfo(true);
 
     (async () => {
       const updates = {};
@@ -218,11 +258,6 @@ const CheckoutPage = () => {
               storeId: store.id || null,
               storeName: store.name || store.storeName || null,
             };
-            console.log('🧾[Checkout] Resolved store from variant API:', {
-              variantId,
-              resolvedStoreId: updates[variantId].storeId,
-              resolvedStoreName: updates[variantId].storeName,
-            });
           }
         } catch (err) {
           console.error('🧾[Checkout] Failed to resolve store for variant', variantId, err);
@@ -232,9 +267,41 @@ const CheckoutPage = () => {
       if (Object.keys(updates).length > 0) {
         setResolvedStoreMap((prev) => ({ ...prev, ...updates }));
       }
+      setIsLoadingStoreInfo(false);
     })();
-  }, [items]);
+  }, [itemsKey]); // Sử dụng itemsKey để tránh infinite loop do reference thay đổi
 
+  // ✅ Load địa chỉ của các store để tính phí ship
+  useEffect(() => {
+    const loadStoreAddresses = async () => {
+      const storeIds = uniqueStores
+        .map(s => s.storeId)
+        .filter(id => id && !storeAddresses[id]);
+      
+      if (storeIds.length === 0) return;
+      
+      const addresses = {};
+      for (const storeId of storeIds) {
+        try {
+          const result = await getStoreById(storeId);
+          if (result.success && result.data?.address?.province) {
+            addresses[storeId] = {
+              province: result.data.address.province,
+            };
+          }
+        } catch (err) {
+          console.error('Error loading store address:', err);
+        }
+      }
+      
+      if (Object.keys(addresses).length > 0) {
+        setStoreAddresses(prev => ({ ...prev, ...addresses }));
+      }
+    };
+    
+    loadStoreAddresses();
+  }, [uniqueStores, storeAddresses]);
+  
   // 🔍 Log debug tổng quan store ở checkout
   useEffect(() => {
     console.log('🧾[Checkout] Selected items:', items);
@@ -559,81 +626,90 @@ const CheckoutPage = () => {
 
           <div className="bg-white p-6 rounded-lg border shadow-sm">
             <h2 className="text-xl font-bold mb-1">Sản phẩm đã chọn ({totalItems})</h2>
-            <p className="text-sm text-gray-500 mb-3">
-              {groupedItems.length <= 1 ? 'Đơn hàng của cửa hàng: ' : 'Đơn hàng của các cửa hàng: '}
-              <span className="font-medium text-gray-800">
-              {groupedItems.length > 0
-                ? groupedItems
-                    .map((group) =>
-                      group.storeName && group.storeName !== 'Cửa hàng chưa xác định'
-                        ? group.storeName
-                        : group.storeId
-                        ? `Cửa hàng #${String(group.storeId).slice(-6)}`
-                        : 'Cửa hàng chưa xác định'
-                    )
-                    .join(', ')
-                : 'Đang xác định...'}
-              </span>
-            </p>
-          <div className="space-y-4">
-            {groupedItems.map((group) => (
-              <div
-                key={group.storeId || group.storeName || 'unknown'}
-                className="border rounded-lg overflow-hidden"
-              >
-                <div className="px-4 py-2 bg-gray-50 border-b flex items-center justify-between">
-                  <div className="font-semibold text-gray-800">
-                    Cửa hàng: {group.storeName}
-                  </div>
-                </div>
-                <div className="divide-y">
-                  {group.items.map((it) => (
-                    <div key={it.id} className="py-3 px-4 flex items-center justify-between">
-                      <div className="flex items-center space-x-3 min-w-0">
-                        <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center overflow-hidden">
-                          {(() => {
-                            // Ưu tiên: image > primaryImage > images[0]
-                            const imageUrl =
-                              it.product?.image ||
-                              it.product?.primaryImage ||
-                              (Array.isArray(it.product?.images) && it.product.images[0]);
-
-                            if (imageUrl && (imageUrl.startsWith('http') || imageUrl.startsWith('/'))) {
-                              return (
-                                <img
-                                  src={imageUrl}
-                                  alt={it.product?.name || 'Sản phẩm'}
-                                  className="w-full h-full object-cover rounded"
-                                  onError={(e) => {
-                                    e.target.onerror = null;
-                                    e.target.style.display = 'none';
-                                    e.target.parentElement.innerHTML = '<span class=\"text-xl\">📦</span>';
-                                  }}
-                                />
-                              );
-                            }
-
-                            return <span className="text-xl">📦</span>;
-                          })()}
-                        </div>
-                        <div className="truncate">
-                          <div className="font-medium truncate">{it.product.name}</div>
-                          <div className="text-sm text-gray-500">x{it.quantity}</div>
+            {isLoadingStoreInfo ? (
+              <div className="py-8 text-center">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                <p className="mt-2 text-sm text-gray-500 italic">Đang tải thông tin cửa hàng...</p>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-gray-500 mb-3">
+                  {groupedItems.length <= 1 ? 'Đơn hàng của cửa hàng: ' : 'Đơn hàng của các cửa hàng: '}
+                  <span className="font-medium text-gray-800">
+                  {groupedItems.length > 0
+                    ? groupedItems
+                        .map((group) =>
+                          group.storeName && group.storeName !== 'Cửa hàng chưa xác định'
+                            ? group.storeName
+                            : group.storeId
+                            ? `Cửa hàng #${String(group.storeId).slice(-6)}`
+                            : 'Cửa hàng chưa xác định'
+                        )
+                        .join(', ')
+                    : 'Đang xác định...'}
+                  </span>
+                </p>
+                <div className="space-y-4">
+                  {groupedItems.map((group) => (
+                    <div
+                      key={group.storeId || group.storeName || 'unknown'}
+                      className="border rounded-lg overflow-hidden"
+                    >
+                      <div className="px-4 py-2 bg-gray-50 border-b flex items-center justify-between">
+                        <div className="font-semibold text-gray-800">
+                          Cửa hàng: {group.storeName}
                         </div>
                       </div>
-                      <div className="font-semibold text-red-600">
-                        {formatPrice(
-                          (typeof it.product.price === 'string'
-                            ? parseInt(it.product.price.replace(/\./g, '') || 0)
-                            : parseInt(it.product.price || 0)) * it.quantity
-                        )}đ
+                      <div className="divide-y">
+                        {group.items.map((it) => (
+                          <div key={it.id} className="py-3 px-4 flex items-center justify-between">
+                            <div className="flex items-center space-x-3 min-w-0">
+                              <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center overflow-hidden">
+                                {(() => {
+                                  // Ưu tiên: image > primaryImage > images[0]
+                                  const imageUrl =
+                                    it.product?.image ||
+                                    it.product?.primaryImage ||
+                                    (Array.isArray(it.product?.images) && it.product.images[0]);
+
+                                  if (imageUrl && (imageUrl.startsWith('http') || imageUrl.startsWith('/'))) {
+                                    return (
+                                      <img
+                                        src={imageUrl}
+                                        alt={it.product?.name || 'Sản phẩm'}
+                                        className="w-full h-full object-cover rounded"
+                                        onError={(e) => {
+                                          e.target.onerror = null;
+                                          e.target.style.display = 'none';
+                                          e.target.parentElement.innerHTML = '<span class=\"text-xl\">📦</span>';
+                                        }}
+                                      />
+                                    );
+                                  }
+
+                                  return <span className="text-xl">📦</span>;
+                                })()}
+                              </div>
+                              <div className="truncate">
+                                <div className="font-medium truncate">{it.product.name}</div>
+                                <div className="text-sm text-gray-500">x{it.quantity}</div>
+                              </div>
+                            </div>
+                            <div className="font-semibold text-red-600">
+                              {formatPrice(
+                                (typeof it.product.price === 'string'
+                                  ? parseInt(it.product.price.replace(/\./g, '') || 0)
+                                  : parseInt(it.product.price || 0)) * it.quantity
+                              )}đ
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   ))}
                 </div>
-              </div>
-            ))}
-          </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -737,6 +813,26 @@ const CheckoutPage = () => {
                 />
               </div>
             </div>
+            
+            {/* Thông tin cách tính phí ship */}
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-start gap-2">
+                <svg className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="flex-1">
+                  <div className="text-xs font-semibold text-blue-900 mb-1">📦 Cách tính phí vận chuyển:</div>
+                  <div className="text-xs text-blue-800 space-y-0.5">
+                    <div>• <strong>Cùng tỉnh:</strong> 15,000đ</div>
+                    <div>• <strong>Cùng vùng:</strong> 30,000đ</div>
+                    <div>• <strong>Vùng lân cận:</strong> 45,000đ</div>
+                    <div>• <strong>Vùng xa (Bắc↔Nam):</strong> 60,000đ</div>
+                    <div>• <strong>Phụ phí:</strong> 5,000đ/kg (sau 1kg đầu, mặc định 1sp = 500g)</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
             <div className="space-y-2 text-sm">
               <div className="flex justify-between"><span>Tạm tính</span><span>{formatPrice(productTotal)}đ</span></div>
               {discount > 0 && (
@@ -745,7 +841,10 @@ const CheckoutPage = () => {
                   <span>-{formatPrice(discount)}đ</span>
                 </div>
               )}
-              <div className="flex justify-between"><span>Phí vận chuyển</span><span>{formatPrice(shippingFee)}đ</span></div>
+              <div className="flex justify-between">
+                <span>Phí vận chuyển</span>
+                <span>{formatPrice(shippingFee)}đ</span>
+              </div>
               <div className="border-t pt-2 font-semibold text-lg flex justify-between">
                 <span>Tổng cộng</span>
                 <span className="text-red-600">

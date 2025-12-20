@@ -358,30 +358,33 @@ export const updateVariantStock = async (variantId, newStock) => {
 };
 
 /**
- * 7. XÓA PRODUCT VARIANT (SET STATUS DELETED - THEO API MỚI)
- * PUT /api/v1/b2c/product-variants/{variantId}
- * Body: { status: 'DELETED' }
+ * 7. XÓA PRODUCT VARIANT
+ * DELETE /api/v1/b2c/product-variants/delete/{variantId}
  * 
- * ⚠️ LƯU Ý: Giờ không dùng DELETE endpoint nữa, mà dùng PUT để set status về DELETED
+ * Soft delete a product variant by disabling it (sets status to inactive)
  */
 export const deleteProductVariant = async (variantId) => {
   try {
+    if (!variantId) {
+      return {
+        success: false,
+        error: 'variantId is required',
+      };
+    }
 
-    // ✅ Dùng PUT endpoint để update status về DELETED thay vì DELETE endpoint
-    const response = await api.put(`/api/v1/b2c/product-variants/${variantId}`, {
-      status: 'DELETED'
-    });
+    // ✅ Dùng DELETE endpoint theo Swagger spec
+    const response = await api.delete(`/api/v1/b2c/product-variants/delete/${variantId}`);
 
-
-    if (response.data.success || response.data) {
-      return { success: true, data: response.data.data || response.data };
+    if (response.data?.success !== false) {
+      return { success: true, data: response.data?.data || response.data };
     } else {
-      return { success: false, error: response.data.error || 'Không thể xóa variant' };
+      return { success: false, error: response.data?.error || response.data?.message || 'Không thể xóa variant' };
     }
   } catch (error) {
+    console.error('[deleteProductVariant] Error:', error);
     return {
       success: false,
-      error: error.response?.data?.error || error.message || 'Lỗi khi xóa variant',
+      error: error.response?.data?.error || error.response?.data?.message || error.message || 'Lỗi khi xóa variant',
     };
   }
 };

@@ -1,44 +1,223 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import StoreLayout from '../../layouts/StoreLayout';
 import StoreStatusGuard from '../../components/store/StoreStatusGuard';
 import StorePageHeader from '../../components/store/StorePageHeader';
 import { useStoreContext } from '../../context/StoreContext';
 import { useToast } from '../../context/ToastContext';
 import { updateStore, uploadStoreLogo, uploadStoreBanner, getMyStores } from '../../services/b2c/b2cStoreService';
+import { getProvinces, getWardsByDistrict } from '../../services/common/provinceService';
 
 const StoreProfile = () => {
   const { currentStore, setCurrentStore } = useStoreContext();
   const { success: showSuccess, error: showError } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [uploading, setUploading] = useState({ logo: false, banner: false });
+  
+  // Parse address từ currentStore
+  const parseAddress = (address) => {
+    if (!address) return { province: '', provinceCode: '', ward: '', wardCode: '', homeAddress: '' };
+    if (typeof address === 'string') {
+      // Nếu là string, tách ra
+      const parts = address.split(',').map(s => s.trim());
+      return {
+        province: parts[parts.length - 1] || '',
+        provinceCode: '',
+        ward: parts[parts.length - 2] || '',
+        wardCode: '',
+        homeAddress: parts.slice(0, -2).join(', ') || '',
+      };
+    }
+    // Nếu là object
+    return {
+      province: address.province || '',
+      provinceCode: '',
+      ward: address.ward || '',
+      wardCode: '',
+      homeAddress: address.homeAddress || address.houseAddress || '',
+    };
+  };
+  
   const [formData, setFormData] = useState({
     name: currentStore?.storeName || currentStore?.name || '',
     description: currentStore?.description || '',
-    address: typeof currentStore?.address === 'string' ? currentStore.address : 
-             (currentStore?.address ? `${currentStore.address.houseAddress || ''}, ${currentStore.address.ward || ''}, ${currentStore.address.province || ''}`.trim().replace(/^,\s*|,\s*$/g, '') : ''),
-    phone: currentStore?.phone || '',
-    email: currentStore?.email || ''
+    address: parseAddress(currentStore?.address),
   });
+  
+  // Dropdown data
+  const [provinces, setProvinces] = useState([]);
+  const [wards, setWards] = useState([]);
+  const [loadingProvinces, setLoadingProvinces] = useState(false);
+  const [loadingWards, setLoadingWards] = useState(false);
+
+  // Load provinces khi component mount
+  useEffect(() => {
+    loadProvinces();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Load wards khi chọn province
+  useEffect(() => {
+    if (formData.address.provinceCode) {
+      loadWards(formData.address.provinceCode);
+    } else {
+      setWards([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.address.provinceCode]);
+
+  // Load provinces và wards khi vào edit mode
+  useEffect(() => {
+    if (isEditing && formData.address.province && !formData.address.provinceCode) {
+      // Tìm provinceCode từ tên province
+      const foundProvince = provinces.find(p => 
+        (p.name || p.provinceName || p.province) === formData.address.province
+      );
+      if (foundProvince) {
+        setFormData(prev => ({
+          ...prev,
+          address: {
+            ...prev.address,
+            provinceCode: foundProvince.code || foundProvince.idProvince || foundProvince.id,
+          },
+        }));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing, provinces]);
+
+  const loadProvinces = async () => {
+    try {
+      setLoadingProvinces(true);
+      const result = await getProvinces();
+      if (result.success && result.data) {
+        const provincesData = Array.isArray(result.data) 
+          ? result.data 
+          : (result.data.data || result.data.provinces || []);
+        setProvinces(provincesData);
+      }
+    } catch (err) {
+      console.error('Error loading provinces:', err);
+    } finally {
+      setLoadingProvinces(false);
+    }
+  };
+
+  const loadWards = async (provinceCode) => {
+    try {
+      setLoadingWards(true);
+      const result = await getWardsByDistrict(provinceCode);
+      if (result.success && result.data) {
+        const wardsData = Array.isArray(result.data) 
+          ? result.data 
+          : (result.data.data || result.data.wards || []);
+        setWards(wardsData);
+        
+        // Nếu đang edit và có ward name nhưng chưa có wardCode, tìm wardCode
+        if (isEditing && formData.address.ward && !formData.address.wardCode) {
+          const foundWard = wardsData.find(w => 
+            (w.name || w.communeName || w.commune) === formData.address.ward
+          );
+          if (foundWard) {
+            setFormData(prev => ({
+              ...prev,
+              address: {
+                ...prev.address,
+                wardCode: foundWard.code || foundWard.idCommune || foundWard.id,
+              },
+            }));
+          }
+        }
+      } else {
+        setWards([]);
+      }
+    } catch (err) {
+      console.error('Error loading wards:', err);
+      setWards([]);
+    } finally {
+      setLoadingWards(false);
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    if (name.startsWith('address.')) {
+      const addressField = name.split('.')[1];
+      
+      if (addressField === 'provinceCode') {
+        // Khi chọn province, tìm tên province
+        const selectedProvince = provinces.find(p => 
+          (p.code || p.idProvince || p.id) === value
+        );
+        setFormData(prev => ({
+          ...prev,
+          address: {
+            ...prev.address,
+            provinceCode: value,
+            province: selectedProvince?.name || selectedProvince?.provinceName || selectedProvince?.province || '',
+            ward: '',
+            wardCode: '',
+          },
+        }));
+      } else if (addressField === 'wardCode') {
+        // Khi chọn ward, tìm tên ward
+        const selectedWard = wards.find(w => 
+          (w.code || w.idCommune || w.id) === value
+        );
+        setFormData(prev => ({
+          ...prev,
+          address: {
+            ...prev.address,
+            wardCode: value,
+            ward: selectedWard?.name || selectedWard?.communeName || selectedWard?.commune || '',
+          },
+        }));
+      } else {
+        setFormData(prev => ({
+          ...prev,
+          address: {
+            ...prev.address,
+            [addressField]: value,
+          },
+        }));
+      }
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Format address theo AddressDTO: { province, ward, homeAddress }
+    const addressDTO = {
+      province: formData.address.province,
+      ward: formData.address.ward,
+      homeAddress: formData.address.homeAddress,
+    };
+    
     const result = await updateStore(currentStore.id, {
-      storeName: formData.name,
+      name: formData.name,
       description: formData.description,
-      address: formData.address,
-      phone: formData.phone,
-      email: formData.email
+      address: addressDTO,
     });
 
     if (result.success) {
-      showSuccess(result.message);
-      setCurrentStore(result.data);
+      showSuccess(result.message || 'Cập nhật cửa hàng thành công!');
+      // Refresh store data
+      const storesResult = await getMyStores();
+      if (storesResult.success && storesResult.data?.length > 0) {
+        const updatedStore = storesResult.data.find(s => s.id === currentStore.id);
+        if (updatedStore) {
+          const mappedStore = {
+            ...updatedStore,
+            logo: updatedStore.logoUrl,
+            banner: updatedStore.bannerUrl,
+            storeName: updatedStore.name
+          };
+          setCurrentStore(mappedStore);
+        }
+      }
       setIsEditing(false);
     } else {
       showError(result.error);
@@ -237,10 +416,7 @@ const StoreProfile = () => {
                         setFormData({
                           name: currentStore?.storeName || currentStore?.name || '',
                           description: currentStore?.description || '',
-                          address: typeof currentStore?.address === 'string' ? currentStore.address : 
-                                   (currentStore?.address ? `${currentStore.address.houseAddress || ''}, ${currentStore.address.ward || ''}, ${currentStore.address.province || ''}`.trim().replace(/^,\s*|,\s*$/g, '') : ''),
-                          phone: currentStore?.phone || '',
-                          email: currentStore?.email || ''
+                          address: parseAddress(currentStore?.address),
                         });
                       }}
                       className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
@@ -288,38 +464,70 @@ const StoreProfile = () => {
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Địa chỉ</label>
-                      <input
-                        type="text"
-                        name="address"
-                        value={formData.address}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label>
-                        <input
-                          type="tel"
-                          name="phone"
-                          value={formData.phone}
+                    <div className="space-y-3">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Địa chỉ cửa hàng</label>
+                      
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">Tỉnh/Thành phố *</label>
+                        <select
+                          name="address.provinceCode"
+                          value={formData.address.provinceCode}
                           onChange={handleInputChange}
+                          required
+                          disabled={loadingProvinces}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                        >
+                          <option value="">-- Chọn Tỉnh/Thành phố --</option>
+                          {loadingProvinces ? (
+                            <option disabled>Đang tải...</option>
+                          ) : (
+                            provinces.map((province) => (
+                              <option key={province.code || province.idProvince || province.id} value={province.code || province.idProvince || province.id}>
+                                {province.name || province.provinceName || province.province}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </div>
+
+                      {formData.address.provinceCode && (
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">Phường/Xã *</label>
+                          <select
+                            name="address.wardCode"
+                            value={formData.address.wardCode}
+                            onChange={handleInputChange}
+                            required
+                            disabled={loadingWards || wards.length === 0}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          >
+                            <option value="">-- Chọn Phường/Xã --</option>
+                            {loadingWards ? (
+                              <option disabled>Đang tải...</option>
+                            ) : (
+                              wards.map((ward) => (
+                                <option key={ward.code || ward.idCommune || ward.id} value={ward.code || ward.idCommune || ward.id}>
+                                  {ward.name || ward.communeName || ward.commune}
+                                </option>
+                              ))
+                            )}
+                          </select>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">Số nhà, đường *</label>
                         <input
-                          type="email"
-                          name="email"
-                          value={formData.email}
+                          type="text"
+                          name="address.homeAddress"
+                          value={formData.address.homeAddress}
                           onChange={handleInputChange}
+                          required
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="VD: 123 Nguyễn Văn Linh"
                         />
-                    </div>
-                  </div>
+                      </div>
+                      </div>
                   </form>
                 ) : (
                   <div className="grid grid-cols-2 gap-4">
@@ -328,20 +536,12 @@ const StoreProfile = () => {
                       <span className="text-gray-900 font-medium">{currentStore?.storeName || currentStore?.name || 'N/A'}</span>
                     </div>
                     <div className="bg-gray-50 rounded-lg p-4">
-                      <span className="text-sm text-gray-500 block mb-1">Email</span>
-                      <span className="text-gray-900">{currentStore?.email || 'Chưa cập nhật'}</span>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <span className="text-sm text-gray-500 block mb-1">Số điện thoại</span>
-                      <span className="text-gray-900">{currentStore?.phone || 'Chưa cập nhật'}</span>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-4">
                       <span className="text-sm text-gray-500 block mb-1">Địa chỉ</span>
                       <span className="text-gray-900">
                         {typeof currentStore?.address === 'string' 
                           ? currentStore.address 
                           : currentStore?.address 
-                            ? `${currentStore.address.houseAddress || ''}, ${currentStore.address.ward || ''}, ${currentStore.address.province || ''}`.trim().replace(/^,\s*|,\s*$/g, '') 
+                            ? `${currentStore.address.houseAddress || currentStore.address.homeAddress || ''}, ${currentStore.address.ward || ''}, ${currentStore.address.province || ''}`.trim().replace(/^,\s*|,\s*$/g, '') 
                             : 'Chưa cập nhật'}
                       </span>
                     </div>

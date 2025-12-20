@@ -13,8 +13,8 @@ const CartSummary = ({ onCheckout }) => {
   const totalItems = getSelectedTotalItems();
   const totalPrice = getSelectedTotalPrice();
   const totalSavings = getSelectedTotalSavings();
-  const shippingFee = 30000; // Luôn tính phí vận chuyển 30k
-  const finalTotal = totalPrice + shippingFee;
+  // Không tính phí ship ở giỏ hàng, chỉ tính ở checkout
+  const finalTotal = totalPrice;
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sticky top-4">
@@ -35,11 +35,6 @@ const CartSummary = ({ onCheckout }) => {
             <span>-{formatPrice(totalSavings)}đ</span>
           </div>
         )}
-
-        <div className="flex justify-between">
-          <span>Phí vận chuyển:</span>
-          <span>{formatPrice(shippingFee)}đ</span>
-        </div>
 
         <div className="border-t pt-3">
           <div className="flex justify-between font-bold text-lg">
@@ -66,20 +61,6 @@ const CartSummary = ({ onCheckout }) => {
           <li>✓ Đổi trả trong 7 ngày</li>
           <li>✓ Bảo hành chính hãng</li>
         </ul>
-      </div>
-
-      {/* Voucher Section */}
-      <div className="mt-4">
-        <div className="flex space-x-2">
-          <input
-            type="text"
-            placeholder="Nhập mã giảm giá"
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <Button variant="outline" size="sm">
-            Áp dụng
-          </Button>
-        </div>
       </div>
     </div>
   );

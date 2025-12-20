@@ -186,12 +186,41 @@ export const createReview = async (reviewData) => {
  */
 export const updateReview = async (reviewId, reviewData) => {
   try {
-    let response;
+    console.log('📝 [ReviewService] Updating review with data:', reviewData);
     
-    // ✅ PUT review dùng application/json (theo Swagger), không phải multipart/form-data
-    // Nếu có ảnh thì cần upload riêng hoặc backend hỗ trợ multipart
-    // Hiện tại chỉ gửi JSON
-    response = await api.put(`/api/v1/buyer/reviews/${reviewId}`, reviewData);
+    // ✅ PUT review dùng multipart/form-data (theo Swagger) - giống như createReview
+    // Swagger hiển thị review là object với Content-Type application/json trong multipart
+    const formData = new FormData();
+    
+    // ✅ Backend Spring Boot mong đợi field 'review' là JSON Blob với Content-Type application/json
+    const reviewJson = {
+      rating: reviewData.rating,
+      comment: reviewData.comment || '',
+    };
+    
+    console.log('📝 [ReviewService] Review JSON:', reviewJson);
+    
+    // ✅ Gửi review như Blob với Content-Type application/json
+    const reviewBlob = new Blob([JSON.stringify(reviewJson)], { type: 'application/json' });
+    formData.append('review', reviewBlob, 'review.json');
+    
+    // ✅ Append images nếu có
+    if (reviewData.imageFiles && reviewData.imageFiles.length > 0) {
+      console.log('📷 [ReviewService] Appending', reviewData.imageFiles.length, 'images');
+      reviewData.imageFiles.forEach((file, index) => {
+        formData.append('images', file);
+        console.log(`📷 [ReviewService] Image ${index + 1}:`, file.name, file.type, file.size);
+      });
+    }
+    
+    // ✅ Debug: Log FormData contents
+    console.log('📦 [ReviewService] FormData entries:');
+    for (let pair of formData.entries()) {
+      console.log('  -', pair[0], ':', pair[1] instanceof File ? `File(${pair[1].name})` : pair[1] instanceof Blob ? `Blob(${pair[1].type})` : pair[1]);
+    }
+    
+    // ✅ Không cần set Content-Type, interceptor sẽ tự xử lý FormData
+    const response = await api.put(`/api/v1/buyer/reviews/${reviewId}`, formData);
     
     return {
       success: true,
@@ -199,10 +228,19 @@ export const updateReview = async (reviewId, reviewData) => {
       message: 'Đánh giá đã được cập nhật!',
     };
   } catch (error) {
-    console.error('Error updating review:', error);
+    console.error('❌ Error updating review:', error);
+    console.error('❌ Error response:', error?.response?.data);
+    console.error('❌ Error status:', error?.response?.status);
+    
+    // Extract error message from API response
+    const errorMessage = error?.response?.data?.error || 
+                         error?.response?.data?.message || 
+                         error?.response?.data?.detail ||
+                         error?.message || 
+                         'Không thể cập nhật đánh giá. Vui lòng kiểm tra lại thông tin.';
     return {
       success: false,
-      error: error.message || 'Không thể cập nhật đánh giá',
+      error: errorMessage,
     };
   }
 };

@@ -5,6 +5,7 @@ import { getOrderCode } from '../../utils/displayCodeUtils';
 import MainLayout from '../../layouts/MainLayout';
 import ReviewForm from '../../components/reviews/ReviewForm';
 import { getOrderById, cancelOrder, canCancelOrder, canReviewOrder, getOrderStatusBadge, getPaymentMethodLabel } from '../../services/buyer/orderService';
+import { getReturnRequestDetail } from '../../services/buyer/returnService';
 import { getAdminOrderById } from '../../services/admin/adminOrderService';
 import { checkExistingReview } from '../../services/buyer/reviewService';
 import { useToast } from '../../context/ToastContext';
@@ -74,6 +75,16 @@ const OrderDetailPage = () => {
   );
 
   const order = orderData?.success ? orderData.data : null;
+
+  // Nếu order có returnRequestId, load thêm chi tiết ReturnRequest (để lấy partialRefundToBuyer/Store nếu có)
+  const { data: rrData } = useSWR(
+    order?.returnRequestId ? ['buyer-return-request-detail', order.returnRequestId] : null,
+    () => getReturnRequestDetail(order.returnRequestId),
+    { revalidateOnFocus: false }
+  );
+
+  const returnRequest =
+    order?.returnRequest || (rrData?.success ? rrData.data : null) || null;
 
   // Check which items have been reviewed
   useEffect(() => {
@@ -188,9 +199,9 @@ const OrderDetailPage = () => {
   const {
     orderNumber,
     status,
-    totalAmount,
-    totalPrice,
-    finalTotal,
+    totalAmount: rawTotalAmount,
+    totalPrice: rawTotalPrice,
+    finalTotal: rawFinalTotal,
     createdAt,
     items: itemsFromOrder,
     orderItems: orderItemsFromOrder,
@@ -201,6 +212,11 @@ const OrderDetailPage = () => {
     shop,
     storeId,
   } = order;
+  
+  // ✅ Parse các giá trị total nếu là string
+  const totalAmount = typeof rawTotalAmount === 'string' ? parseFloat(rawTotalAmount) : (rawTotalAmount ?? 0);
+  const totalPrice = typeof rawTotalPrice === 'string' ? parseFloat(rawTotalPrice) : (rawTotalPrice ?? 0);
+  const finalTotal = typeof rawFinalTotal === 'string' ? parseFloat(rawFinalTotal) : (rawFinalTotal ?? 0);
   
   // Handle different store name formats from backend
   const getStoreName = () => {
@@ -220,61 +236,95 @@ const OrderDetailPage = () => {
   // Totals breakdown
   const subtotal = items.reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 0)), 0);
   const shippingFeeValue = order.shippingFee ?? order.shippingCost ?? 0;
-  // 💰 Hoa hồng nền tảng (platformCommission) - ưu tiên field mới, fallback field cũ nếu còn
+  
+  // 💰 Hoa hồng nền tảng - chỉ để hiển thị, không cộng vào tổng của buyer
   const platformCommission = order.platformCommission ?? order.serviceFee ?? 0;
   
+  // ✅ Helper function để extract promotion code từ nhiều nguồn
+  const getPromotionCode = (order) => {
+    // 1. Kiểm tra promotions array (DBRef hoặc populated)
+    if (order.promotions && Array.isArray(order.promotions) && order.promotions.length > 0) {
+      const firstPromo = order.promotions[0];
+      // Nếu là DBRef đã populate, có code
+      if (firstPromo.code) return firstPromo.code;
+      // Nếu là DBRef chưa populate, có $id hoặc id
+      // Tạm thời check các nguồn khác
+    }
+    
+    // 2. Kiểm tra các field promotion khác
+    return (
+      order.promotion?.code || 
+      order.promotionCode || 
+      order.appliedPromotion?.code ||
+      order.platformPromotions?.orderPromotionCode ||
+      order.platformPromotions?.shippingPromotionCode ||
+      null
+    );
+  };
+
   // ✅ Tính discount - ƯU TIÊN dùng discount từ backend, KHÔNG tính ngược (tránh sai số)
-  // Backend đã tính discount chính xác, chỉ cần lấy từ field
-  let discountValue = parseFloat(
-    order.discount ?? 
-    order.discountAmount ?? 
-    order.promotionDiscount ?? 
-    order.appliedDiscount ?? 
-    order.promotionAmount ??
-    order.appliedPromotion?.discountAmount ??
-    order.appliedPromotion?.discountValue ??
-    0
-  );
+  let discountValue = 0;
   
-  // ✅ Chỉ tính ngược từ totalPrice nếu KHÔNG có discount field nào (fallback cuối cùng)
-  // Và chỉ tính khi có promotion để tránh tính sai
-  if (discountValue === 0 && (order.appliedPromotion || order.promotionCode)) {
-    const calculatedTotal = subtotal + shippingFeeValue + platformCommission;
-    const actualTotal = parseFloat(finalTotal ?? totalAmount ?? totalPrice ?? 0);
-    // ✅ Chỉ tính nếu actualTotal hợp lý và nhỏ hơn calculatedTotal
-    if (actualTotal > 0 && calculatedTotal > actualTotal && (calculatedTotal - actualTotal) > 0) {
-      discountValue = calculatedTotal - actualTotal;
-      console.log('[OrderDetailPage] Calculated discount from totalPrice:', discountValue, {
-        calculatedTotal,
-        actualTotal,
-        difference: calculatedTotal - actualTotal
-      });
+  // 1. Ưu tiên: totalDiscountAmount > storeDiscountAmount + platformDiscountAmount
+  if (order.totalDiscountAmount !== undefined && order.totalDiscountAmount !== null) {
+    discountValue = parseFloat(order.totalDiscountAmount);
+  } else {
+    // Tính tổng từ storeDiscountAmount + platformDiscountAmount
+    const storeDiscount = parseFloat(order.storeDiscountAmount || 0);
+    const platformDiscount = parseFloat(order.platformDiscountAmount || 0);
+    discountValue = storeDiscount + platformDiscount;
+  }
+  
+  // 2. Nếu vẫn = 0, check các field discount khác
+  if (discountValue === 0) {
+    const discountFields = [
+      'discount',
+      'discountAmount',
+      'promotionDiscount',
+      'appliedDiscount',
+      'promotionAmount',
+      'promotionValue',
+      'discountValue',
+    ];
+    
+    for (const field of discountFields) {
+      if (order[field] !== undefined && order[field] !== null) {
+        discountValue = parseFloat(order[field]);
+        if (discountValue > 0) break;
+      }
     }
   }
   
-  // ✅ Debug log để kiểm tra
-  console.log('[OrderDetailPage] Order breakdown:', {
-    subtotal,
-    shippingFeeValue,
-    platformCommission,
-    discountValue,
-    finalTotal,
-    totalAmount,
-    totalPrice,
-    calculatedTotal: subtotal + shippingFeeValue + platformCommission - discountValue,
-    appliedPromotion: order.appliedPromotion,
-    promotionCode: order.promotionCode,
-    orderKeys: Object.keys(order).filter(k => k.toLowerCase().includes('discount') || k.toLowerCase().includes('promotion'))
-  });
-
+  // 3. Nếu vẫn = 0, check trong appliedPromotion hoặc promotion object
+  if (discountValue === 0) {
+    const promo = order.promotion || order.appliedPromotion;
+    if (promo) {
+      discountValue = parseFloat(promo.discountAmount || promo.discountValue || promo.value || 0);
+    }
+  }
+  
+  // 4. Nếu vẫn = 0 và có dấu hiệu có promotion, tính ngược từ totalAmount
+  if (discountValue === 0 && (order.promotion || order.appliedPromotion || order.promotionCode || order.promotions)) {
+    const expectedTotal = subtotal + shippingFeeValue;
+    // Parse totalPrice nếu là string
+    const parsedTotalPrice = typeof order.totalPrice === 'string' ? parseFloat(order.totalPrice) : order.totalPrice;
+    const parsedTotalAmount = typeof order.totalAmount === 'string' ? parseFloat(order.totalAmount) : order.totalAmount;
+    const parsedFinalTotal = typeof finalTotal === 'string' ? parseFloat(finalTotal) : finalTotal;
+    const actualTotal = parsedFinalTotal ?? parsedTotalAmount ?? parsedTotalPrice ?? 0;
+    
+    if (actualTotal > 0 && expectedTotal > actualTotal) {
+      discountValue = expectedTotal - actualTotal;
+    }
+  }
+  
   const parseTotalPrice = () => {
-    if (finalTotal && !isNaN(finalTotal)) return finalTotal;
-    if (totalAmount && !isNaN(totalAmount)) return totalAmount;
+    if (finalTotal && !isNaN(finalTotal) && finalTotal > 0) return finalTotal;
+    if (totalAmount && !isNaN(totalAmount) && totalAmount > 0) return totalAmount;
     if (totalPrice) {
       const parsed = parseFloat(totalPrice);
-      if (!isNaN(parsed)) return parsed;
+      if (!isNaN(parsed) && parsed > 0) return parsed;
     }
-    return Math.max(0, subtotal + shippingFeeValue + platformCommission - discountValue);
+    return Math.max(0, subtotal + shippingFeeValue - discountValue);
   };
 
   const calculatedTotal = parseTotalPrice();
@@ -407,7 +457,11 @@ const OrderDetailPage = () => {
             </tr>
             ${discountValue ? `
             <tr>
-              <td class="text-right muted">Giảm giá:</td>
+              <td class="text-right muted">Mã giảm giá:</td>
+              <td class="text-right">${order.promotion?.code || order.promotionCode || order.appliedPromotion?.code || order.appliedPromotion?.name || order.promotionName || 'Giảm giá từ chương trình'}</td>
+            </tr>
+            <tr>
+              <td class="text-right muted">Số tiền giảm:</td>
               <td class="text-right">-${formatCurrency(discountValue)}</td>
             </tr>
             ` : ''}
@@ -611,16 +665,65 @@ const OrderDetailPage = () => {
                   <span className="text-gray-600">Phí vận chuyển:</span>
                   <span className="font-medium">{formatCurrency(shippingFeeValue)}</span>
                 </div>
-                <div className="flex justify-end gap-2">
-                  <span className="text-gray-600">Hoa hồng nền tảng:</span>
-                  <span className="font-medium">{formatCurrency(platformCommission)}</span>
-                </div>
-                {discountValue > 0 && (
-                  <div className="flex justify-end gap-2 text-green-600">
-                    <span>Giảm giá:</span>
-                    <span className="font-medium">-{formatCurrency(discountValue)}</span>
-                  </div>
-                )}
+                {(() => {
+                  const promotionCode = getPromotionCode(order);
+                  
+                  if (promotionCode || discountValue > 0) {
+                    return (
+                      <>
+                        {promotionCode && (
+                          <div className="flex justify-end gap-2 items-center bg-blue-50 border border-blue-200 rounded-lg p-2 mt-2">
+                            <span className="text-gray-700 flex items-center gap-1.5 text-sm">
+                              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/>
+                              </svg>
+                              <span className="font-medium">Mã khuyến mãi đã áp dụng:</span>
+                            </span>
+                            <span className="font-bold text-blue-700 bg-white px-2 py-1 rounded border border-blue-300 text-sm">
+                              {promotionCode}
+                            </span>
+                          </div>
+                        )}
+                        {discountValue > 0 && (
+                          <div className="flex justify-end gap-2 text-green-600">
+                            <span>Số tiền giảm:</span>
+                            <span className="font-medium">-{formatCurrency(discountValue)}</span>
+                          </div>
+                        )}
+                      </>
+                    );
+                  }
+                  return null;
+                })()}
+                {/* Thông tin hoàn tiền một phần (nếu có ReturnRequest gắn với order) */}
+                {returnRequest &&
+                  (typeof returnRequest.partialRefundToBuyer === 'number' ||
+                    typeof returnRequest.partialRefundToStore === 'number') && (
+                    <div className="pt-2 mt-1 border-t border-dashed border-gray-300 space-y-1 text-xs text-emerald-800">
+                      <div className="flex justify-end gap-2">
+                        <span className="font-semibold">Hoàn tiền một phần:</span>
+                      </div>
+                      {typeof returnRequest.partialRefundToBuyer === 'number' &&
+                        returnRequest.partialRefundToBuyer > 0 && (
+                          <div className="flex justify-end gap-2">
+                            <span>Hoàn cho bạn:</span>
+                            <span className="font-semibold">
+                              {formatCurrency(returnRequest.partialRefundToBuyer)}
+                            </span>
+                          </div>
+                        )}
+                      {typeof returnRequest.partialRefundToStore === 'number' &&
+                        returnRequest.partialRefundToStore > 0 && (
+                          <div className="flex justify-end gap-2 text-emerald-700">
+                            <span>Hoàn lại cho cửa hàng:</span>
+                            <span className="font-semibold">
+                              {formatCurrency(returnRequest.partialRefundToStore)}
+                            </span>
+                          </div>
+                        )}
+                    </div>
+                  )}
+
                 <div className="flex justify-end gap-2 pt-2 border-t border-gray-200 text-lg font-bold text-red-600">
                   <span className="text-gray-800">Tổng cộng:</span>
                   <span>{formatCurrency(calculatedTotal)}</span>
@@ -640,6 +743,9 @@ const OrderDetailPage = () => {
                 Địa chỉ nhận hàng
               </h2>
               <div className="text-sm text-gray-700 space-y-1">
+                {shippingAddress.suggestedName && (
+                  <p className="font-semibold text-blue-600">{shippingAddress.suggestedName}</p>
+                )}
                 <p className="font-semibold">{shippingAddress.recipientName || 'N/A'}</p>
                 <p>{shippingAddress.phone || 'N/A'}</p>
                 <p>

@@ -7,6 +7,7 @@ import {
   deleteAdminNotification 
 } from '../../services/notification/adminNotificationService';
 import { useToast } from '../../context/ToastContext';
+import { confirmDelete } from '../../utils/sweetalert';
 
 const AdminNotifications = () => {
   const { success, error: showError } = useToast();
@@ -77,7 +78,8 @@ const AdminNotifications = () => {
   };
 
   const handleDelete = async (notificationId) => {
-    if (!window.confirm('Bạn có chắc muốn xóa thông báo này?')) return;
+    const confirmed = await confirmDelete('thông báo này');
+    if (!confirmed) return;
     
     const result = await deleteAdminNotification(notificationId);
     if (result.success) {

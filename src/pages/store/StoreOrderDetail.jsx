@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 import StoreLayout from '../../layouts/StoreLayout';
@@ -12,11 +12,9 @@ import ShipmentCard from '../../components/shipment/ShipmentCard';
 import { 
   getStoreOrderById, 
   confirmOrder, 
-  shipOrder, 
-  deliverOrder, 
-  cancelStoreOrder 
+  deliverOrder
 } from '../../services/b2c/b2cOrderService';
-import { getShipmentByOrderId, updateShipmentStatus } from '../../services/b2c/shipmentService';
+import { getShipmentByOrderId, updateShipmentStatus, getShipmentsByStoreId } from '../../services/b2c/shipmentService';
 import { getPaymentMethodLabel } from '../../services/buyer/orderService';
 
 const StoreOrderDetail = () => {
@@ -26,10 +24,9 @@ const StoreOrderDetail = () => {
   const { success: showSuccess, error: showError } = useToast();
   const { mutate: globalMutate } = useSWRConfig();
   const [actionLoading, setActionLoading] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [showShipModal, setShowShipModal] = useState(false);
   const [showDeliverModal, setShowDeliverModal] = useState(false);
-  const [pendingAction, setPendingAction] = useState(null);
+  const [hasShipment, setHasShipment] = useState(false);
+  const [checkingShipment, setCheckingShipment] = useState(true);
 
   // ✅ Helper functions - Định nghĩa trước khi sử dụng
   const formatPrice = (price) => {
@@ -169,6 +166,90 @@ const StoreOrderDetail = () => {
   );
 
   const order = orderData?.success ? orderData.data : null;
+
+  // ✅ Kiểm tra xem đơn hàng đã có vận đơn chưa (chỉ để hiển thị button "Đã tạo vận đơn")
+  useEffect(() => {
+    const checkShipment = async () => {
+      if (!orderId || !currentStore?.id || !order || order.status !== 'CONFIRMED') {
+        setCheckingShipment(false);
+        if (order?.status !== 'CONFIRMED') {
+          setHasShipment(false);
+        }
+        return;
+      }
+
+      console.log('[StoreOrderDetail] 🔍 Bắt đầu kiểm tra shipment cho orderId:', orderId, 'storeId:', currentStore.id);
+
+      // ✅ Cách 1: Lấy danh sách shipment của store và filter theo orderId
+      try {
+        console.log('[StoreOrderDetail] 📦 Đang lấy danh sách shipment của store...');
+        const storeShipmentsResult = await getShipmentsByStoreId(currentStore.id, { size: 100 });
+        console.log('[StoreOrderDetail] 📦 Kết quả lấy danh sách shipment:', storeShipmentsResult);
+
+        if (storeShipmentsResult.success && storeShipmentsResult.data) {
+          const shipments = Array.isArray(storeShipmentsResult.data) 
+            ? storeShipmentsResult.data 
+            : (storeShipmentsResult.data.content || storeShipmentsResult.data.data || []);
+          
+          console.log('[StoreOrderDetail] 📦 Danh sách shipment:', shipments);
+          console.log('[StoreOrderDetail] 📦 Số lượng shipment:', shipments.length);
+
+          // Tìm shipment có order.id hoặc order._id hoặc order.$id trùng với orderId
+          const foundShipment = shipments.find(shipment => {
+            const orderRef = shipment.order || shipment.orderRef;
+            const orderIdFromShipment = orderRef?.id || orderRef?._id || orderRef?.$id || orderRef;
+            const orderIdStr = String(orderId);
+            const orderIdFromShipmentStr = String(orderIdFromShipment);
+            
+            console.log('[StoreOrderDetail] 🔍 So sánh:', {
+              orderId: orderIdStr,
+              orderIdFromShipment: orderIdFromShipmentStr,
+              match: orderIdStr === orderIdFromShipmentStr
+            });
+
+            return orderIdStr === orderIdFromShipmentStr;
+          });
+
+          if (foundShipment) {
+            console.log('[StoreOrderDetail] ✅ TÌM THẤY SHIPMENT!', foundShipment);
+            setHasShipment(true);
+            setCheckingShipment(false);
+            return;
+          } else {
+            console.log('[StoreOrderDetail] ❌ Không tìm thấy shipment trong danh sách');
+          }
+        }
+      } catch (err) {
+        console.warn('[StoreOrderDetail] ⚠️ Lỗi khi lấy danh sách shipment:', err);
+      }
+
+      // ✅ Cách 2: Fallback - thử dùng getShipmentByOrderId
+      try {
+        console.log('[StoreOrderDetail] 🔄 Thử cách 2: getShipmentByOrderId...');
+        const checkResult = await getShipmentByOrderId(orderId);
+        console.log('[StoreOrderDetail] 🔄 Kết quả getShipmentByOrderId:', checkResult);
+        
+        if (checkResult.data && !checkResult.notFound) {
+          console.log('[StoreOrderDetail] ✅ Shipment found via getShipmentByOrderId, setting hasShipment = true');
+          setHasShipment(true);
+        } else if (checkResult.success && checkResult.data) {
+          console.log('[StoreOrderDetail] ✅ Shipment found (success=true), setting hasShipment = true');
+          setHasShipment(true);
+        } else {
+          console.log('[StoreOrderDetail] ❌ No shipment found, setting hasShipment = false');
+          setHasShipment(false);
+        }
+      } catch (err) {
+        console.warn('[StoreOrderDetail] ⚠️ Lỗi khi dùng getShipmentByOrderId:', err);
+        setHasShipment(false);
+      } finally {
+        setCheckingShipment(false);
+      }
+    };
+
+    checkShipment();
+  }, [orderId, currentStore?.id, order?.status]);
+
   if (order) {
     console.log('[StoreOrderDetail] Raw order data:', order);
     console.log('[StoreOrderDetail] Shipping address:', getShipping(order));
@@ -226,8 +307,8 @@ const StoreOrderDetail = () => {
       showError('Không tìm thấy thông tin cửa hàng');
       return;
     }
-    setPendingAction('confirm');
-    setShowConfirmModal(true);
+    // Xác nhận trực tiếp không cần modal
+    handleConfirm();
   };
 
   const handleConfirm = async () => {
@@ -348,36 +429,6 @@ const StoreOrderDetail = () => {
     }
   };
 
-  const handleShipClick = () => {
-    if (!currentStore?.id) {
-      showError('Không tìm thấy thông tin cửa hàng');
-      return;
-    }
-    setPendingAction('ship');
-    setShowShipModal(true);
-  };
-
-  const handleShip = async () => {
-    if (!currentStore?.id) return;
-    
-    setActionLoading(true);
-    try {
-      const result = await shipOrder(orderId, currentStore.id);
-      
-      if (result.success) {
-        showSuccess(result.message);
-        // ✅ Force refresh order detail
-        await mutate(undefined, { revalidate: true });
-      } else {
-        showError(result.error);
-      }
-    } catch (err) {
-      console.error('Error shipping order:', err);
-      showError('Có lỗi xảy ra khi cập nhật trạng thái giao hàng');
-    } finally {
-      setActionLoading(false);
-    }
-  };
 
   const handleDeliverClick = () => {
     if (!currentStore?.id) {
@@ -410,28 +461,6 @@ const StoreOrderDetail = () => {
     }
   };
 
-  const handleCancel = async () => {
-    const reason = window.prompt('Lý do hủy đơn hàng:');
-    if (!reason) return;
-    
-    setActionLoading(true);
-    try {
-      const result = await cancelStoreOrder(orderId, reason);
-      
-      if (result.success) {
-        showSuccess(result.message);
-        // ✅ Force refresh order detail
-        await mutate(undefined, { revalidate: true });
-      } else {
-        showError(result.error);
-      }
-    } catch (err) {
-      console.error('Error cancelling order:', err);
-      showError('Có lỗi xảy ra khi hủy đơn hàng');
-    } finally {
-      setActionLoading(false);
-    }
-  };
 
   if (isLoading) {
     return (
@@ -470,11 +499,37 @@ const StoreOrderDetail = () => {
   const subtotal = items.reduce((sum, item) => sum + (parseFloat(item.price || 0) * parseInt(item.quantity || 0)), 0);
   const shippingFee = parseFloat(order.shippingFee || order.shippingCost || 0);
   
+  // ✅ Helper function để lấy mã khuyến mãi của store (không lấy platform promotion)
+  const getStorePromotionCode = (order) => {
+    // Chỉ lấy mã nếu có storeDiscountAmount > 0 (có store promotion)
+    const storeDiscount = parseFloat(order.storeDiscountAmount || 0);
+    if (storeDiscount === 0) return null;
+    
+    // Kiểm tra promotions array (có thể là DBRef hoặc populated)
+    if (order.promotions && Array.isArray(order.promotions) && order.promotions.length > 0) {
+      const firstPromo = order.promotions[0];
+      // Nếu là DBRef đã populate, có code
+      if (firstPromo.code) return firstPromo.code;
+    }
+    
+    // Kiểm tra các field promotion khác (chỉ nếu là store promotion)
+    // Có thể cần check thêm logic để đảm bảo đây là store promotion
+    return (
+      order.promotionCode || 
+      order.appliedPromotion?.code ||
+      order.promotion?.code ||
+      null
+    );
+  };
+
   // ✅ Tính discount từ nhiều nguồn có thể có
-  let discount = 0;
+  // Ưu tiên: storeDiscountAmount (chỉ discount từ store promotion)
+  let discount = parseFloat(order.storeDiscountAmount || 0);
   
-  // 1. Từ discount field trực tiếp
-  discount = parseFloat(order.discount || order.discountAmount || 0);
+  // Nếu không có storeDiscountAmount, thử các field khác
+  if (discount === 0) {
+    discount = parseFloat(order.discount || order.discountAmount || 0);
+  }
   
   // 2. Nếu không có, thử từ promotion fields
   if (discount === 0) {
@@ -639,20 +694,46 @@ const StoreOrderDetail = () => {
                       <span className="font-medium">{formatPrice(shippingFee)}</span>
                     </div>
                   )}
-                  {discount > 0 && (
-                    <div className="flex justify-between text-sm text-gray-600">
-                      <span>Giảm giá:</span>
-                      <span className="font-medium text-green-600">-{formatPrice(discount)}</span>
-                    </div>
-                  )}
-                  {(order.promotionCode || order.appliedPromotion) && (
-                    <div className="flex justify-between text-sm text-gray-600">
-                      <span>Mã khuyến mãi:</span>
-                      <span className="font-medium text-blue-600">
-                        {order.promotionCode || order.appliedPromotion?.code || 'N/A'}
-                      </span>
-                    </div>
-                  )}
+                  {/* Hiển thị số tiền giảm trước */}
+                  {(() => {
+                    const storeDiscount = parseFloat(order.storeDiscountAmount || 0);
+                    const displayDiscount = storeDiscount > 0 ? storeDiscount : discount;
+                    
+                    if (displayDiscount > 0) {
+                      return (
+                        <div className="flex justify-between text-sm text-gray-600">
+                          <span>Số tiền giảm:</span>
+                          <span className="font-medium text-green-600">-{formatPrice(displayDiscount)}</span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                  
+                  {/* Chỉ hiển thị mã khuyến mãi nếu đó là mã của store (có storeDiscountAmount) - ĐẶT DƯỚI SỐ TIỀN GIẢM */}
+                  {(() => {
+                    const storePromotionCode = getStorePromotionCode(order);
+                    const storeDiscount = parseFloat(order.storeDiscountAmount || 0);
+                    
+                    // Chỉ hiển thị nếu có store promotion
+                    if (storePromotionCode && storeDiscount > 0) {
+                      return (
+                        <div className="flex justify-between items-center text-sm bg-blue-50 border border-blue-200 rounded-lg p-2 mt-2">
+                          <span className="text-gray-700 flex items-center gap-1.5">
+                            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/>
+                            </svg>
+                            <span className="font-medium">Mã khuyến mãi của store:</span>
+                          </span>
+                          <span className="font-bold text-blue-700 bg-white px-2 py-1 rounded border border-blue-300">
+                            {storePromotionCode}
+                          </span>
+                        </div>
+                      );
+                    }
+                    
+                    return null;
+                  })()}
                   <div className="flex justify-between items-center text-lg font-bold pt-3 border-t border-gray-200">
                     <span>Tổng cộng:</span>
                     <span className="text-red-600 text-xl">{formatPrice(totalPrice)}</span>
@@ -774,51 +855,47 @@ const StoreOrderDetail = () => {
                 </div>
               </div>
 
-              {/* Shipment Info - Hiển thị nếu đơn đã xác nhận */}
-              {(order.status === 'CONFIRMED' || order.status === 'SHIPPING' || order.status === 'DELIVERED') && (
-                <ShipmentCard orderId={order.id} />
+              {/* Shipment Info - Hiển thị khi đã bắt đầu giao hàng (SHIPPING hoặc DELIVERED) */}
+              {/* Sau khi bấm "Bắt đầu giao hàng", status sẽ chuyển sang SHIPPING và ShipmentCard sẽ hiển thị */}
+              {(order.status === 'SHIPPING' || order.status === 'DELIVERED') && (
+                <ShipmentCard orderId={order.id} storeId={currentStore?.id} />
               )}
+              
 
               {/* Actions */}
               <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Thao tác</h2>
                 <div className="space-y-2">
                   {order.status === 'PENDING' && (
-                    <>
-                      <button
-                        onClick={handleConfirmClick}
-                        disabled={actionLoading}
-                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        ✅ Xác nhận đơn hàng
-                      </button>
-                      <button
-                        onClick={handleCancel}
-                        disabled={actionLoading}
-                        className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        ❌ Hủy đơn hàng
-                      </button>
-                    </>
+                    <button
+                      onClick={handleConfirmClick}
+                      disabled={actionLoading}
+                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      ✅ Xác nhận đơn hàng
+                    </button>
                   )}
                   
-                  {order.status === 'CONFIRMED' && (
-                    <>
-                      <button
-                        onClick={handleShipClick}
-                        disabled={actionLoading}
-                        className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        🚚 Bắt đầu giao hàng
-                      </button>
-                      <button
-                        onClick={handleCancel}
-                        disabled={actionLoading}
-                        className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        ❌ Hủy đơn hàng
-                      </button>
-                    </>
+                  {order.status === 'CONFIRMED' && checkingShipment && (
+                    <div className="w-full px-4 py-2 bg-gray-100 text-gray-600 rounded-lg flex items-center justify-center gap-2">
+                      <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Đang kiểm tra...
+                    </div>
+                  )}
+                  {order.status === 'CONFIRMED' && !checkingShipment && hasShipment && (
+                    <button
+                      onClick={() => navigate('/store-dashboard/shipments')}
+                      className="w-full px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center justify-center gap-2"
+                      title="Đã tạo vận đơn"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
+                      </svg>
+                      Đã tạo vận đơn
+                    </button>
                   )}
                   
                   {order.status === 'SHIPPING' && (
@@ -831,10 +908,29 @@ const StoreOrderDetail = () => {
                     </button>
                   )}
                   
-                  {(order.status === 'DELIVERED' || order.status === 'CANCELLED') && (
-                    <p className="text-center text-gray-500 py-4">
-                      Đơn hàng đã hoàn tất
-                    </p>
+                  {order.status === 'DELIVERED' && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <div className="flex items-center gap-3 text-green-700">
+                        <span className="text-2xl">🎉</span>
+                        <div>
+                          <p className="text-sm font-medium">Giao hàng thành công</p>
+                          <p className="text-xs text-green-600 mt-1">
+                            Đơn hàng đã được giao đến khách hàng
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {order.status === 'CANCELLED' && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                      <div className="flex items-center gap-3 text-red-700">
+                        <span className="text-2xl">❌</span>
+                        <div>
+                          <p className="text-sm font-medium">Đơn hàng đã bị hủy</p>
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
@@ -843,31 +939,7 @@ const StoreOrderDetail = () => {
         </div>
       </StoreLayout>
 
-      {/* Confirm Order Modal */}
-      <ConfirmModal
-        isOpen={showConfirmModal}
-        onClose={() => setShowConfirmModal(false)}
-        onConfirm={handleConfirm}
-        title="Xác nhận đơn hàng"
-        message="Xác nhận đơn hàng này?"
-        confirmText="Xác nhận"
-        cancelText="Hủy"
-        confirmColor="blue"
-        icon="✅"
-      />
 
-      {/* Ship Order Modal */}
-      <ConfirmModal
-        isOpen={showShipModal}
-        onClose={() => setShowShipModal(false)}
-        onConfirm={handleShip}
-        title="Bắt đầu giao hàng"
-        message="Chuyển đơn hàng sang trạng thái đang giao?"
-        confirmText="Xác nhận"
-        cancelText="Hủy"
-        confirmColor="purple"
-        icon="🚚"
-      />
 
       {/* Deliver Order Modal */}
       <ConfirmModal

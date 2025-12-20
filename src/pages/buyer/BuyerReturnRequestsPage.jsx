@@ -188,21 +188,57 @@ const BuyerReturnRequestsPage = () => {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-4 text-sm">
-                        <span className="text-gray-600">
-                          <span className="font-medium">Số tiền hoàn:</span>{' '}
-                          <span className="text-green-600 font-semibold">
-                            {formatCurrency(request.refundAmount || 0)}
+                      <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4 text-sm">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                          <span className="text-gray-600">
+                            <span className="font-medium">Số tiền hoàn dự kiến:</span>{' '}
+                            <span className="text-gray-900 font-semibold">
+                              {formatCurrency(request.refundAmount || 0)}
+                            </span>
                           </span>
-                        </span>
-                        {request.order && (
-                          <Link
-                            to={`/orders/${request.order.id || request.order._id || request.order}`}
-                            className="text-blue-600 hover:underline"
-                          >
-                            Xem đơn hàng →
-                          </Link>
-                        )}
+                          {typeof request.partialRefundToBuyer === 'number' && request.partialRefundToBuyer > 0 && (
+                            <span className="text-gray-600">
+                              <span className="font-medium">Hoàn tiền một phần cho bạn:</span>{' '}
+                              <span className="text-green-600 font-bold">
+                                {formatCurrency(request.partialRefundToBuyer)}
+                              </span>
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-col sm:items-end gap-1 sm:ml-auto">
+                          {request.order && (
+                            <Link
+                              to={`/orders/${request.order.id || request.order._id || request.order}`}
+                              className="text-blue-600 hover:underline"
+                            >
+                              Xem đơn hàng →
+                            </Link>
+                          )}
+
+                          {/* Khiếu nại liên quan (nếu BE trả về) */}
+                          {Array.isArray(request.relatedDisputes) && request.relatedDisputes.length > 0 && (
+                            <div className="mt-1 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded px-2 py-1">
+                              <span className="font-medium">Khiếu nại liên quan:</span>{' '}
+                              <span>{request.relatedDisputes.length} khiếu nại</span>
+                              <div className="mt-1 space-y-0.5">
+                                {request.relatedDisputes.slice(0, 2).map((d) => (
+                                  <Link
+                                    key={d.disputeId || d.id}
+                                    to={`/orders/disputes/${d.disputeId || d.id || d}`}
+                                    className="block text-blue-600 hover:underline"
+                                  >
+                                    #{String(d.disputeId || d.id || d).slice(-6)} – {d.disputeType || d.type || 'N/A'}
+                                  </Link>
+                                ))}
+                                {request.relatedDisputes.length > 2 && (
+                                  <span className="block text-[11px] text-gray-500">
+                                    … và {request.relatedDisputes.length - 2} khiếu nại khác
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       {request.storeResponse && (

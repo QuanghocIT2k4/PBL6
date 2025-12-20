@@ -4,37 +4,49 @@
  */
 
 /**
- * Generate display code from ID
+ * Generate a deterministic hash from string
+ * @param {string} str - Input string
+ * @returns {number} Hash number
+ */
+const hashString = (str) => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash);
+};
+
+/**
+ * Generate display code from ID with random 4-digit number (deterministic)
  * @param {string} id - UUID hoặc ID dạng hash
  * @param {string} prefix - Prefix viết tắt (VD, DH, SP, CH, etc.)
- * @param {number} length - Số ký tự lấy từ ID (default: 8)
- * @returns {string} Display code (VD: "VD69233E0B")
+ * @returns {string} Display code (VD: "VD1234")
  */
-export const generateDisplayCode = (id, prefix, length = 8) => {
+export const generateDisplayCode = (id, prefix) => {
   if (!id) return 'N/A';
   
-  // Loại bỏ dấu gạch ngang nếu là UUID
-  const cleanId = id.replace(/-/g, '');
+  // Tạo hash từ ID để đảm bảo cùng một ID luôn tạo ra cùng một mã
+  const hash = hashString(String(id));
   
-  // Lấy N ký tự đầu và uppercase
-  const shortId = cleanId.substring(0, length).toUpperCase();
+  // Lấy 4 số cuối từ hash (đảm bảo là 4 chữ số)
+  const randomNum = (hash % 10000).toString().padStart(4, '0');
   
-  return `${prefix}${shortId}`;
+  return `${prefix}${randomNum}`;
 };
 
 /**
  * Shipment ID → Mã vận đơn
- * VD: "69233e0b-..." → "VD69233E0B"
+ * VD: "69233e0b-..." → "VD1234"
  */
 export const getShipmentCode = (shipmentId) => {
-  return generateDisplayCode(shipmentId, 'VD', 8);
+  return generateDisplayCode(shipmentId, 'VD');
 };
 
 /**
  * Order ID → Mã đơn hàng hiển thị
- *
- * YÊU CẦU MỚI: hiển thị đúng `orderId` gốc, KHÔNG dùng prefix "DH" nữa.
- * Ví dụ: orderId = "6942ba94f5bd3d765c8dd3cb" → hiển thị nguyên chuỗi đó.
+ * VD: "6942ba94f5bd3d765c8dd3cb" → "DH1234"
  */
 export const getOrderCode = (orderId) => {
   if (!orderId) return 'N/A';
@@ -50,7 +62,7 @@ export const getOrderCode = (orderId) => {
       raw.toString?.();
   }
 
-  return String(raw);
+  return generateDisplayCode(String(raw), 'DH');
 };
 
 /**
