@@ -17,6 +17,7 @@ const AdminLayout = ({ children }) => {
     { path: '/admin-dashboard/products', icon: '📦', label: 'Sản phẩm' },
     { path: '/admin-dashboard/variants', icon: '🎨', label: 'Biến thể' },
     { path: '/admin-dashboard/promotions', icon: '🎁', label: 'Khuyến mãi' },
+    { path: '/admin-dashboard/notifications', icon: '📬', label: 'Thông báo' },
     { path: '/admin-dashboard/shippers', icon: '🚚', label: 'Quản lý Shipper' },
     { path: '/admin-dashboard/disputes', icon: '⚖️', label: 'Khiếu nại' },
     { path: '/admin-dashboard/refunds', icon: '💳', label: 'Hoàn tiền' },

@@ -136,6 +136,10 @@ const PromoCodeInput = ({
         return;
       }
       
+      // ✅ Check promotion type - CHO PHÉP CẢ ORDER VÀ SHIPPING DISCOUNT
+      const promotionType = foundPromotion.type || foundPromotion.discountType || '';
+      const isShippingPromotion = promotionType === 'SHIPPING' || promotionType === 'FREE_SHIPPING';
+      
       // ✅ Check min order value
       const minOrderValue = foundPromotion.minOrderValue || foundPromotion.minOrderAmount || 0;
       if (orderTotal < minOrderValue) {
@@ -144,14 +148,17 @@ const PromoCodeInput = ({
         return;
       }
       
-      // ✅ Calculate discount
-      const discount = calculateDiscount(foundPromotion, orderTotal);
+      // ✅ Calculate discount (cho shipping promotion, discount là shipping fee được giảm)
+      const discount = isShippingPromotion 
+        ? (foundPromotion.discountValue || foundPromotion.value || 0) // Shipping promotion: giá trị giảm phí ship
+        : calculateDiscount(foundPromotion, orderTotal); // Order promotion: tính theo % hoặc số tiền
       
       onApplySuccess({
         promotion: foundPromotion,
         discount,
         code: upperCode,
         isStorePromotion: foundIn === 'store', // ✅ Lưu thông tin là store hay platform
+        isShippingPromotion, // ✅ Lưu thông tin là shipping hay order promotion
       });
       
       setCode('');
@@ -177,7 +184,9 @@ const PromoCodeInput = ({
 
   // Nếu đã apply promotion
   if (appliedPromotion) {
-    const discount = calculateDiscount(appliedPromotion.promotion, orderTotal);
+    // ✅ Xử lý an toàn khi promotion có thể undefined
+    const promotion = appliedPromotion.promotion || {};
+    const discount = promotion ? calculateDiscount(promotion, orderTotal) : 0;
     
     return (
       <div className="bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 border-2 border-green-300 rounded-xl p-4 shadow-md">
@@ -188,17 +197,21 @@ const PromoCodeInput = ({
               <span className="font-mono font-bold text-green-700 bg-white px-3 py-1 rounded-lg shadow-sm border border-green-200">
                 {appliedPromotion.code}
               </span>
-              <span className="text-xs bg-gradient-to-r from-green-400 to-emerald-500 text-white px-3 py-1 rounded-full font-bold shadow-md">
-                {formatDiscountValue(appliedPromotion.promotion)}
-              </span>
+              {promotion && (
+                <span className="text-xs bg-gradient-to-r from-green-400 to-emerald-500 text-white px-3 py-1 rounded-full font-bold shadow-md">
+                  {formatDiscountValue(promotion)}
+                </span>
+              )}
             </div>
             <p className="text-sm text-gray-700 font-medium mb-1">
-              {appliedPromotion.promotion.description || 'Giảm giá đơn hàng'}
+              {promotion?.description || 'Giảm giá đơn hàng'}
             </p>
-            <p className="text-base font-bold text-green-600 flex items-center space-x-1">
-              <span>💰</span>
-              <span>Tiết kiệm: {formatCurrency(discount)}</span>
-            </p>
+            {discount > 0 && (
+              <p className="text-base font-bold text-green-600 flex items-center space-x-1">
+                <span>💰</span>
+                <span>Tiết kiệm: {formatCurrency(discount)}</span>
+              </p>
+            )}
           </div>
           <button
             onClick={handleRemove}

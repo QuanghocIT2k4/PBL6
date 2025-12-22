@@ -4,7 +4,8 @@ import {
   getAdminNotificationsByType,
   markAdminNotificationAsRead,
   markAllAdminNotificationsAsRead,
-  deleteAdminNotification 
+  deleteAdminNotification,
+  formatNotificationMessage
 } from '../../services/notification/adminNotificationService';
 import { useToast } from '../../context/ToastContext';
 import { confirmDelete } from '../../utils/sweetalert';
@@ -93,6 +94,22 @@ const AdminNotifications = () => {
   const getNotificationIcon = (type) => {
     const typeObj = notificationTypes.find(t => t.value === type);
     return typeObj?.icon || '📬';
+  };
+
+  // ✅ Chuyển đổi status/type sang tiếng Việt
+  const getStatusLabel = (status) => {
+    const statusMap = {
+      'DISPUTE': 'Khiếu nại',
+      'REFUND_REQUEST': 'Yêu cầu hoàn tiền',
+      'REFUND': 'Hoàn tiền',
+      'ORDER': 'Đơn hàng',
+      'PRODUCT': 'Sản phẩm',
+      'USER': 'Người dùng',
+      'STORE': 'Cửa hàng',
+      'PAYMENT': 'Thanh toán',
+      'SYSTEM': 'Hệ thống',
+    };
+    return statusMap[status] || status;
   };
 
   const formatDate = (dateString) => {
@@ -188,13 +205,13 @@ const AdminNotifications = () => {
                         }`}>
                           {notification.title}
                         </h3>
-                        <p className="text-gray-600 mt-1">{notification.message}</p>
+                        <p className="text-gray-600 mt-1">{formatNotificationMessage(notification.message)}</p>
                         <div className="flex items-center gap-4 mt-2">
                           <span className="text-sm text-gray-500">
                             {formatDate(notification.createdAt)}
                           </span>
                           <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full">
-                            {notification.type}
+                            {getStatusLabel(notification.type || notification.status)}
                           </span>
                         </div>
                       </div>

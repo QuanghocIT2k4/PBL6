@@ -11,7 +11,7 @@ import { confirmDelete } from '../../utils/sweetalert';
  * ReviewList Component
  * Displays list of reviews with stats, filtering, and pagination
  */
-const ReviewList = ({ productVariantId, onWriteReview, allowEdit = false }) => {
+const ReviewList = ({ productVariantId, onWriteReview, allowEdit = false, isStoreView = false }) => {
   const { user } = useAuth();
   const { success, error: showError } = useToast();
   const [currentPage, setCurrentPage] = useState(0);
@@ -163,6 +163,7 @@ const ReviewList = ({ productVariantId, onWriteReview, allowEdit = false }) => {
                 isOwner={user && user.id === review.user?.id}
                 onEdit={allowEdit ? handleEdit : undefined}
                 onDelete={allowEdit ? handleDelete : undefined}
+                isStoreView={isStoreView}
               />
             ))}
 

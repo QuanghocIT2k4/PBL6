@@ -36,3 +36,24 @@ Tên: NGUYEN VAN A
 Hạn ghi trên thẻ: 03/07
 
 OTP: OTP
+
+
+---
+
+
+## Thẻ Test MoMo Payment Gateway (Credit Card)
+
+**Thẻ thành công (Card Successful):**
+
+Số thẻ: 5200 0000 0000 1096
+
+Tên: NGUYEN VAN A
+
+Hạn thẻ: 05/26
+
+CVC: 111
+
+OTP: OTP
+
+Test Case: Card Successful
+

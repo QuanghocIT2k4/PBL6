@@ -2,37 +2,10 @@ import React, { useState } from 'react';
 import { 
   formatNotificationTime, 
   getNotificationIcon, 
-  getNotificationColor 
+  getNotificationColor,
+  formatNotificationMessage
 } from '../../services/buyer/notificationService';
 
-/**
- * Format số tiền trong message notification
- * VD: "2.05E+7 VNĐ" → "20,500,000 VNĐ"
- * VD: "500080.0 VNĐ" → "500,080 VNĐ"
- */
-const formatMoneyInMessage = (message) => {
-  if (!message) return message;
-  
-  // Regex để tìm số tiền (bao gồm scientific notation và số thập phân)
-  // Matches: 2.05E+7, 500080.0, 1000000, etc.
-  const moneyRegex = /(\d+\.?\d*(?:E[+-]?\d+)?)\s*(VNĐ|VND|đ)/gi;
-  
-  return message.replace(moneyRegex, (match, number, currency) => {
-    try {
-      // Parse số (xử lý cả scientific notation)
-      const parsedNumber = parseFloat(number);
-      
-      if (isNaN(parsedNumber)) return match;
-      
-      // Format số với dấu phẩy ngăn cách hàng nghìn
-      const formattedNumber = new Intl.NumberFormat('vi-VN').format(Math.round(parsedNumber));
-      
-      return `${formattedNumber} ${currency}`;
-    } catch (e) {
-      return match;
-    }
-  });
-};
 
 /**
  * NotificationItem Component
@@ -117,9 +90,9 @@ const NotificationItem = ({ notification, onMarkAsRead, onDelete }) => {
             )}
           </div>
 
-          {/* Message - Format số tiền */}
+          {/* Message - Format số tiền và thay thế order ID */}
           <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-            {formatMoneyInMessage(notification.message)}
+            {formatNotificationMessage(notification.message)}
           </p>
 
           {/* Time */}

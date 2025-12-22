@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import MainLayout from '../../layouts/MainLayout';
 import { useToast } from '../../context/ToastContext';
+import SEO from '../../components/seo/SEO';
 import {
   getBuyerNotifications,
   markNotificationAsRead,
@@ -10,6 +12,7 @@ import {
   formatNotificationTime,
   getNotificationIcon,
   getNotificationColor,
+  formatNotificationMessage,
 } from '../../services/buyer/notificationService';
 
 /**
@@ -133,37 +136,42 @@ const BuyerNotifications = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => navigate(-1)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Thông báo</h1>
-                <p className="text-sm text-gray-500 mt-1">
-                  {unreadCount > 0 ? `${unreadCount} thông báo chưa đọc` : 'Tất cả đã đọc'}
-                </p>
+    <MainLayout>
+      <SEO
+        title="Thông báo | E-Comm"
+        description="Xem tất cả thông báo của bạn"
+      />
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Header */}
+          <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => navigate(-1)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">Thông báo</h1>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {unreadCount > 0 ? `${unreadCount} thông báo chưa đọc` : 'Tất cả đã đọc'}
+                  </p>
+                </div>
               </div>
-            </div>
 
-            {unreadCount > 0 && (
-              <button
-                onClick={handleMarkAllAsRead}
-                className="px-4 py-2 text-sm font-medium text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-lg transition-colors"
-              >
-                Đọc tất cả
-              </button>
-            )}
-          </div>
+              {unreadCount > 0 && (
+                <button
+                  onClick={handleMarkAllAsRead}
+                  className="px-4 py-2 text-sm font-medium text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-lg transition-colors"
+                >
+                  Đọc tất cả
+                </button>
+              )}
+            </div>
 
           {/* Filter Tabs */}
           <div className="flex gap-2">
@@ -185,11 +193,11 @@ const BuyerNotifications = () => {
               </button>
             ))}
           </div>
-        </div>
+          </div>
 
-        {/* Notifications List */}
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          {loading && notifications.length === 0 ? (
+          {/* Notifications List */}
+          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+            {loading && notifications.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
             </div>
@@ -241,7 +249,7 @@ const BuyerNotifications = () => {
                           )}
                         </div>
 
-                        <p className="text-sm text-gray-600 mt-1">{notification.message}</p>
+                        <p className="text-sm text-gray-600 mt-1">{formatNotificationMessage(notification.message)}</p>
 
                         <div className="flex items-center justify-between mt-2">
                           <p className="text-xs text-gray-400">{timeAgo}</p>
@@ -287,16 +295,17 @@ const BuyerNotifications = () => {
                 Xem thêm
               </button>
             </div>
-          )}
+            )}
 
-          {loading && notifications.length > 0 && (
-            <div className="flex items-center justify-center py-4">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
-            </div>
-          )}
+            {loading && notifications.length > 0 && (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </MainLayout>
   );
 };
 

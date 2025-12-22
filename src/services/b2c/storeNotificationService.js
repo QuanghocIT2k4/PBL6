@@ -1,4 +1,5 @@
 import api from '../common/api';
+import { getOrderCode } from '../../utils/displayCodeUtils';
 
 /**
  * B2C STORE NOTIFICATION SERVICE
@@ -188,6 +189,58 @@ export const getNotificationColor = (type) => {
   };
   
   return colors[type] || colors.DEFAULT;
+};
+
+/**
+ * Format số tiền trong message notification
+ */
+const formatMoneyInMessage = (message) => {
+  if (!message) return message;
+  
+  // Regex để match số tiền có thể có dấu phẩy hoặc dấu chấm phân cách hàng nghìn
+  // Ví dụ: "10,000,0 đ" hoặc "10000 đ" hoặc "10.000 đ"
+  const moneyRegex = /(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?)\s*(VNĐ|VND|đ)/gi;
+  
+  return message.replace(moneyRegex, (match, number, currency) => {
+    try {
+      // Loại bỏ tất cả dấu phẩy và dấu chấm phân cách hàng nghìn, chỉ giữ lại dấu thập phân cuối cùng
+      // Ví dụ: "10,000,0" -> "10000.0" -> parseFloat -> 10000
+      const cleanedNumber = number.replace(/[.,](?=\d{3})/g, ''); // Loại bỏ dấu phân cách hàng nghìn
+      const parsedNumber = parseFloat(cleanedNumber);
+      if (isNaN(parsedNumber)) return match;
+      const roundedNumber = Math.round(parsedNumber);
+      const formattedNumber = new Intl.NumberFormat('vi-VN', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(roundedNumber);
+      return `${formattedNumber} ${currency}`;
+    } catch (e) {
+      return match;
+    }
+  });
+};
+
+/**
+ * Thay thế order ID trong message bằng mã hiển thị
+ */
+const replaceOrderIdInMessage = (message) => {
+  if (!message) return message;
+  
+  const orderIdRegex = /#?([0-9a-f]{24}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi;
+  
+  return message.replace(orderIdRegex, (match, orderId) => {
+    const hasHash = match.startsWith('#');
+    const displayCode = getOrderCode(orderId);
+    return hasHash ? `#${displayCode}` : displayCode;
+  });
+};
+
+/**
+ * Format notification message (format money + replace order ID)
+ */
+export const formatNotificationMessage = (message) => {
+  if (!message) return message;
+  return replaceOrderIdInMessage(formatMoneyInMessage(message));
 };
 
 /**

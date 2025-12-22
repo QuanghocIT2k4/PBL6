@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import StoreLayout from '../../layouts/StoreLayout';
 import StoreStatusGuard from '../../components/store/StoreStatusGuard';
 import { useStoreContext } from '../../context/StoreContext';
@@ -29,10 +29,28 @@ const StoreChats = () => {
     sendMessage,
     deleteMessage,
     loadMoreMessages,
-    handleTyping
+    handleTyping,
+    loadConversations
   } = useChat();
 
   const [showSidebar, setShowSidebar] = useState(true);
+  const hasLoadedRef = useRef(false);
+
+  // ✅ Load conversations khi component mount hoặc khi currentStore thay đổi
+  // Đảm bảo load conversations ngay khi mount trang chat
+  // Tránh trường hợp ChatContext useEffect không chạy do user đã có sẵn từ trước
+  useEffect(() => {
+    if (currentStore?.id && user?.id && !hasLoadedRef.current) {
+      // Chỉ load 1 lần khi mount
+      hasLoadedRef.current = true;
+      loadConversations();
+    }
+    
+    // Reset ref khi unmount để có thể load lại khi mount lại
+    return () => {
+      hasLoadedRef.current = false;
+    };
+  }, [currentStore?.id, user?.id, loadConversations]);
 
   // ⭐ Clear currentConversation khi unmount (navigate ra khỏi chat page)
   useEffect(() => {

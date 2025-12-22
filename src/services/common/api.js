@@ -29,6 +29,7 @@ const api = axios.create({
  * REQUEST INTERCEPTOR
  * ================================================
  * Automatically attach JWT token to all requests
+ * ✅ Không set Content-Type nếu là FormData (browser sẽ tự set multipart/form-data)
  */
 api.interceptors.request.use(
   (config) => {
@@ -36,6 +37,12 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // ✅ Nếu là FormData, xóa Content-Type để browser tự set multipart/form-data với boundary
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
+    
     return config;
   },
   (error) => {

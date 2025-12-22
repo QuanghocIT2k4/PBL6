@@ -4,6 +4,7 @@ import AdminPageHeader from '../../components/admin/AdminPageHeader';
 import { getPendingProducts, approveProduct, rejectProduct } from '../../services/admin/adminProductService';
 import { useToast } from '../../context/ToastContext';
 import { getAllBrandsWithoutPagination } from '../../services/common/brandService';
+import { confirmAction } from '../../utils/sweetalert';
 
 const AdminProducts = () => {
   const { showToast } = useToast();
@@ -40,7 +41,8 @@ const AdminProducts = () => {
 
   // Handle approve product
   const handleApprove = async (productId) => {
-    if (!confirm('Bạn có chắc muốn duyệt sản phẩm này?')) return;
+    const confirmed = await confirmAction('duyệt sản phẩm này');
+    if (!confirmed) return;
 
     const result = await approveProduct(productId);
     if (result.success) {

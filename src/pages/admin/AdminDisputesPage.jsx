@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 import { getAdminDisputes } from '../../services/admin/disputeService';
 import { useToast } from '../../context/ToastContext';
+import { getOrderCode } from '../../utils/displayCodeUtils';
 
 const AdminDisputesPage = () => {
   const { error: showError } = useToast();
@@ -91,6 +92,26 @@ const AdminDisputesPage = () => {
 
     const disputeType = detectDisputeType(dispute);
 
+    // ✅ Xử lý PARTIAL_REFUND: Hiển thị số tiền
+    if (decision === 'PARTIAL_REFUND') {
+      let amount = null;
+      // Ưu tiên lấy từ dispute.partialRefundAmount
+      amount = dispute.partialRefundAmount;
+      // Nếu không có, lấy từ returnRequest.partialRefundToBuyer
+      if (!amount && dispute.returnRequest?.partialRefundToBuyer) {
+        amount = dispute.returnRequest.partialRefundToBuyer;
+      }
+      
+      if (amount && typeof amount === 'number' && amount > 0) {
+        const formattedAmount = new Intl.NumberFormat('vi-VN', {
+          style: 'currency',
+          currency: 'VND'
+        }).format(amount);
+        return `Hoàn trả 1 phần (${formattedAmount})`;
+      }
+      return 'Hoàn trả 1 phần';
+    }
+
     // Phân biệt theo loại khiếu nại
     if (disputeType === 'RETURN_QUALITY') {
       // Store khiếu nại chất lượng hàng trả
@@ -121,6 +142,13 @@ const AdminDisputesPage = () => {
       month: '2-digit',
       year: 'numeric',
     });
+  };
+
+  // Helper lấy ID từ DBRef / object
+  const getIdFromRef = (ref) => {
+    if (!ref) return null;
+    if (typeof ref === 'string' || typeof ref === 'number') return String(ref);
+    return String(ref.$id || ref._id || ref.id || ref.$oid || ref);
   };
 
 
@@ -234,70 +262,95 @@ const AdminDisputesPage = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {disputes.map((dispute) => (
-                <div
-                  key={dispute.id || dispute._id}
-                  className="bg-white rounded-lg shadow p-6 hover:shadow-md transition"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-3">
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadge(
-                            dispute.status
-                          )}`}
-                        >
-                          {getStatusLabel(dispute.status)}
-                        </span>
-                        <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
-                          {getDisputeTypeLabel(dispute.disputeType)}
-                        </span>
-                        <span className="text-sm text-gray-500">
-                          {formatDate(dispute.createdAt)}
-                        </span>
-                      </div>
+              {disputes.map((dispute) => {
+                const orderId = getIdFromRef(
+                  dispute.order ||
+                    dispute.orderId ||
+                    dispute.orderRef ||
+                    dispute.returnRequest?.order
+                );
+                const orderCode = orderId ? getOrderCode(orderId) : null;
 
-                      <div className="mb-3">
-                        <p className="text-sm text-gray-600 mb-1">
-                          <span className="font-medium">Số tin nhắn:</span>{' '}
-                          {dispute.messages?.length || 0}
-                        </p>
-                        <p className="text-sm text-gray-600 mb-1">
-                          <span className="font-medium">Người khởi tạo khiếu nại:</span>{' '}
-                          {getInitiatorLabel(dispute, initiatorTab)}
-                        </p>
-                        {dispute.buyer && (
-                          <p className="text-sm text-gray-600">
-                            <span className="font-medium">Người mua:</span>{' '}
-                            {dispute.buyer.name || dispute.buyer.email || 'N/A'}
-                          </p>
-                        )}
-                        {dispute.store && (
-                          <p className="text-sm text-gray-600">
-                            <span className="font-medium">Cửa hàng:</span>{' '}
-                            {dispute.store.storeName || dispute.store.name || 'N/A'}
-                          </p>
-                        )}
-                        {dispute.finalDecision && (
-                          <p className="text-sm text-gray-600">
-                            <span className="font-medium">Kết quả:</span>{' '}
-                            <span className="font-semibold">{getComplaintResult(dispute) || dispute.finalDecision}</span>
-                          </p>
-                        )}
-                      </div>
+                return (
+                  <div
+                    key={dispute.id || dispute._id}
+                    className="bg-white rounded-lg shadow p-6 hover:shadow-md transition"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-3">
+                          <span
+                            className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadge(
+                              dispute.status
+                            )}`}
+                          >
+                            {getStatusLabel(dispute.status)}
+                          </span>
+                          <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
+                            {getDisputeTypeLabel(dispute.disputeType)}
+                          </span>
+                          <span className="text-sm text-gray-500">
+                            {formatDate(dispute.createdAt)}
+                          </span>
+                        </div>
 
-                      <div className="flex flex-wrap items-center gap-3 mt-2">
-                        <Link
-                          to={`/admin-dashboard/disputes/${dispute.id || dispute._id}`}
-                          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm"
-                        >
-                          Xem & xử lý khiếu nại
-                        </Link>
+                        <div className="mb-3">
+                          <p className="text-sm text-gray-600 mb-1">
+                            <span className="font-medium">Số tin nhắn:</span>{' '}
+                            {dispute.messages?.length || 0}
+                          </p>
+                          <p className="text-sm text-gray-600 mb-1">
+                            <span className="font-medium">Người khởi tạo khiếu nại:</span>{' '}
+                            {getInitiatorLabel(dispute, initiatorTab)}
+                          </p>
+                          {orderId && (
+                            <p className="text-sm text-gray-600 mb-1">
+                              <span className="font-medium">Đơn hàng:</span>{' '}
+                              <span className="font-mono">{orderCode}</span>
+                            </p>
+                          )}
+                          {dispute.buyer && (
+                            <p className="text-sm text-gray-600">
+                              <span className="font-medium">Người mua:</span>{' '}
+                              {dispute.buyer.name || dispute.buyer.email || 'N/A'}
+                            </p>
+                          )}
+                          {dispute.store && (
+                            <p className="text-sm text-gray-600">
+                              <span className="font-medium">Cửa hàng:</span>{' '}
+                              {dispute.store.storeName || dispute.store.name || 'N/A'}
+                            </p>
+                          )}
+                          {dispute.finalDecision && (
+                            <p className="text-sm text-gray-600">
+                              <span className="font-medium">Kết quả:</span>{' '}
+                              <span className="font-semibold">{getComplaintResult(dispute) || dispute.finalDecision}</span>
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3 mt-2">
+                          <Link
+                            to={`/admin-dashboard/disputes/${dispute.id || dispute._id}`}
+                            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm"
+                          >
+                            Xem & xử lý khiếu nại
+                          </Link>
+                          {/* Button xem chi tiết đơn hàng liên quan (nếu có) */}
+                          {orderId && (
+                            <Link
+                              to={`/orders/${orderId}`}
+                              className="px-4 py-2 text-sm font-semibold bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors"
+                            >
+                              Xem chi tiết đơn hàng #{orderCode}
+                            </Link>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               {/* Pagination */}
               {totalPages > 1 && (

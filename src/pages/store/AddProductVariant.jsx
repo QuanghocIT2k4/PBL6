@@ -4,9 +4,7 @@ import useSWR from 'swr';
 import StoreLayout from '../../layouts/StoreLayout';
 import { useStoreContext } from '../../context/StoreContext';
 import StoreStatusGuard from '../../components/store/StoreStatusGuard';
-import { getProductsByStore } from '../../services/b2c/b2cProductService';
-import { createProductVariantWithFormData } from '../../services/b2c/b2cProductService';
-import { addColorToVariant } from '../../services/b2c/b2cProductService';
+import { getProductsByStore, createProductVariantWithFormData, addColorToVariant, getProductVariantsByStore } from '../../services/b2c/b2cProductService';
 import { useToast } from '../../context/ToastContext';
 import api from '../../services/common/api';
 
@@ -65,6 +63,90 @@ const AddProductVariant = () => {
     }
   }, [productIdFromQuery, storeLoading, navigate, showToast]);
 
+  // ✅ Hàm lấy default attributes theo category
+  const getDefaultAttributesByCategory = (categoryKey, categoryName) => {
+    // Normalize category name/key để so sánh
+    const normalizedCategory = (categoryKey || categoryName || '').toLowerCase().trim();
+    
+    // Mapping category → default attributes
+    const categoryAttributesMap = {
+      // Phone / Điện thoại
+      'phone': [
+        { key: 'Kích thước màn hình', value: '' },
+        { key: 'Độ phân giải màn hình', value: '' },
+        { key: 'Công nghệ màn hình', value: '' },
+        { key: 'Chipset', value: '' },
+        { key: 'Loại CPU', value: '' },
+        { key: 'Dung lượng RAM', value: '' },
+        { key: 'Bộ nhớ trong', value: '' },
+        { key: 'Camera sau', value: '' },
+        { key: 'Camera trước', value: '' },
+        { key: 'Pin', value: '' },
+        { key: 'Hệ điều hành', value: '' },
+        { key: 'Thẻ SIM', value: '' },
+        { key: 'Công nghệ NFC', value: '' },
+      ],
+      // Laptop / Máy tính xách tay
+      'laptop': [
+        { key: 'Kích thước màn hình', value: '' },
+        { key: 'Độ phân giải màn hình', value: '' },
+        { key: 'Công nghệ màn hình', value: '' },
+        { key: 'Loại CPU', value: '' },
+        { key: 'Loại card đồ họa', value: '' },
+        { key: 'Dung lượng RAM', value: '' },
+        { key: 'Ổ cứng', value: '' },
+        { key: 'Pin', value: '' },
+        { key: 'Hệ điều hành', value: '' },
+        { key: 'Cổng giao tiếp', value: '' },
+      ],
+      // Tablet / Máy tính bảng
+      'tablet': [
+        { key: 'Kích thước màn hình', value: '' },
+        { key: 'Độ phân giải màn hình', value: '' },
+        { key: 'Công nghệ màn hình', value: '' },
+        { key: 'Chipset', value: '' },
+        { key: 'Loại CPU', value: '' },
+        { key: 'Dung lượng RAM', value: '' },
+        { key: 'Bộ nhớ trong', value: '' },
+        { key: 'Camera sau', value: '' },
+        { key: 'Camera trước', value: '' },
+        { key: 'Pin', value: '' },
+        { key: 'Hệ điều hành', value: '' },
+      ],
+      // Watch / Đồng hồ thông minh
+      'watch': [
+        { key: 'Kích thước màn hình', value: '' },
+        { key: 'Độ phân giải màn hình', value: '' },
+        { key: 'Công nghệ màn hình', value: '' },
+        { key: 'Chipset', value: '' },
+        { key: 'Dung lượng RAM', value: '' },
+        { key: 'Bộ nhớ trong', value: '' },
+        { key: 'Pin', value: '' },
+        { key: 'Hệ điều hành', value: '' },
+        { key: 'Chống nước', value: '' },
+      ],
+      // Headphone / Tai nghe
+      'headphone': [
+        { key: 'Loại tai nghe', value: '' },
+        { key: 'Kết nối', value: '' },
+        { key: 'Pin', value: '' },
+        { key: 'Thời lượng pin', value: '' },
+        { key: 'Chống ồn', value: '' },
+        { key: 'Tần số đáp ứng', value: '' },
+      ],
+    };
+    
+    // Tìm category match
+    for (const [key, attrs] of Object.entries(categoryAttributesMap)) {
+      if (normalizedCategory.includes(key) || normalizedCategory === key) {
+        return attrs;
+      }
+    }
+    
+    // Default: Trả về empty array nếu không match
+    return [];
+  };
+
   // ✅ Auto-select product if productId is provided in query param - CHẶN nếu chưa được duyệt
   useEffect(() => {
     if (productIdFromQuery && products.length > 0) {
@@ -89,6 +171,47 @@ const AddProductVariant = () => {
     }
   }, [productIdFromQuery, products, navigate, showToast]);
 
+  // ✅ Auto-populate attributes khi selectedProduct thay đổi
+  useEffect(() => {
+    if (selectedProduct) {
+      // Lấy category từ product
+      const categoryKey = selectedProduct.categoryKey || selectedProduct.category?.key || '';
+      const categoryName = selectedProduct.categoryName || selectedProduct.category?.name || selectedProduct.category || '';
+      
+      // Lấy default attributes theo category
+      const defaultAttrs = getDefaultAttributesByCategory(categoryKey, categoryName);
+      
+      // Chỉ populate nếu:
+      // 1. Có default attributes
+      // 2. Attributes hiện tại đang trống hoặc chỉ có 1 field trống (chưa nhập gì)
+      const hasEmptyAttrs = attributes.length === 0 || 
+                           (attributes.length === 1 && !attributes[0].key.trim() && !attributes[0].value.trim()) ||
+                           attributes.every(attr => !attr.key.trim() && !attr.value.trim());
+      
+      if (defaultAttrs.length > 0 && hasEmptyAttrs) {
+        setAttributes(defaultAttrs);
+        console.log('✅ Auto-populated attributes for category:', categoryKey || categoryName, defaultAttrs);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProduct]); // Chỉ chạy khi selectedProduct thay đổi
+
+  // ✅ Helper: Format số với dấu chấm (100000 -> 100.000)
+  const formatNumberWithDots = (value) => {
+    if (!value) return '';
+    // Loại bỏ tất cả ký tự không phải số
+    const numericValue = value.toString().replace(/[^\d]/g, '');
+    if (!numericValue) return '';
+    // Format với dấu chấm
+    return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+
+  // ✅ Helper: Parse số từ format có dấu chấm (100.000 -> 100000)
+  const parseFormattedNumber = (value) => {
+    if (!value) return '';
+    return value.toString().replace(/\./g, '');
+  };
+
   // Handle attributes changes
   const addAttribute = () => {
     setAttributes([...attributes, { key: '', value: '' }]);
@@ -111,13 +234,42 @@ const AddProductVariant = () => {
     const files = Array.from(e.target.files);
     console.log(`📸 Selected ${files.length} images:`, files.map(f => f.name));
     
-    setImages(files);
-
-    // Generate previews
-    const previews = files.map(file => URL.createObjectURL(file));
-    setImagePreviews(previews);
+    // ✅ Kiểm tra số lượng ảnh hiện tại + ảnh mới không vượt quá 5
+    const currentCount = images.length;
+    const newCount = files.length;
+    const totalCount = currentCount + newCount;
     
-    console.log(`✅ Created ${previews.length} previews`);
+    if (totalCount > 5) {
+      showToast(`Chỉ được tải tối đa 5 ảnh. Hiện tại đã có ${currentCount} ảnh, bạn chỉ có thể thêm tối đa ${5 - currentCount} ảnh nữa.`, 'error');
+      // Chỉ lấy số ảnh còn thiếu
+      const remainingSlots = 5 - currentCount;
+      if (remainingSlots > 0) {
+        const limitedFiles = files.slice(0, remainingSlots);
+        const newImages = [...images, ...limitedFiles];
+        setImages(newImages);
+        
+        // Generate previews cho tất cả ảnh
+        const allPreviews = newImages.map(file => URL.createObjectURL(file));
+        setImagePreviews(allPreviews);
+        console.log(`✅ Added ${limitedFiles.length} images (limited to max 5). Total: ${newImages.length}`);
+      }
+      // Reset input để có thể chọn lại
+      e.target.value = '';
+      return;
+    }
+    
+    // ✅ Nếu chưa đạt giới hạn, thêm ảnh mới vào danh sách hiện tại
+    const newImages = [...images, ...files];
+    setImages(newImages);
+
+    // Generate previews cho tất cả ảnh
+    const allPreviews = newImages.map(file => URL.createObjectURL(file));
+    setImagePreviews(allPreviews);
+    
+    console.log(`✅ Created ${allPreviews.length} previews (total)`);
+    
+    // Reset input để có thể chọn thêm ảnh
+    e.target.value = '';
   };
 
   const removeImage = (index) => {
@@ -182,6 +334,7 @@ const AddProductVariant = () => {
         return variantName.trim() !== '' && price > 0 && selectedProduct !== null;
       case 2:
         // ✅ Images là optional - có thể bỏ qua
+        // ✅ Nếu có colors, ảnh chính không bắt buộc vì mỗi color có ảnh riêng
         return true;
       case 3:
         // Nếu có colors, kiểm tra tất cả colors đều hợp lệ
@@ -249,9 +402,14 @@ const AddProductVariant = () => {
 
       let variantId = null;
 
+      // ✅ LOGIC: Nếu có colors → Ảnh chính không bắt buộc (mỗi color có ảnh riêng)
       // ✅ Nếu KHÔNG CÓ ẢNH → Dùng API create-without-image
       if (!images || images.length === 0) {
-        console.log('📝 Creating variant without images');
+        if (hasColors && colors.some(c => c.image !== null)) {
+          console.log('📝 Creating variant without main images (will use color images instead)');
+        } else {
+          console.log('📝 Creating variant without images');
+        }
         const result = await api.post('/api/v1/b2c/product-variants/create-without-image', dto);
         
         console.log('🔍 [DEBUG] Full response:', result);
@@ -264,17 +422,90 @@ const AddProductVariant = () => {
           return;
         }
 
-        // Thử nhiều cách lấy ID từ response
-        variantId = 
-          result.data?.data?.id || 
-          result.data?.data?._id || 
-          result.data?.data?.$oid ||
-          result.data?.id || 
-          result.data?._id ||
-          result.data?.variantId ||
-          (result.data?.data && typeof result.data.data === 'string' ? result.data.data : null);
+        // ✅ Log toàn bộ response để debug
+        console.log('🔍 [DEBUG] Full response object:', JSON.stringify(result.data, null, 2));
+        console.log('🔍 [DEBUG] Full response (raw):', result);
+        console.log('🔍 [DEBUG] Response headers:', result.headers);
+        
+        // ✅ Thử lấy ID từ Location header (nếu có)
+        const locationHeader = result.headers?.['location'] || result.headers?.['Location'];
+        if (locationHeader) {
+          const locationMatch = locationHeader.match(/\/([a-f0-9]{24})$/i); // MongoDB ObjectId pattern
+          if (locationMatch) {
+            variantId = locationMatch[1];
+            console.log('✅ [SUCCESS] Found variantId from Location header:', variantId);
+          }
+        }
+        
+        // Thử nhiều cách lấy ID từ response body
+        if (!variantId) {
+          variantId = 
+            result.data?.data?.id || 
+            result.data?.data?._id || 
+            result.data?.data?.$oid ||
+            result.data?.id || 
+            result.data?._id ||
+            result.data?.variantId ||
+            result.data?.data?.variantId ||
+            (result.data?.data && typeof result.data.data === 'object' && result.data.data?.id ? result.data.data.id : null) ||
+            (result.data?.data && typeof result.data.data === 'object' && result.data.data?._id ? result.data.data._id : null);
+        }
 
         console.log('🔍 [DEBUG] Extracted variantId:', variantId);
+        console.log('🔍 [DEBUG] variantId type:', typeof variantId);
+        
+        // ✅ Nếu vẫn không có variantId, thử lấy variant mới nhất từ product
+        // ⚠️ Backend có thể trả về message thay vì object, nên cần fallback này
+        if (!variantId && selectedProduct?.id && currentStore?.id) {
+          console.log('⚠️ [WARNING] Không tìm thấy variantId trong response, thử lấy variant mới nhất từ product...');
+          // Delay để đảm bảo variant đã được tạo xong trong DB
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          try {
+            const variantsResult = await getProductVariantsByStore(currentStore.id, {
+              page: 0,
+              size: 100, // Lấy nhiều để tìm variant mới nhất
+              sortBy: 'createdAt',
+              sortDir: 'desc'
+            });
+            
+            if (variantsResult.success) {
+              const variants = Array.isArray(variantsResult.data) 
+                ? variantsResult.data 
+                : (variantsResult.data?.content || []);
+              
+              // Tìm variant mới nhất của product này (theo name hoặc productId)
+              const productVariants = variants.filter(v => {
+                const vProductId = v.product?.id || v.product?._id || v.productId;
+                const vName = v.name || '';
+                const selectedName = variantName.trim();
+                
+                return (
+                  vProductId === selectedProduct.id ||
+                  vProductId === selectedProduct._id ||
+                  (vName === selectedName && vProductId === selectedProduct.id)
+                );
+              });
+              
+              if (productVariants.length > 0) {
+                // Variant đầu tiên đã được sort desc theo createdAt
+                variantId = productVariants[0]?.id || productVariants[0]?._id;
+                console.log('✅ [SUCCESS] Found variantId from latest variant:', variantId);
+                console.log('✅ [SUCCESS] Variant details:', productVariants[0]);
+              } else {
+                console.warn('⚠️ [WARNING] Không tìm thấy variant nào của product này');
+              }
+            }
+          } catch (err) {
+            console.error('❌ [ERROR] Không thể lấy variant mới nhất:', err);
+          }
+        }
+        
+        // ✅ Kiểm tra nếu variantId là message thay vì ID
+        if (variantId && typeof variantId === 'string' && variantId.length > 50) {
+          console.warn('⚠️ [WARNING] variantId có vẻ là message, không phải ID:', variantId);
+          variantId = null;
+        }
 
         if (!variantId) {
           console.error('❌ [ERROR] Cannot extract variantId. Full response:', result);
@@ -292,8 +523,10 @@ const AddProductVariant = () => {
         const primaryIdx = Math.max(0, Math.min(primaryImageIndex, images.length - 1));
         formData.append('primaryImageIndex', String(primaryIdx));
 
-        // Append images
-        images.forEach(image => {
+        // Append images (có thể nhiều ảnh)
+        console.log(`📤 Sending ${images.length} images to API`);
+        images.forEach((image, idx) => {
+          console.log(`  - Image ${idx + 1}: ${image.name} (${(image.size / 1024).toFixed(2)} KB)`);
           formData.append('images', image);
         });
 
@@ -307,6 +540,9 @@ const AddProductVariant = () => {
           return;
         }
 
+        // ✅ Log toàn bộ response để debug
+        console.log('🔍 [DEBUG] Full result object:', JSON.stringify(result, null, 2));
+        
         // Thử nhiều cách lấy ID từ response
         variantId = 
           result.data?.id || 
@@ -315,9 +551,16 @@ const AddProductVariant = () => {
           result.data?.data?.id ||
           result.data?.data?._id ||
           result.data?.variantId ||
-          (result.data && typeof result.data === 'string' ? result.data : null);
+          (result.data && typeof result.data === 'string' && result.data.length < 50 ? result.data : null); // Chỉ lấy string nếu ngắn (tránh lấy message)
 
         console.log('🔍 [DEBUG] Extracted variantId:', variantId);
+        console.log('🔍 [DEBUG] variantId type:', typeof variantId);
+        
+        // ✅ Kiểm tra nếu variantId là message thay vì ID
+        if (variantId && typeof variantId === 'string' && variantId.length > 50) {
+          console.warn('⚠️ [WARNING] variantId có vẻ là message, không phải ID:', variantId);
+          variantId = null;
+        }
 
         if (!variantId) {
           console.error('❌ [ERROR] Cannot extract variantId. Full result:', result);
@@ -331,6 +574,16 @@ const AddProductVariant = () => {
 
       // ✅ Bước 2: Thêm colors nếu có
       if (hasColors && colors.length > 0) {
+        // ✅ Kiểm tra variantId trước khi thêm màu
+        if (!variantId) {
+          console.error('❌ [ERROR] Không có variantId để thêm màu sắc');
+          showToast('Không thể thêm màu sắc vì không tìm thấy ID biến thể', 'error');
+          setIsSubmitting(false);
+          return;
+        }
+        
+        console.log('🎨 [COLORS] variantId để thêm màu:', variantId);
+        
         const validColors = colors.filter(color => 
           color.colorName.trim() !== '' && 
           color.price > 0 && 
@@ -341,16 +594,24 @@ const AddProductVariant = () => {
         if (validColors.length > 0) {
           showToast(`Đang thêm ${validColors.length} màu sắc...`, 'info');
           
+          // ✅ Thêm delay nhỏ để đảm bảo variant đã được tạo xong trong DB
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
           for (const color of validColors) {
+            console.log(`🎨 [COLORS] Đang thêm màu: ${color.colorName} với variantId: ${variantId}`);
+            
             const colorResult = await addColorToVariant(variantId, {
               colorName: color.colorName.trim(),
-              price: parseInt(color.price),
+              price: parseInt(parseFormattedNumber(color.price)),
               stock: parseInt(color.stock)
             }, color.image);
 
             if (!colorResult.success) {
-              console.error(`Lỗi khi thêm màu ${color.colorName}:`, colorResult.error);
-              showToast(`Lỗi khi thêm màu ${color.colorName}`, 'warning');
+              console.error(`❌ [ERROR] Lỗi khi thêm màu ${color.colorName}:`, colorResult.error);
+              console.error(`❌ [ERROR] variantId đã dùng:`, variantId);
+              showToast(`Lỗi khi thêm màu ${color.colorName}: ${colorResult.error}`, 'error');
+            } else {
+              console.log(`✅ [SUCCESS] Đã thêm màu ${color.colorName} thành công`);
             }
           }
         }
@@ -434,18 +695,15 @@ const AddProductVariant = () => {
                   Giá (VNĐ) <span className="text-red-500">*</span>
                 </label>
                 <input
-                  type="number"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  placeholder="Ví dụ: 26990000"
-                  min="0"
+                  type="text"
+                  value={formatNumberWithDots(price)}
+                  onChange={(e) => {
+                    const parsed = parseFormattedNumber(e.target.value);
+                    setPrice(parsed);
+                  }}
+                  placeholder="Ví dụ: 26.990.000"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
-                {price > 0 && (
-                  <p className="text-sm text-gray-600 mt-1">
-                    = {parseInt(price || 0).toLocaleString('vi-VN')} đ
-                  </p>
-                )}
               </div>
 
               {/* Tồn kho */}
@@ -478,47 +736,36 @@ const AddProductVariant = () => {
                 />
               </div>
 
-              {/* Attributes */}
+              {/* Attributes - CỐ ĐỊNH, chỉ nhập giá trị */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Thuộc tính (Tùy chọn)
                 </label>
-                <p className="text-xs text-gray-500 mb-3">Ví dụ: Bộ nhớ, Màn hình, CPU...</p>
+                <p className="text-xs text-gray-500 mb-3">
+                  Điền thông số kỹ thuật cho biến thể. Các thuộc tính này được tự động tạo dựa trên loại sản phẩm.
+                </p>
                 
                 <div className="space-y-2">
                   {attributes.map((attr, index) => (
-                    <div key={index} className="flex gap-2">
-                      <input
-                        type="text"
-                        value={attr.key}
-                        onChange={(e) => updateAttribute(index, 'key', e.target.value)}
-                        placeholder="Tên thuộc tính"
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
+                    <div key={index} className="flex items-center gap-3">
+                      <label className="w-1/3 text-sm font-medium text-gray-700">
+                        {attr.key}
+                      </label>
                       <input
                         type="text"
                         value={attr.value}
                         onChange={(e) => updateAttribute(index, 'value', e.target.value)}
-                        placeholder="Giá trị"
+                        placeholder="Nhập giá trị"
                         className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
-                      {attributes.length > 1 && (
-                        <button
-                          onClick={() => removeAttribute(index)}
-                          className="px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
-                        >
-                          ✕
-                        </button>
-                      )}
                     </div>
                   ))}
                   
-                  <button
-                    onClick={addAttribute}
-                    className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-colors"
-                  >
-                    + Thêm thuộc tính
-                  </button>
+                  {attributes.length === 0 && (
+                    <div className="text-center py-4 text-gray-500 text-sm">
+                      Chưa có thuộc tính nào. Vui lòng chọn sản phẩm để tự động tạo thuộc tính.
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -528,8 +775,15 @@ const AddProductVariant = () => {
       case 2:
         return (
           <div>
-            <h3 className="text-2xl font-bold mb-4 text-gray-900">Bước 2: Hình ảnh sản phẩm (Tùy chọn)</h3>
-            <p className="text-gray-600 mb-6">Upload hình ảnh cho biến thể. Có thể bỏ qua và thêm ảnh sau.</p>
+            <h3 className="text-2xl font-bold mb-4 text-gray-900">Bước 2: Hình ảnh sản phẩm (Tùy chọn - Tối đa 5 ảnh)</h3>
+            <p className="text-gray-600 mb-4">Upload hình ảnh cho biến thể. Có thể bỏ qua và thêm ảnh sau. Tối đa 5 ảnh.</p>
+            {hasColors && (
+              <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6 rounded">
+                <p className="text-blue-800 text-sm">
+                  <strong>💡 Gợi ý:</strong> Vì biến thể này có nhiều màu sắc, bạn có thể <strong>bỏ qua bước này</strong> và thêm ảnh cho từng màu ở bước tiếp theo. Mỗi màu sẽ có ảnh riêng của nó.
+                </p>
+              </div>
+            )}
             
             <div className="space-y-4">
               <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 transition-colors">
@@ -540,26 +794,35 @@ const AddProductVariant = () => {
                   onChange={handleImageChange}
                   className="hidden"
                   id="image-upload"
+                  disabled={images.length >= 5}
                 />
-                <label htmlFor="image-upload" className="cursor-pointer">
+                <label 
+                  htmlFor="image-upload" 
+                  className={`cursor-pointer ${images.length >= 5 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
                   <div className="text-6xl mb-4">📸</div>
                   <p className="text-lg font-semibold text-gray-900 mb-2">Chọn hình ảnh</p>
-                  <p className="text-gray-600">Kéo thả hoặc click để chọn nhiều ảnh</p>
+                  <p className="text-gray-600 mb-2">Kéo thả hoặc click để chọn nhiều ảnh</p>
+                  <p className="text-sm text-gray-500">
+                    {images.length > 0 ? `${images.length}/5 ảnh đã chọn` : 'Chưa có ảnh nào'}
+                  </p>
                 </label>
               </div>
 
               {imagePreviews.length > 0 && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {imagePreviews.map((preview, index) => (
-                    <div key={index} className="relative group">
-                      <img
-                        src={preview}
-                        alt={`Preview ${index + 1}`}
-                        className="w-full h-32 object-cover rounded-lg border-2 border-gray-200"
-                      />
+                    <div key={index} className="relative group bg-gray-100 rounded-lg border-2 border-gray-200 overflow-hidden">
+                      <div className="w-full aspect-square flex items-center justify-center">
+                        <img
+                          src={preview}
+                          alt={`Preview ${index + 1}`}
+                          className="w-full h-full object-contain p-2"
+                        />
+                      </div>
                       <button
                         onClick={() => removeImage(index)}
-                        className="absolute top-2 right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute top-2 right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
                       >
                         ✕
                       </button>
@@ -637,18 +900,15 @@ const AddProductVariant = () => {
                             Giá (VNĐ) <span className="text-red-500">*</span>
                           </label>
                           <input
-                            type="number"
-                            value={color.price}
-                            onChange={(e) => updateColor(index, 'price', e.target.value)}
-                            placeholder="Ví dụ: 30000000"
-                            min="0"
+                            type="text"
+                            value={formatNumberWithDots(color.price)}
+                            onChange={(e) => {
+                              const parsed = parseFormattedNumber(e.target.value);
+                              updateColor(index, 'price', parsed);
+                            }}
+                            placeholder="Ví dụ: 30.000.000"
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           />
-                          {color.price > 0 && (
-                            <p className="text-xs text-gray-600 mt-1">
-                              = {parseInt(color.price || 0).toLocaleString('vi-VN')} đ
-                            </p>
-                          )}
                         </div>
 
                         {/* Tồn kho màu */}
@@ -672,15 +932,17 @@ const AddProductVariant = () => {
                             Hình ảnh màu <span className="text-red-500">*</span>
                           </label>
                           {color.imagePreview ? (
-                            <div className="relative">
-                              <img
-                                src={color.imagePreview}
-                                alt={color.colorName || `Color ${index + 1}`}
-                                className="w-full h-32 object-cover rounded-lg border-2 border-gray-200"
-                              />
+                            <div className="relative group bg-gray-100 rounded-lg border-2 border-gray-200 overflow-hidden">
+                              <div className="w-full aspect-square flex items-center justify-center">
+                                <img
+                                  src={color.imagePreview}
+                                  alt={color.colorName || `Color ${index + 1}`}
+                                  className="w-full h-full object-contain p-2"
+                                />
+                              </div>
                               <button
                                 onClick={() => removeColorImage(index)}
-                                className="absolute top-2 right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center"
+                                className="absolute top-2 right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
                               >
                                 ✕
                               </button>
@@ -787,10 +1049,12 @@ const AddProductVariant = () => {
                 <h4 className="font-bold text-lg mb-3 text-gray-900">Hình ảnh ({images.length})</h4>
                 <div className="grid grid-cols-4 gap-2">
                   {imagePreviews.map((preview, idx) => (
-                    <div key={idx} className="relative">
-                      <img src={preview} alt={`Preview ${idx + 1}`} className="w-full h-20 object-cover rounded-lg" />
+                    <div key={idx} className="relative bg-gray-100 rounded-lg overflow-hidden">
+                      <div className="w-full aspect-square flex items-center justify-center">
+                        <img src={preview} alt={`Preview ${idx + 1}`} className="w-full h-full object-contain p-1" />
+                      </div>
                       {idx === primaryImageIndex && (
-                        <div className="absolute top-1 left-1 bg-blue-600 text-white text-xs px-2 py-0.5 rounded">Chính</div>
+                        <div className="absolute top-1 left-1 bg-blue-600 text-white text-xs px-2 py-0.5 rounded z-10">Chính</div>
                       )}
                     </div>
                   ))}
@@ -808,7 +1072,9 @@ const AddProductVariant = () => {
                           <div key={idx} className="bg-white p-4 rounded-lg border border-gray-200">
                             <div className="flex items-center gap-3 mb-2">
                               {color.imagePreview && (
-                                <img src={color.imagePreview} alt={color.colorName} className="w-16 h-16 object-cover rounded-lg" />
+                                <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
+                                  <img src={color.imagePreview} alt={color.colorName} className="w-full h-full object-contain p-1" />
+                                </div>
                               )}
                               <div>
                                 <p className="font-semibold text-gray-900">{color.colorName}</p>

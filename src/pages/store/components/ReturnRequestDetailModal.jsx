@@ -1,4 +1,5 @@
 import React from 'react';
+import { getOrderCode } from '../../../utils/displayCodeUtils';
 
 const getStatusLabel = (status) => {
   switch (status) {
@@ -98,7 +99,10 @@ const ReturnRequestDetailModal = ({ open, loading, data, onClose }) => {
                   <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
                     <p className="text-xs text-gray-500 uppercase font-semibold">Đơn hàng</p>
                     <p className="mt-1 font-medium break-all">
-                      {data.orderNumber || data.order?.id || data.order?.orderId || data.order}
+                      {(() => {
+                        const orderId = data.orderNumber || data.order?.id || data.order?.orderId || data.order;
+                        return orderId ? getOrderCode(orderId) : 'N/A';
+                      })()}
                     </p>
                   </div>
                 )}

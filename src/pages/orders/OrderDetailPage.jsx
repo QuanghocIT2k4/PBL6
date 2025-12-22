@@ -6,8 +6,10 @@ import MainLayout from '../../layouts/MainLayout';
 import ReviewForm from '../../components/reviews/ReviewForm';
 import { getOrderById, cancelOrder, canCancelOrder, canReviewOrder, getOrderStatusBadge, getPaymentMethodLabel } from '../../services/buyer/orderService';
 import { getReturnRequestDetail } from '../../services/buyer/returnService';
+import { getMyDisputes } from '../../services/buyer/disputeService';
 import { getAdminOrderById } from '../../services/admin/adminOrderService';
 import { checkExistingReview } from '../../services/buyer/reviewService';
+import { getPromotionById } from '../../services/admin/adminPromotionService';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { confirmCancelOrder } from '../../utils/sweetalert';
@@ -36,6 +38,13 @@ const formatDate = (dateString) => {
   });
 };
 
+// Lấy ID từ DBRef hoặc object populate
+const getIdFromRef = (ref) => {
+  if (!ref) return null;
+  if (typeof ref === 'string' || typeof ref === 'number') return String(ref);
+  return String(ref.$id || ref._id || ref.id || ref.$oid || ref);
+};
+
 /**
  * OrderDetailPage Component - SHOPEE/MALL STYLE
  * Clean, simple, professional
@@ -49,6 +58,7 @@ const OrderDetailPage = () => {
   const [selectedItem, setSelectedItem] = useState(null);
   const [reviewedItems, setReviewedItems] = useState({}); // Track which items have been reviewed
   const [existingReviews, setExistingReviews] = useState({}); // Store existing reviews for editing
+  const [fetchedPromotions, setFetchedPromotions] = useState({}); // Cache fetched promotions from DBRef
 
   // ✅ Check if user is admin (check nhiều cách)
   const isAdmin = 
@@ -75,6 +85,16 @@ const OrderDetailPage = () => {
   );
 
   const order = orderData?.success ? orderData.data : null;
+  
+  // ✅ DEBUG: Log order ngay khi có data
+  if (order) {
+    console.log('🔍 [OrderDetailPage] ===== ORDER LOADED =====');
+    console.log('🔍 [OrderDetailPage] Order ID:', order.id || order._id);
+    console.log('🔍 [OrderDetailPage] platformDiscountAmount:', order.platformDiscountAmount);
+    console.log('🔍 [OrderDetailPage] storeDiscountAmount:', order.storeDiscountAmount);
+    console.log('🔍 [OrderDetailPage] promotions:', order.promotions);
+    console.log('🔍 [OrderDetailPage] =========================');
+  }
 
   // Nếu order có returnRequestId, load thêm chi tiết ReturnRequest (để lấy partialRefundToBuyer/Store nếu có)
   const { data: rrData } = useSWR(
@@ -85,6 +105,93 @@ const OrderDetailPage = () => {
 
   const returnRequest =
     order?.returnRequest || (rrData?.success ? rrData.data : null) || null;
+
+  // Helper xác định trạng thái trả hàng chính để hiển thị trên timeline
+  const getReturnMainStatus = (rr) => {
+    if (!rr) return null;
+    // Ưu tiên các trạng thái đã hoàn tất để khách dễ hiểu
+    if (rr.status === 'REFUNDED') return 'REFUNDED';
+    if (rr.status === 'RETURNED') return 'RETURNED';
+    if (rr.status === 'RETURNING') return 'RETURNING';
+    if (rr.status === 'READY_TO_RETURN') return 'READY_TO_RETURN';
+    if (rr.status === 'APPROVED') return 'APPROVED';
+    if (rr.status === 'REJECTED') return 'REJECTED';
+    return rr.status || null;
+  };
+
+  // Label tiếng Việt cho trạng thái trả hàng (dùng cho timeline)
+  const getReturnStatusLabel = (status) => {
+    const labels = {
+      PENDING: 'Chờ xử lý',
+      APPROVED: 'Đã chấp nhận trả hàng',
+      READY_TO_RETURN: 'Sẵn sàng trả hàng',
+      RETURNING: 'Đang trả hàng',
+      RETURNED: 'Đã trả hàng',
+      REFUNDED: 'Đã hoàn tiền',
+      REJECTED: 'Đã từ chối yêu cầu trả hàng',
+      RETURN_DISPUTED: 'Tranh chấp chất lượng',
+    };
+    return labels[status] || status || 'Đang xử lý';
+  };
+
+  const returnMainStatus = getReturnMainStatus(returnRequest);
+
+  // Khiếu nại gắn với đơn hàng này (buyer)
+  const { data: disputesData } = useSWR(
+    order ? ['buyer-order-disputes', order.id] : null,
+    () => getMyDisputes({ page: 0, size: 200 }),
+    { revalidateOnFocus: false }
+  );
+
+  const buyerDisputes = disputesData?.success
+    ? disputesData.data?.content || disputesData.data || []
+    : [];
+
+  const orderDisputes = buyerDisputes.filter((d) => {
+    const disputeOrderId = getIdFromRef(d.order || d.orderId || d.orderRef);
+    return disputeOrderId && String(disputeOrderId) === String(order.id || order._id);
+  });
+
+  // ✅ Fetch promotion details nếu promotions là DBRef
+  useEffect(() => {
+    if (!order || !order.promotions || !Array.isArray(order.promotions)) return;
+    
+    const fetchPromotionDetails = async () => {
+      const newFetchedPromotions = {};
+      
+      for (const promo of order.promotions) {
+        // Nếu là DBRef chưa populate (có $id hoặc _id nhưng không có code)
+        const isDBRef = (promo.$id || promo._id || promo.id) && !promo.code && !promo.issuer;
+        
+        if (isDBRef) {
+          const promoId = promo.$id || promo._id || promo.id;
+          
+          // Nếu đã fetch rồi trong cache, bỏ qua
+          if (fetchedPromotions[promoId]) {
+            continue;
+          }
+          
+          try {
+            console.log('🔄 [OrderDetailPage] Fetching promotion details for ID:', promoId);
+            const result = await getPromotionById(promoId);
+            if (result.success && result.data) {
+              newFetchedPromotions[promoId] = result.data;
+              console.log('✅ [OrderDetailPage] Fetched promotion:', result.data.code, 'issuer:', result.data.issuer);
+            }
+          } catch (error) {
+            console.error('❌ [OrderDetailPage] Error fetching promotion:', error);
+          }
+        }
+      }
+      
+      if (Object.keys(newFetchedPromotions).length > 0) {
+        setFetchedPromotions(prev => ({ ...prev, ...newFetchedPromotions }));
+      }
+    };
+    
+    fetchPromotionDetails();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.promotions]);
 
   // Check which items have been reviewed
   useEffect(() => {
@@ -331,6 +438,11 @@ const OrderDetailPage = () => {
   const statusBadge = getOrderStatusBadge(status);
   const canCancel = canCancelOrder(status);
   const canReview = canReviewOrder(status);
+  
+  // ✅ Debug log order status
+  console.log('📦 [OrderDetailPage] Order status:', status);
+  console.log('📦 [OrderDetailPage] Can review?', canReview);
+  console.log('📦 [OrderDetailPage] Full order:', order);
 
   // Helper: build display name with color (productName - ColorName)
   const buildItemDisplayName = (item) => {
@@ -544,6 +656,67 @@ const OrderDetailPage = () => {
             </div>
           </div>
 
+          {/* Khiếu nại liên quan đơn hàng */}
+          {orderDisputes.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="mt-1">
+                  <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-amber-800">Đơn hàng đang có khiếu nại</p>
+                  <div className="mt-2 space-y-2">
+                    {orderDisputes.map((d) => {
+                      const disputeId = d.id || d._id;
+                      return (
+                        <div key={disputeId} className="bg-white border border-amber-100 rounded-md p-3 shadow-xs">
+                          <div className="flex flex-wrap items-center gap-2 text-sm">
+                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+                              {d.disputeType || 'Khiếu nại'}
+                            </span>
+                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+                              Trạng thái: {d.status || 'N/A'}
+                            </span>
+                            {d.finalDecision && (
+                              <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                                Quyết định: {d.finalDecision}
+                              </span>
+                            )}
+                            {d.winner && (
+                              <span className="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                                Bên thắng: {d.winner}
+                              </span>
+                            )}
+                          </div>
+                          {d.decisionReason && (
+                            <p className="text-sm text-gray-700 mt-1">
+                              Lý do: {d.decisionReason}
+                            </p>
+                          )}
+                          <div className="flex items-center justify-between mt-2">
+                            <p className="text-xs text-gray-500">
+                              Cập nhật: {d.updatedAt ? formatDate(d.updatedAt) : 'N/A'}
+                            </p>
+                            {disputeId && (
+                              <button
+                                onClick={() => navigate(`/orders/disputes/${disputeId}`)}
+                                className="text-sm font-semibold text-blue-600 hover:text-blue-700"
+                              >
+                                Xem chi tiết
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Products - MALL STYLE */}
           <div className="bg-white border border-gray-200 rounded-lg mb-4">
             {/* Store Header */}
@@ -666,28 +839,166 @@ const OrderDetailPage = () => {
                   <span className="font-medium">{formatCurrency(shippingFeeValue)}</span>
                 </div>
                 {(() => {
-                  const promotionCode = getPromotionCode(order);
+                  // ✅ Lấy mã khuyến mãi store và sàn từ promotions array
+                  let storePromotionCode = order.promotionCode || order.promotion?.code || order.appliedPromotion?.code;
+                  let platformPromotionCode = order.platformPromotions?.orderPromotionCode || 
+                                             order.platformPromotions?.shippingPromotionCode ||
+                                             order.platformPromotionCode ||
+                                             (order.platformPromotions && typeof order.platformPromotions === 'string' ? order.platformPromotions : null);
                   
-                  if (promotionCode || discountValue > 0) {
+                  // ✅ Nếu platformPromotions là object, thử lấy code từ các field khác
+                  if (!platformPromotionCode && order.platformPromotions && typeof order.platformPromotions === 'object') {
+                    platformPromotionCode = order.platformPromotions.code || 
+                                           order.platformPromotions.promotionCode ||
+                                           (order.platformPromotions.orderPromotion && order.platformPromotions.orderPromotion.code) ||
+                                           (order.platformPromotions.shippingPromotion && order.platformPromotions.shippingPromotion.code);
+                  }
+                  
+                  // ✅ QUAN TRỌNG: Kiểm tra promotions array để lấy mã sàn và mã store
+                  if (order.promotions && Array.isArray(order.promotions) && order.promotions.length > 0) {
+                    order.promotions.forEach(promo => {
+                      // Nếu là DBRef chưa populate (có $id hoặc _id nhưng không có code và issuer)
+                      const isDBRef = (promo.$id || promo._id || promo.id) && !promo.code && !promo.issuer;
+                      
+                      if (isDBRef) {
+                        // DBRef chưa populate - thử lấy từ fetchedPromotions cache
+                        const promoId = promo.$id || promo._id || promo.id;
+                        const fetchedPromo = fetchedPromotions[promoId];
+                        
+                        if (fetchedPromo) {
+                          // Đã fetch được promotion details
+                          if (fetchedPromo.issuer === 'PLATFORM' || fetchedPromo.issuer === 'platform') {
+                            if (fetchedPromo.code) {
+                              platformPromotionCode = fetchedPromo.code;
+                              console.log('✅ [OrderDetailPage] Tìm thấy mã sàn từ fetched promotion:', fetchedPromo.code);
+                            }
+                          } else if (fetchedPromo.issuer === 'STORE' || fetchedPromo.issuer === 'store') {
+                            if (fetchedPromo.code) {
+                              storePromotionCode = fetchedPromo.code;
+                              console.log('✅ [OrderDetailPage] Tìm thấy mã store từ fetched promotion:', fetchedPromo.code);
+                            }
+                          }
+                        } else {
+                          console.log('⚠️ [OrderDetailPage] Promotion là DBRef chưa populate, ID:', promoId, '- Đang fetch...');
+                        }
+                        return;
+                      }
+                      
+                      // Nếu đã populate, kiểm tra issuer
+                      if (promo.issuer === 'PLATFORM' || promo.issuer === 'platform') {
+                        // Đây là mã sàn
+                        if (promo.code) {
+                          platformPromotionCode = promo.code;
+                          console.log('✅ [OrderDetailPage] Tìm thấy mã sàn:', promo.code);
+                        }
+                      } else if (promo.issuer === 'STORE' || promo.issuer === 'store') {
+                        // Đây là mã store
+                        if (promo.code) {
+                          storePromotionCode = promo.code;
+                          console.log('✅ [OrderDetailPage] Tìm thấy mã store:', promo.code);
+                        }
+                      } else if (promo.code) {
+                        // Nếu có code nhưng không có issuer, thử đoán dựa vào discount amount
+                        // Nếu chưa có store code, có thể là store promotion
+                        if (!storePromotionCode) {
+                          storePromotionCode = promo.code;
+                          console.log('✅ [OrderDetailPage] Tìm thấy mã (fallback - có thể là store):', promo.code);
+                        }
+                      }
+                    });
+                  }
+                  
+                  // ✅ Lấy discount riêng biệt
+                  const storeDiscount = parseFloat(order.storeDiscountAmount || 0);
+                  const platformDiscount = parseFloat(order.platformDiscountAmount || 0);
+                  
+                  // ✅ Nếu promotions là DBRef nhưng có platformDiscountAmount > 0, vẫn hiển thị mã sàn
+                  // (không có code cụ thể nhưng vẫn hiển thị để người dùng biết có mã sàn)
+                  if (!platformPromotionCode && platformDiscount > 0) {
+                    console.log('⚠️ [OrderDetailPage] Có platformDiscount nhưng không có code, sẽ hiển thị "Đã áp dụng mã sàn"');
+                  }
+                  
+                  // ✅ DEBUG LOG CHI TIẾT
+                  console.log('🔍 [OrderDetailPage] ===== PROMOTION DEBUG =====');
+                  console.log('🔍 [OrderDetailPage] Full order object:', order);
+                  console.log('🔍 [OrderDetailPage] Order keys:', Object.keys(order));
+                  console.log('🔍 [OrderDetailPage] storeDiscountAmount:', order.storeDiscountAmount);
+                  console.log('🔍 [OrderDetailPage] platformDiscountAmount:', order.platformDiscountAmount);
+                  console.log('🔍 [OrderDetailPage] totalDiscountAmount:', order.totalDiscountAmount);
+                  console.log('🔍 [OrderDetailPage] promotions array:', order.promotions);
+                  console.log('🔍 [OrderDetailPage] promotions type:', typeof order.promotions);
+                  console.log('🔍 [OrderDetailPage] promotions isArray:', Array.isArray(order.promotions));
+                  if (order.promotions && Array.isArray(order.promotions)) {
+                    order.promotions.forEach((promo, index) => {
+                      console.log(`🔍 [OrderDetailPage] Promotion ${index}:`, promo);
+                      console.log(`🔍 [OrderDetailPage] Promotion ${index} type:`, typeof promo);
+                      if (promo && typeof promo === 'object') {
+                        console.log(`🔍 [OrderDetailPage] Promotion ${index} keys:`, Object.keys(promo));
+                        console.log(`🔍 [OrderDetailPage] Promotion ${index} issuer:`, promo.issuer);
+                        console.log(`🔍 [OrderDetailPage] Promotion ${index} code:`, promo.code);
+                      }
+                    });
+                  }
+                  console.log('🔍 [OrderDetailPage] platformPromotions:', order.platformPromotions);
+                  console.log('🔍 [OrderDetailPage] platformPromotions type:', typeof order.platformPromotions);
+                  console.log('🔍 [OrderDetailPage] Final storePromotionCode:', storePromotionCode);
+                  console.log('🔍 [OrderDetailPage] Final platformPromotionCode:', platformPromotionCode);
+                  console.log('🔍 [OrderDetailPage] Final storeDiscount:', storeDiscount);
+                  console.log('🔍 [OrderDetailPage] Final platformDiscount:', platformDiscount);
+                  console.log('🔍 [OrderDetailPage] Will show platform promotion?', platformDiscount > 0 || platformPromotionCode);
+                  console.log('🔍 [OrderDetailPage] ================================');
+                  
+                  // ✅ Hiển thị nếu có bất kỳ promotion nào (code hoặc discount)
+                  if (storePromotionCode || platformPromotionCode || storeDiscount > 0 || platformDiscount > 0) {
                     return (
                       <>
-                        {promotionCode && (
+                        {/* Mã khuyến mãi store - hiển thị nếu có code HOẶC có discount */}
+                        {(storePromotionCode || storeDiscount > 0) && (
                           <div className="flex justify-end gap-2 items-center bg-blue-50 border border-blue-200 rounded-lg p-2 mt-2">
                             <span className="text-gray-700 flex items-center gap-1.5 text-sm">
                               <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/>
                               </svg>
-                              <span className="font-medium">Mã khuyến mãi đã áp dụng:</span>
+                              <span className="font-medium">Mã khuyến mãi cửa hàng:</span>
                             </span>
                             <span className="font-bold text-blue-700 bg-white px-2 py-1 rounded border border-blue-300 text-sm">
-                              {promotionCode}
+                              {storePromotionCode || 'Đã áp dụng mã cửa hàng'}
                             </span>
                           </div>
                         )}
-                        {discountValue > 0 && (
+                        {/* Mã khuyến mãi sàn - hiển thị nếu có code HOẶC có discount */}
+                        {(platformPromotionCode || platformDiscount > 0) && (
+                          <div className="flex justify-end gap-2 items-center bg-purple-50 border border-purple-200 rounded-lg p-2 mt-2">
+                            <span className="text-gray-700 flex items-center gap-1.5 text-sm">
+                              <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/>
+                              </svg>
+                              <span className="font-medium">Mã khuyến mãi sàn:</span>
+                            </span>
+                            <span className="font-bold text-purple-700 bg-white px-2 py-1 rounded border border-purple-300 text-sm">
+                              {platformPromotionCode || 'Đã áp dụng mã sàn'}
+                            </span>
+                          </div>
+                        )}
+                        {/* Giảm giá từ mã cửa hàng */}
+                        {storeDiscount > 0 && (
                           <div className="flex justify-end gap-2 text-green-600">
-                            <span>Số tiền giảm:</span>
-                            <span className="font-medium">-{formatCurrency(discountValue)}</span>
+                            <span>Giảm giá từ mã cửa hàng:</span>
+                            <span className="font-medium">-{formatCurrency(storeDiscount)}</span>
+                          </div>
+                        )}
+                        {/* Giảm giá từ mã sàn */}
+                        {platformDiscount > 0 && (
+                          <div className="flex justify-end gap-2 text-green-600">
+                            <span>Giảm giá từ mã sàn:</span>
+                            <span className="font-medium">-{formatCurrency(platformDiscount)}</span>
+                          </div>
+                        )}
+                        {/* Tổng giảm giá (nếu có cả 2) */}
+                        {storeDiscount > 0 && platformDiscount > 0 && (
+                          <div className="flex justify-end gap-2 text-green-600 font-semibold pt-1 border-t border-green-200">
+                            <span>Tổng giảm giá:</span>
+                            <span>-{formatCurrency(storeDiscount + platformDiscount)}</span>
                           </div>
                         )}
                       </>
@@ -763,7 +1074,7 @@ const OrderDetailPage = () => {
             <p className="text-sm text-gray-700">{getPaymentMethodLabel(paymentMethod)}</p>
           </div>
 
-          {/* Order Timeline - Process Tracking */}
+          {/* Order Timeline - Process Tracking (bao gồm cả trả hàng nếu có) */}
           <div className="bg-white border border-gray-200 rounded-lg p-5 mb-4">
             <h2 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
               <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -897,6 +1208,102 @@ const OrderDetailPage = () => {
                   </div>
                 )}
 
+                {/* Return Steps - nếu đơn có yêu cầu trả hàng */}
+                {returnMainStatus && (
+                  <>
+                    {/* Bắt đầu trả hàng */}
+                    {(returnMainStatus === 'READY_TO_RETURN' ||
+                      returnMainStatus === 'RETURNING' ||
+                      returnMainStatus === 'RETURNED' ||
+                      returnMainStatus === 'REFUNDED') && (
+                      <div className="flex items-start gap-4 relative z-10">
+                        <div className="flex-shrink-0">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-400 to-orange-500 flex items-center justify-center shadow-lg ring-4 ring-orange-100">
+                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v6h6M20 20v-6h-6M5 19a9 9 0 0114-14"/>
+                            </svg>
+                          </div>
+                        </div>
+                        <div className="flex-1 pt-1">
+                          <div className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-lg p-4 border border-orange-200">
+                            <div className="flex items-center justify-between mb-1">
+                              <h3 className="font-bold text-orange-900 text-base">Bắt đầu quy trình trả hàng</h3>
+                              <span className="text-xs font-semibold text-orange-700 bg-orange-200 px-2 py-1 rounded-full">
+                                {getReturnStatusLabel(returnMainStatus)}
+                              </span>
+                            </div>
+                            <p className="text-sm text-orange-800">
+                              Yêu cầu trả hàng của bạn đã được chấp nhận, vui lòng gửi hàng lại cho shop theo hướng dẫn.
+                            </p>
+                            {returnRequest?.createdAt && (
+                              <p className="text-xs text-orange-600 mt-1">
+                                Tạo yêu cầu: {formatDate(returnRequest.createdAt)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Đã trả hàng thành công */}
+                    {(returnMainStatus === 'RETURNED' || returnMainStatus === 'REFUNDED') && (
+                      <div className="flex items-start gap-4 relative z-10">
+                        <div className="flex-shrink-0">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-sky-500 to-sky-600 flex items-center justify-center shadow-lg ring-4 ring-sky-100">
+                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                          </div>
+                        </div>
+                        <div className="flex-1 pt-1">
+                          <div className="bg-gradient-to-r from-sky-50 to-sky-100 rounded-lg p-4 border border-sky-200">
+                            <div className="flex items-center justify-between mb-1">
+                              <h3 className="font-bold text-sky-900 text-base">Hàng trả đã được shop xác nhận</h3>
+                              <span className="text-xs font-semibold text-sky-700 bg-sky-200 px-2 py-1 rounded-full">
+                                Đã trả hàng
+                              </span>
+                            </div>
+                            <p className="text-sm text-sky-800">
+                              Shop đã xác nhận nhận được hàng trả về và không có vấn đề về chất lượng.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Đã hoàn tiền */}
+                    {returnMainStatus === 'REFUNDED' && (
+                      <div className="flex items-start gap-4 relative z-10">
+                        <div className="flex-shrink-0">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center shadow-lg ring-4 ring-amber-100">
+                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V4m0 12v2m9-8a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                          </div>
+                        </div>
+                        <div className="flex-1 pt-1">
+                          <div className="bg-gradient-to-r from-amber-50 to-amber-100 rounded-lg p-4 border border-amber-200">
+                            <div className="flex items-center justify-between mb-1">
+                              <h3 className="font-bold text-amber-900 text-base">Đã hoàn tiền</h3>
+                              <span className="text-xs font-semibold text-amber-700 bg-amber-200 px-2 py-1 rounded-full">
+                                Hoàn tất
+                              </span>
+                            </div>
+                            <p className="text-sm text-amber-800">
+                              Số tiền hoàn ({formatCurrency(returnRequest?.refundAmount || 0)}) đã được xử lý theo phương thức thanh toán của bạn.
+                            </p>
+                            {returnRequest?.updatedAt && (
+                              <p className="text-xs text-amber-600 mt-1">
+                                Cập nhật: {formatDate(returnRequest.updatedAt)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
                 {/* Step 5: Đã hủy - If cancelled */}
                 {status === 'CANCELLED' && (
                   <div className="flex items-start gap-4 relative z-10">
@@ -986,6 +1393,7 @@ const OrderDetailPage = () => {
               <ReviewForm
                 productVariantId={selectedItem.productVariantId || selectedItem.id}
                 orderId={order.id}
+                existingReview={existingReviews[selectedItem.productVariantId || selectedItem.id] || null}
                 onSuccess={handleReviewSuccess}
                 onCancel={() => setShowReviewModal(false)}
               />

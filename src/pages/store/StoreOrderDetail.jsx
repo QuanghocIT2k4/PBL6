@@ -14,8 +14,9 @@ import {
   confirmOrder, 
   deliverOrder
 } from '../../services/b2c/b2cOrderService';
-import { getShipmentByOrderId, updateShipmentStatus, getShipmentsByStoreId } from '../../services/b2c/shipmentService';
+import { getShipmentByOrderId, updateShipmentStatus, getShipmentsByStoreId, getShipmentStatusBadge } from '../../services/b2c/shipmentService';
 import { getPaymentMethodLabel } from '../../services/buyer/orderService';
+import { getStoreDisputes } from '../../services/b2c/returnService';
 
 const StoreOrderDetail = () => {
   const { orderId } = useParams();
@@ -27,6 +28,7 @@ const StoreOrderDetail = () => {
   const [showDeliverModal, setShowDeliverModal] = useState(false);
   const [hasShipment, setHasShipment] = useState(false);
   const [checkingShipment, setCheckingShipment] = useState(true);
+  const [shipmentData, setShipmentData] = useState(null);
 
   // ✅ Helper functions - Định nghĩa trước khi sử dụng
   const formatPrice = (price) => {
@@ -158,6 +160,13 @@ const StoreOrderDetail = () => {
     return parts.join(', ') || 'N/A';
   };
 
+  // Lấy ID từ DBRef hoặc object populate
+  const getIdFromRef = (ref) => {
+    if (!ref) return null;
+    if (typeof ref === 'string' || typeof ref === 'number') return String(ref);
+    return String(ref.$id || ref._id || ref.id || ref.$oid || ref);
+  };
+
   // ✅ Fetch order detail từ API
   const { data: orderData, error, isLoading, mutate } = useSWR(
     orderId && currentStore?.id ? ['store-order-detail', orderId, currentStore.id] : null,
@@ -166,6 +175,22 @@ const StoreOrderDetail = () => {
   );
 
   const order = orderData?.success ? orderData.data : null;
+
+  // Khiếu nại liên quan đơn hàng (store)
+  const { data: disputeListData } = useSWR(
+    order && currentStore?.id ? ['store-order-disputes', orderId, currentStore.id] : null,
+    () => getStoreDisputes(currentStore.id, { page: 0, size: 200 }),
+    { revalidateOnFocus: false }
+  );
+
+  const storeDisputes = disputeListData?.success
+    ? disputeListData.data?.content || disputeListData.data || []
+    : [];
+
+  const orderDisputes = storeDisputes.filter((d) => {
+    const disputeOrderId = getIdFromRef(d.order || d.orderId || d.orderRef);
+    return disputeOrderId && String(disputeOrderId) === String(order?.id || order?._id);
+  });
 
   // ✅ Kiểm tra xem đơn hàng đã có vận đơn chưa (chỉ để hiển thị button "Đã tạo vận đơn")
   useEffect(() => {
@@ -213,6 +238,7 @@ const StoreOrderDetail = () => {
           if (foundShipment) {
             console.log('[StoreOrderDetail] ✅ TÌM THẤY SHIPMENT!', foundShipment);
             setHasShipment(true);
+            setShipmentData(foundShipment);
             setCheckingShipment(false);
             return;
           } else {
@@ -232,12 +258,15 @@ const StoreOrderDetail = () => {
         if (checkResult.data && !checkResult.notFound) {
           console.log('[StoreOrderDetail] ✅ Shipment found via getShipmentByOrderId, setting hasShipment = true');
           setHasShipment(true);
+          setShipmentData(checkResult.data);
         } else if (checkResult.success && checkResult.data) {
           console.log('[StoreOrderDetail] ✅ Shipment found (success=true), setting hasShipment = true');
           setHasShipment(true);
+          setShipmentData(checkResult.data);
         } else {
           console.log('[StoreOrderDetail] ❌ No shipment found, setting hasShipment = false');
           setHasShipment(false);
+          setShipmentData(null);
         }
       } catch (err) {
         console.warn('[StoreOrderDetail] ⚠️ Lỗi khi dùng getShipmentByOrderId:', err);
@@ -291,12 +320,46 @@ const StoreOrderDetail = () => {
     });
   };
 
+  // Helper để lấy timestamp từ shipment history cho một status cụ thể
+  const getShipmentHistoryTimestamp = (shipment, statusKeywords) => {
+    if (!shipment?.history) return null;
+    
+    const history = Array.isArray(shipment.history) ? shipment.history : [];
+    const keywords = Array.isArray(statusKeywords) ? statusKeywords : [statusKeywords];
+    
+    const historyItem = history.find(h => {
+      const msg = typeof h === 'string' ? h : (h.message || h.status || '');
+      return keywords.some(keyword => msg && msg.includes(keyword));
+    });
+    
+    if (!historyItem) return null;
+    
+    if (typeof historyItem === 'string') {
+      // Parse format: "2025-12-16T21:24:01.151920443: Tạo đơn vận chuyển (READY_TO_PICK)"
+      const match = historyItem.match(/^(.+?):\s/);
+      if (match) {
+        try {
+          return formatDate(new Date(match[1]));
+        } catch (e) {
+          return null;
+        }
+      }
+    } else if (historyItem.timestamp) {
+      return formatDate(historyItem.timestamp);
+    } else if (historyItem.createdAt) {
+      return formatDate(historyItem.createdAt);
+    }
+    
+    return null;
+  };
+
   const getStatusBadge = (status) => {
     const badges = {
       PENDING: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Chờ xác nhận', icon: '⏳' },
       CONFIRMED: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Đã xác nhận', icon: '✅' },
       SHIPPING: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Đang giao', icon: '🚚' },
       DELIVERED: { bg: 'bg-green-100', text: 'text-green-800', label: 'Đã giao', icon: '📦' },
+      RETURNED: { bg: 'bg-emerald-100', text: 'text-emerald-800', label: 'Đã trả hàng', icon: '↩️' },
       CANCELLED: { bg: 'bg-red-100', text: 'text-red-800', label: 'Đã hủy', icon: '❌' }
     };
     return badges[status] || { bg: 'bg-gray-100', text: 'text-gray-800', label: status, icon: '📋' };
@@ -496,7 +559,26 @@ const StoreOrderDetail = () => {
   
   // Calculate order breakdown
   const items = order.items || order.orderItems || [];
-  const subtotal = items.reduce((sum, item) => sum + (parseFloat(item.price || 0) * parseInt(item.quantity || 0)), 0);
+  
+  // ✅ Tính subtotal: ưu tiên từ items, nếu không có thì dùng productPrice hoặc tính ngược từ totalPrice
+  let subtotal = 0;
+  if (items && Array.isArray(items) && items.length > 0) {
+    subtotal = items.reduce((sum, item) => {
+      const itemPrice = parseFloat(item.price || item.unitPrice || 0);
+      const itemQuantity = parseInt(item.quantity || 0);
+      return sum + (itemPrice * itemQuantity);
+    }, 0);
+  } else if (order.productPrice && order.productPrice > 0) {
+    subtotal = parseFloat(order.productPrice);
+  } else {
+    // Fallback: tính ngược từ totalPrice
+    const totalPrice = parseFloat(order.totalPrice || order.totalAmount || order.finalTotal || 0);
+    const shippingFee = parseFloat(order.shippingFee || order.shippingCost || 0);
+    const storeDiscount = parseFloat(order.storeDiscountAmount || 0);
+    const platformDiscount = parseFloat(order.platformDiscountAmount || 0);
+    subtotal = totalPrice + storeDiscount + platformDiscount - shippingFee;
+  }
+  
   const shippingFee = parseFloat(order.shippingFee || order.shippingCost || 0);
   
   // ✅ Helper function để lấy mã khuyến mãi của store (không lấy platform promotion)
@@ -522,58 +604,44 @@ const StoreOrderDetail = () => {
     );
   };
 
-  // ✅ Tính discount từ nhiều nguồn có thể có
-  // Ưu tiên: storeDiscountAmount (chỉ discount từ store promotion)
-  let discount = parseFloat(order.storeDiscountAmount || 0);
+  // ✅ Tính discount từ store promotion (chỉ discount từ store)
+  const storeDiscount = parseFloat(order.storeDiscountAmount || 0);
   
-  // Nếu không có storeDiscountAmount, thử các field khác
-  if (discount === 0) {
-    discount = parseFloat(order.discount || order.discountAmount || 0);
-  }
+  // ✅ Lấy discount từ mã sàn (platform promotion) - sàn chịu
+  const platformDiscount = parseFloat(order.platformDiscountAmount || 0);
   
-  // 2. Nếu không có, thử từ promotion fields
-  if (discount === 0) {
-    discount = parseFloat(
-      order.promotionDiscount || 
-      order.appliedDiscount || 
-      order.promotionAmount ||
-      order.appliedPromotion?.discountAmount ||
-      order.appliedPromotion?.discountValue ||
-      0
-    );
-  }
+  // ✅ Tổng tiền người mua trả (đã trừ cả store discount và platform discount)
+  const buyerPaidTotal = parseFloat(order.totalPrice || order.totalAmount || order.finalTotal || (subtotal + shippingFee - storeDiscount - platformDiscount));
   
-  // 3. Nếu vẫn không có và có promotion, tính từ totalPrice ngược lại
-  if (discount === 0 && order.appliedPromotion) {
-    const calculatedTotal = subtotal + shippingFee;
-    const actualTotal = parseFloat(order.totalPrice || order.totalAmount || order.finalTotal || 0);
-    if (actualTotal > 0 && calculatedTotal > actualTotal) {
-      discount = calculatedTotal - actualTotal;
-    }
-  }
+  // ✅ Tính hoa hồng sàn với giới hạn tối đa 500.000 ₫
+  const calculatedCommission = 0.05 * (subtotal - storeDiscount);
+  const MAX_COMMISSION = 500000; // Giới hạn hoa hồng tối đa 500.000 ₫
+  const actualCommission = Math.min(calculatedCommission, MAX_COMMISSION);
   
-  // 4. Nếu vẫn không có, tính từ totalPrice ngược lại (fallback)
-  if (discount === 0) {
-    const calculatedTotal = subtotal + shippingFee;
-    const actualTotal = parseFloat(order.totalPrice || order.totalAmount || order.finalTotal || 0);
-    if (actualTotal > 0 && calculatedTotal > actualTotal) {
-      discount = calculatedTotal - actualTotal;
-    }
-  }
+  // ✅ Tổng tiền store nhận = subtotal - storeDiscount - hoa hồng thực tế + shippingFee
+  // ✅ LƯU Ý: Store trả tiền ship trước cho shipper, sau đó sàn cộng lại cho store
+  // ✅ Công thức: (số tiền gốc sản phẩm - mã giảm giá của shop - hoa hồng thực tế) + phí ship
+  const storeReceiveTotal = Math.round(subtotal - storeDiscount - actualCommission + shippingFee);
   
-  const totalPrice = parseFloat(order.totalPrice) || order.totalAmount || order.finalTotal || (subtotal + shippingFee - discount);
+  // ✅ Doanh thu store = subtotal - storeDiscount - hoa hồng thực tế (KHÔNG bao gồm phí ship)
+  // ✅ LƯU Ý: Doanh thu KHÔNG bao gồm phí ship (vì store trả trước, sàn cộng lại sau)
+  const storeRevenue = Math.round(subtotal - storeDiscount - actualCommission);
   
   // ✅ Debug log để kiểm tra
   console.log('[StoreOrderDetail] Order breakdown:', {
     subtotal,
     shippingFee,
-    discount,
-    totalPrice,
+    storeDiscount,
+    platformDiscount,
+    buyerPaidTotal,
+    storeReceiveTotal,
+    storeRevenue,
     orderTotalPrice: order.totalPrice,
     orderTotalAmount: order.totalAmount,
     orderFinalTotal: order.finalTotal,
     appliedPromotion: order.appliedPromotion,
     promotionCode: order.promotionCode,
+    platformPromotions: order.platformPromotions,
     orderKeys: Object.keys(order).filter(k => k.toLowerCase().includes('discount') || k.toLowerCase().includes('promotion'))
   });
 
@@ -597,20 +665,17 @@ const StoreOrderDetail = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  {/* Store Status Badge */}
-                  {currentStore?.status && (
+                  {/* Store Status Badge - ẩn nếu đã APPROVED để tránh hiển thị pill trống */}
+                  {currentStore?.status && currentStore.status !== 'APPROVED' && (
                     <div className={`px-6 py-3 rounded-xl font-semibold text-sm flex items-center gap-2 ${
-                      currentStore.status === 'APPROVED' ? 'bg-green-100 text-green-800 border-2 border-green-300' :
                       currentStore.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800 border-2 border-yellow-300' :
                       'bg-red-100 text-red-800 border-2 border-red-300'
                     }`}>
                       <span className="text-lg">
-                        {currentStore.status === 'APPROVED' ? '✅' :
-                         currentStore.status === 'PENDING' ? '⏳' : '❌'}
+                         {currentStore.status === 'PENDING' ? '⏳' : '❌'}
                       </span>
                       <span>
-                        {currentStore.status === 'APPROVED' ? 'Đã duyệt' :
-                         currentStore.status === 'PENDING' ? 'Chờ duyệt' : 'Đã từ chối'}
+                         {currentStore.status === 'PENDING' ? 'Chờ duyệt' : 'Đã từ chối'}
                       </span>
                     </div>
                   )}
@@ -629,6 +694,65 @@ const StoreOrderDetail = () => {
               </div>
             </div>
           </div>
+
+          {/* Khiếu nại liên quan đơn hàng */}
+          {orderDisputes.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5">
+                  <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-amber-800">Đơn hàng đang có khiếu nại</p>
+                  <div className="mt-2 space-y-2">
+                    {orderDisputes.map((d) => {
+                      const disputeId = d.id || d._id;
+                      return (
+                        <div key={disputeId} className="bg-white border border-amber-100 rounded-lg p-3">
+                          <div className="flex flex-wrap items-center gap-2 text-sm">
+                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+                              {d.disputeType || 'Khiếu nại'}
+                            </span>
+                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+                              Trạng thái: {d.status || 'N/A'}
+                            </span>
+                            {d.finalDecision && (
+                              <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                                Quyết định: {d.finalDecision}
+                              </span>
+                            )}
+                            {d.winner && (
+                              <span className="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                                Bên thắng: {d.winner}
+                              </span>
+                            )}
+                          </div>
+                          {d.decisionReason && (
+                            <p className="text-sm text-gray-700 mt-1">Lý do: {d.decisionReason}</p>
+                          )}
+                          <div className="flex items-center justify-between mt-2">
+                            <p className="text-xs text-gray-500">
+                              Cập nhật: {d.updatedAt ? formatDate(d.updatedAt) : 'N/A'}
+                            </p>
+                            {disputeId && (
+                              <button
+                                onClick={() => navigate(`/store-dashboard/returns/disputes/${disputeId}`)}
+                                className="text-sm font-semibold text-blue-600 hover:text-blue-700"
+                              >
+                                Xem chi tiết
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Order Items */}
@@ -694,28 +818,18 @@ const StoreOrderDetail = () => {
                       <span className="font-medium">{formatPrice(shippingFee)}</span>
                     </div>
                   )}
-                  {/* Hiển thị số tiền giảm trước */}
-                  {(() => {
-                    const storeDiscount = parseFloat(order.storeDiscountAmount || 0);
-                    const displayDiscount = storeDiscount > 0 ? storeDiscount : discount;
-                    
-                    if (displayDiscount > 0) {
-                      return (
-                        <div className="flex justify-between text-sm text-gray-600">
-                          <span>Số tiền giảm:</span>
-                          <span className="font-medium text-green-600">-{formatPrice(displayDiscount)}</span>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
+                  {/* Giảm giá từ mã cửa hàng */}
+                  {storeDiscount > 0 && (
+                    <div className="flex justify-between text-sm text-gray-600">
+                      <span>Giảm giá từ mã cửa hàng:</span>
+                      <span className="font-medium text-green-600">-{formatPrice(storeDiscount)}</span>
+                    </div>
+                  )}
                   
-                  {/* Chỉ hiển thị mã khuyến mãi nếu đó là mã của store (có storeDiscountAmount) - ĐẶT DƯỚI SỐ TIỀN GIẢM */}
+                  {/* Mã khuyến mãi cửa hàng */}
                   {(() => {
                     const storePromotionCode = getStorePromotionCode(order);
-                    const storeDiscount = parseFloat(order.storeDiscountAmount || 0);
                     
-                    // Chỉ hiển thị nếu có store promotion
                     if (storePromotionCode && storeDiscount > 0) {
                       return (
                         <div className="flex justify-between items-center text-sm bg-blue-50 border border-blue-200 rounded-lg p-2 mt-2">
@@ -731,12 +845,83 @@ const StoreOrderDetail = () => {
                         </div>
                       );
                     }
-                    
                     return null;
                   })()}
-                  <div className="flex justify-between items-center text-lg font-bold pt-3 border-t border-gray-200">
-                    <span>Tổng cộng:</span>
-                    <span className="text-red-600 text-xl">{formatPrice(totalPrice)}</span>
+                  
+                  {/* Giảm giá từ mã sàn (sàn chịu) */}
+                  {platformDiscount > 0 && (
+                    <>
+                      <div className="flex justify-between text-sm text-gray-600">
+                        <span>Giảm giá từ mã sàn (sàn chịu):</span>
+                        <span className="font-medium text-green-600">-{formatPrice(platformDiscount)}</span>
+                      </div>
+                      {(() => {
+                        const platformPromotionCode = order.platformPromotions?.orderPromotionCode || order.platformPromotions?.shippingPromotionCode;
+                        if (platformPromotionCode) {
+                          return (
+                            <div className="flex justify-between items-center text-sm bg-purple-50 border border-purple-200 rounded-lg p-2 mt-2">
+                              <span className="text-gray-700 flex items-center gap-1.5">
+                                <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/>
+                                </svg>
+                                <span className="font-medium">Mã khuyến mãi sàn:</span>
+                              </span>
+                              <span className="font-bold text-purple-700 bg-white px-2 py-1 rounded border border-purple-300">
+                                {platformPromotionCode}
+                              </span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </>
+                  )}
+                  
+                  {/* Tổng tiền người mua trả */}
+                  <div className="flex justify-between text-sm text-gray-600 pt-2 border-t border-gray-200">
+                    <span>Tổng tiền người mua trả:</span>
+                    <span className="font-medium">{formatPrice(buyerPaidTotal)}</span>
+                  </div>
+                  
+                  {/* Phí ship (store trả trước, sàn cộng lại) */}
+                  {shippingFee > 0 && (
+                    <div className="flex justify-between text-sm text-green-600 pt-2 border-t border-gray-200 bg-green-50 rounded-lg p-2">
+                      <span className="flex items-center gap-1.5">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                        </svg>
+                        <span>Phí ship (sàn cộng lại cho store):</span>
+                      </span>
+                      <span className="font-medium text-green-700">+{formatPrice(shippingFee)}</span>
+                    </div>
+                  )}
+                  
+                  {/* Hoa hồng sàn (5%, tối đa 500.000 ₫) */}
+                  <div className="flex justify-between text-sm text-gray-500 pt-2 border-t border-gray-200 bg-gray-50 rounded-lg p-2">
+                    <span className="flex items-center gap-1.5">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-5m-3 5h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                      </svg>
+                      <span>Hoa hồng sàn (5%, tối đa 500k):</span>
+                    </span>
+                    <span className="font-medium text-gray-600">-{formatPrice(Math.round(actualCommission))}</span>
+                  </div>
+                  
+                  {/* Tổng tiền store nhận = 95% × (subtotal - storeDiscount) + shippingFee (sàn cộng lại) */}
+                  <div className="flex justify-between items-center text-lg font-bold pt-3 border-t-2 border-gray-300 bg-blue-50 rounded-lg p-3">
+                    <span className="text-gray-700">Tổng cộng (store nhận):</span>
+                    <span className="text-red-600 text-xl">{formatPrice(storeReceiveTotal)}</span>
+                  </div>
+                  
+                  {/* Doanh thu thực tế = 95% × (subtotal - storeDiscount) - KHÔNG bao gồm phí ship */}
+                  <div className="flex justify-between items-center text-base font-semibold pt-2 border-t border-gray-200 bg-green-50 rounded-lg p-2.5">
+                    <span className="text-gray-700 flex items-center gap-1.5">
+                      <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                      </svg>
+                      <span>Doanh thu thực tế:</span>
+                    </span>
+                    <span className="text-green-600 font-bold">{formatPrice(storeRevenue)}</span>
                   </div>
                 </div>
               </div>
@@ -822,7 +1007,175 @@ const StoreOrderDetail = () => {
                       </div>
                     </div>
                   )}
-                  {order.shippedAt && (
+                  
+                  {/* Shipment Timeline - Hiển thị các bước vận đơn nếu có */}
+                  {shipmentData && (
+                    <>
+                      {/* READY_TO_PICK - Đơn hàng sẵn sàng để lấy */}
+                      {shipmentData.status && (
+                        <div className="flex items-start gap-3">
+                          <div className="w-2 h-2 bg-cyan-500 rounded-full mt-2"></div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">📦 Đơn hàng sẵn sàng để lấy</p>
+                            <p className="text-xs text-gray-500">
+                              {shipmentData.createdAt ? formatDate(shipmentData.createdAt) : 'Đã tạo vận đơn'}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* PICKING_UP - Shipper đang đến lấy hàng */}
+                      {(shipmentData.status === 'PICKING_UP' || shipmentData.status === 'PICKING' || 
+                        (shipmentData.history && shipmentData.history.some(h => {
+                          const msg = typeof h === 'string' ? h : h.message || h.status;
+                          return msg && (msg.includes('PICKING_UP') || msg.includes('PICKING'));
+                        }))) && (
+                        <div className="flex items-start gap-3">
+                          <div className="w-2 h-2 bg-yellow-500 rounded-full mt-2"></div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">📦 Shipper đang đến lấy hàng</p>
+                            <p className="text-xs text-gray-500">
+                              {getShipmentHistoryTimestamp(shipmentData, ['PICKING_UP', 'PICKING']) || 
+                               (shipmentData.updatedAt ? formatDate(shipmentData.updatedAt) : 'Đang xử lý')}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* PICKED - Đã lấy hàng */}
+                      {(shipmentData.status === 'PICKED' || 
+                        (shipmentData.history && shipmentData.history.some(h => {
+                          const msg = typeof h === 'string' ? h : h.message || h.status;
+                          return msg && msg.includes('PICKED');
+                        }))) && (
+                        <div className="flex items-start gap-3">
+                          <div className="w-2 h-2 bg-orange-500 rounded-full mt-2"></div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">✅ Shipper đã lấy hàng</p>
+                            <p className="text-xs text-gray-500">
+                              {getShipmentHistoryTimestamp(shipmentData, 'PICKED') || 
+                               (shipmentData.updatedAt ? formatDate(shipmentData.updatedAt) : 'Đã lấy hàng')}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* SHIPPING - Đang giao hàng */}
+                      {(shipmentData.status === 'SHIPPING' || 
+                        (shipmentData.history && shipmentData.history.some(h => {
+                          const msg = typeof h === 'string' ? h : h.message || h.status;
+                          return msg && msg.includes('SHIPPING');
+                        }))) && (
+                        <div className="flex items-start gap-3">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">🚚 Đang giao hàng</p>
+                            <p className="text-xs text-gray-500">
+                              {getShipmentHistoryTimestamp(shipmentData, 'SHIPPING') || 
+                               (shipmentData.updatedAt ? formatDate(shipmentData.updatedAt) : 'Đang giao')}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* DELIVERED - Đã giao hàng thành công */}
+                      {(shipmentData.status === 'DELIVERED' || 
+                        (shipmentData.history && shipmentData.history.some(h => {
+                          const msg = typeof h === 'string' ? h : h.message || h.status;
+                          return msg && msg.includes('DELIVERED');
+                        }))) && (
+                        <div className="flex items-start gap-3">
+                          <div className="w-2 h-2 bg-green-600 rounded-full mt-2"></div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">✅ Đã giao hàng thành công</p>
+                            <p className="text-xs text-gray-500">
+                              {(() => {
+                                if (shipmentData.history) {
+                                  const history = Array.isArray(shipmentData.history) ? shipmentData.history : [];
+                                  const deliveredHistory = history.find(h => {
+                                    const msg = typeof h === 'string' ? h : h.message || h.status || '';
+                                    return msg && msg.includes('DELIVERED');
+                                  });
+                                  if (deliveredHistory) {
+                                    if (typeof deliveredHistory === 'string') {
+                                      const match = deliveredHistory.match(/^(.+?):\s/);
+                                      if (match) {
+                                        try {
+                                          return formatDate(new Date(match[1]));
+                                        } catch (e) {
+                                          return 'Đã giao';
+                                        }
+                                      }
+                                    } else if (deliveredHistory.timestamp) {
+                                      return formatDate(deliveredHistory.timestamp);
+                                    }
+                                  }
+                                }
+                                return shipmentData.updatedAt ? formatDate(shipmentData.updatedAt) : 'Đã giao';
+                              })()}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* DELIVERED_FAIL / FAILED - Giao hàng thất bại */}
+                      {(shipmentData.status === 'DELIVERED_FAIL' || shipmentData.status === 'FAILED' ||
+                        (shipmentData.history && shipmentData.history.some(h => {
+                          const msg = typeof h === 'string' ? h : h.message || h.status;
+                          return msg && (msg.includes('FAILED') || msg.includes('DELIVERED_FAIL'));
+                        }))) && (
+                        <div className="flex items-start gap-3">
+                          <div className="w-2 h-2 bg-red-500 rounded-full mt-2"></div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">❌ Giao hàng thất bại</p>
+                            <p className="text-xs text-gray-500">
+                              {getShipmentHistoryTimestamp(shipmentData, ['FAILED', 'DELIVERED_FAIL']) || 
+                               (shipmentData.updatedAt ? formatDate(shipmentData.updatedAt) : 'Giao thất bại')}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* RETURNING - Đang trả hàng về shop */}
+                      {(shipmentData.status === 'RETURNING' ||
+                        (shipmentData.history && shipmentData.history.some(h => {
+                          const msg = typeof h === 'string' ? h : h.message || h.status;
+                          return msg && msg.includes('RETURNING');
+                        }))) && (
+                        <div className="flex items-start gap-3">
+                          <div className="w-2 h-2 bg-indigo-500 rounded-full mt-2"></div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">↩️ Đang trả hàng về shop</p>
+                            <p className="text-xs text-gray-500">
+                              {getShipmentHistoryTimestamp(shipmentData, 'RETURNING') || 
+                               (shipmentData.updatedAt ? formatDate(shipmentData.updatedAt) : 'Đang trả hàng')}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* RETURNED - Đã trả hàng về shop */}
+                      {(shipmentData.status === 'RETURNED' ||
+                        (shipmentData.history && shipmentData.history.some(h => {
+                          const msg = typeof h === 'string' ? h : h.message || h.status;
+                          return msg && msg.includes('RETURNED');
+                        }))) && (
+                        <div className="flex items-start gap-3">
+                          <div className="w-2 h-2 bg-indigo-600 rounded-full mt-2"></div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">↩️ Đã trả hàng về shop</p>
+                            <p className="text-xs text-gray-500">
+                              {getShipmentHistoryTimestamp(shipmentData, 'RETURNED') || 
+                               (shipmentData.updatedAt ? formatDate(shipmentData.updatedAt) : 'Đã trả hàng')}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  
+                  {/* Fallback: Hiển thị shippedAt nếu không có shipment data */}
+                  {!shipmentData && order.shippedAt && (
                     <div className="flex items-start gap-3">
                       <div className="w-2 h-2 bg-purple-500 rounded-full mt-2"></div>
                       <div className="flex-1">
@@ -831,7 +1184,9 @@ const StoreOrderDetail = () => {
                       </div>
                     </div>
                   )}
-                  {order.deliveredAt && (
+                  
+                  {/* Fallback: Hiển thị deliveredAt nếu không có shipment data */}
+                  {!shipmentData && order.deliveredAt && (
                     <div className="flex items-start gap-3">
                       <div className="w-2 h-2 bg-green-600 rounded-full mt-2"></div>
                       <div className="flex-1">
@@ -840,6 +1195,33 @@ const StoreOrderDetail = () => {
                       </div>
                     </div>
                   )}
+                  
+                  {/* COMPLETED - Đơn hàng đã hoàn tất (khách hàng xác nhận) */}
+                  {order.status === 'COMPLETED' && order.completedAt && (
+                    <div className="flex items-start gap-3">
+                      <div className="w-2 h-2 bg-emerald-500 rounded-full mt-2"></div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-900">✅ Đơn hàng đã hoàn tất</p>
+                        <p className="text-xs text-gray-500">{formatDate(order.completedAt)}</p>
+                        {/* Hiển thị doanh thu khi đơn hàng hoàn tất */}
+                        {storeRevenue > 0 && (
+                          <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-green-700 font-medium">Doanh thu store:</span>
+                              <span className="text-sm font-bold text-green-600">{formatPrice(storeRevenue)}</span>
+                            </div>
+                            <div className="mt-1 pt-1 border-t border-green-200">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-gray-600">Tổng tiền nhận (bao gồm phí ship):</span>
+                                <span className="text-xs font-semibold text-blue-600">{formatPrice(storeReceiveTotal)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
                   {order.cancelledAt && (
                     <div className="flex items-start gap-3">
                       <div className="w-2 h-2 bg-red-500 rounded-full mt-2"></div>

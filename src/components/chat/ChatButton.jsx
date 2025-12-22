@@ -11,6 +11,7 @@ import { toast } from '../../utils/sweetalert';
 const ChatButton = ({ 
   storeId, 
   storeName,
+  recipientId = null,
   productId = null,
   productName = null,
   type = 'BUYER_SELLER',
@@ -26,6 +27,20 @@ const ChatButton = ({
     if (!user || !user.id) {
       toast.warning('Vui lòng đăng nhập để chat');
       navigate('/auth');
+      return;
+    }
+
+    // ✅ Validate storeId
+    if (!storeId) {
+      console.error('❌ [ChatButton] storeId is missing:', { storeId, storeName });
+      toast.error('Không tìm thấy thông tin cửa hàng. Vui lòng thử lại!');
+      return;
+    }
+
+    // ✅ Validate recipientId (BE yêu cầu)
+    if (!recipientId) {
+      console.error('❌ [ChatButton] recipientId is missing:', { recipientId, storeId, storeName });
+      toast.error('Không tìm thấy người nhận chat. Vui lòng thử lại!');
       return;
     }
 
@@ -45,16 +60,22 @@ const ChatButton = ({
     const conversationData = {
       storeId,
       type,
+      recipientId,
+      ...(productId && { productId }), // Optional: include productId if available
       // ❌ KHÔNG GỬI initialMessage - User sẽ tự gõ tin nhắn đầu tiên
     };
 
-    const newConversation = await createConversation(conversationData);
-    
-    if (newConversation) {
-      selectConversation(newConversation);
-      navigate('/chat');
-    } else {
-      toast.error('Không thể tạo cuộc trò chuyện. Vui lòng thử lại!');
+    try {
+      const newConversation = await createConversation(conversationData);
+      
+      if (newConversation) {
+        selectConversation(newConversation);
+        navigate('/chat');
+      } else {
+        toast.error('Không thể tạo cuộc trò chuyện. Vui lòng thử lại!');
+      }
+    } catch (error) {
+      toast.error('Đã xảy ra lỗi khi tạo cuộc trò chuyện. Vui lòng thử lại!');
     }
   };
 
@@ -63,10 +84,10 @@ const ChatButton = ({
       onClick={handleStartChat}
       className={className || 'flex items-center gap-2 px-4 py-2 bg-white border-2 border-blue-500 text-blue-500 rounded-lg hover:bg-blue-50 transition-colors'}
     >
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
       </svg>
-      {children || 'Chat với shop'}
+      <span>{children || 'Chat với shop'}</span>
     </button>
   );
 };

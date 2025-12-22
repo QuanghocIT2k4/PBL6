@@ -14,6 +14,7 @@ import AdminShippers from '../pages/admin/AdminShippers';
 import AdminDisputesPage from '../pages/admin/AdminDisputesPage';
 import AdminDisputeDetailPage from '../pages/admin/AdminDisputeDetailPage';
 import AdminRefundsPage from '../pages/admin/AdminRefundsPage';
+import AdminNotifications from '../pages/admin/AdminNotifications';
 
 const AdminRoutes = () => {
   return (
@@ -33,6 +34,7 @@ const AdminRoutes = () => {
           <Route path="/disputes" element={<AdminDisputesPage />} />
           <Route path="/disputes/:disputeId" element={<AdminDisputeDetailPage />} />
           <Route path="/refunds" element={<AdminRefundsPage />} />
+          <Route path="/notifications" element={<AdminNotifications />} />
         </Routes>
       </AdminLayout>
     </AdminAuthGuard>

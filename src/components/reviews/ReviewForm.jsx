@@ -18,7 +18,8 @@ const reviewSchema = z.object({
 const ReviewForm = ({ productVariantId, orderId, existingReview = null, onSuccess, onCancel }) => {
   const { success, error: showError } = useToast();
   const [hoveredRating, setHoveredRating] = useState(0);
-  const [uploadedImages, setUploadedImages] = useState([]); // State cho ảnh đã upload
+  const [uploadedImages, setUploadedImages] = useState([]); // State cho ảnh đã upload (File objects)
+  const [existingImages, setExistingImages] = useState([]); // State cho ảnh hiện có từ review (URLs)
   const [uploading, setUploading] = useState(false); // State loading khi upload
 
   const {
@@ -49,6 +50,16 @@ const ReviewForm = ({ productVariantId, orderId, existingReview = null, onSucces
         comment: existingReview.comment || '',
         images: existingReview.images || []
       });
+      
+      // Load existing images from review
+      const reviewImages = existingReview.images || 
+                          existingReview.imageUrls || 
+                          (existingReview.reviewImages ? existingReview.reviewImages.map(img => img?.url || img?.imageUrl || img?.image || img).filter(Boolean) : []);
+      setExistingImages(reviewImages);
+      setUploadedImages([]); // Reset uploaded images when editing
+    } else {
+      setExistingImages([]);
+      setUploadedImages([]);
     }
   }, [existingReview, reset]);
 
@@ -62,6 +73,11 @@ const ReviewForm = ({ productVariantId, orderId, existingReview = null, onSucces
   };
 
   const onSubmit = async (data) => {
+    console.log('📝 [ReviewForm] onSubmit called');
+    console.log('📝 [ReviewForm] Existing review?', !!existingReview);
+    console.log('📝 [ReviewForm] ProductVariantId:', productVariantId);
+    console.log('📝 [ReviewForm] OrderId:', orderId);
+    
     if (!existingReview) {
       if (!productVariantId) {
         showError('Thiếu thông tin sản phẩm. Vui lòng thử lại.');
@@ -70,6 +86,28 @@ const ReviewForm = ({ productVariantId, orderId, existingReview = null, onSucces
       if (!orderId) {
         showError('Vui lòng đánh giá từ trang đơn hàng của bạn.');
         return;
+      }
+      
+      // ✅ Kiểm tra order status trước khi submit
+      // DELIVERED tức là đã hoàn thành rồi
+      // Lưu ý: Backend sẽ validate lại, nhưng check ở frontend để hiển thị thông báo sớm hơn
+      try {
+        const { getOrderById } = await import('../../services/buyer/orderService');
+        const orderResult = await getOrderById(orderId);
+        if (orderResult.success && orderResult.data) {
+          const orderStatus = orderResult.data.status;
+          console.log('📦 [ReviewForm] Order status:', orderStatus);
+          console.log('📦 [ReviewForm] Full order data:', orderResult.data);
+          
+          // DELIVERED hoặc COMPLETED đều được coi là đã hoàn thành
+          if (orderStatus !== 'DELIVERED' && orderStatus !== 'COMPLETED') {
+            showError(`Đơn hàng chưa hoàn tất. Chỉ có thể đánh giá khi đơn hàng đã được giao (trạng thái hiện tại: ${orderStatus}).`);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('⚠️ [ReviewForm] Could not check order status:', err);
+        // Tiếp tục submit, để backend validate
       }
     }
 
@@ -81,21 +119,30 @@ const ReviewForm = ({ productVariantId, orderId, existingReview = null, onSucces
       ...((!existingReview && orderId) && { orderId }),
     };
     
-    // ✅ Nếu có ảnh đã chọn, thêm vào reviewData
+    // ✅ Nếu có ảnh đã chọn (ảnh mới upload), thêm vào reviewData
+    // Lưu ý: Khi chỉnh sửa, chỉ gửi ảnh mới upload, ảnh cũ sẽ được giữ lại từ backend
     if (uploadedImages.length > 0) {
       reviewData.imageFiles = uploadedImages.map(img => img.file);
-      console.log('📷 Gửi ảnh:', uploadedImages.map(img => img.name));
+      console.log('📷 Gửi ảnh mới:', uploadedImages.map(img => img.name));
     }
 
     try {
+      console.log('📝 [ReviewForm] Submitting review with data:', reviewData);
+      console.log('📝 [ReviewForm] Existing review?', !!existingReview);
+      
       let result;
       if (existingReview) {
+        console.log('📝 [ReviewForm] Updating review ID:', existingReview.id);
         result = await updateReview(existingReview.id, reviewData);
       } else {
+        console.log('📝 [ReviewForm] Creating new review');
         result = await createReview(reviewData);
       }
 
+      console.log('📝 [ReviewForm] Result:', result);
+
       if (result.success) {
+        console.log('✅ [ReviewForm] Review submitted successfully');
         success(result.message || 'Đánh giá thành công!');
         onSuccess && onSuccess(result.data);
         
@@ -107,9 +154,11 @@ const ReviewForm = ({ productVariantId, orderId, existingReview = null, onSucces
           });
         }
       } else {
+        console.error('❌ [ReviewForm] Review submission failed:', result.error);
         showError(result.error || 'Không thể gửi đánh giá');
       }
     } catch (error) {
+      console.error('❌ [ReviewForm] Exception caught:', error);
       showError('Đã xảy ra lỗi khi gửi đánh giá');
     }
   };
@@ -120,7 +169,7 @@ const ReviewForm = ({ productVariantId, orderId, existingReview = null, onSucces
     if (!files.length) return;
     
     const currentImages = uploadedImages || [];
-    const remainingSlots = 5 - currentImages.length;
+    const remainingSlots = 5 - (existingImages.length + currentImages.length);
     
     if (files.length > remainingSlots) {
       showError(`Chỉ có thể thêm ${remainingSlots} ảnh nữa (tối đa 5 ảnh)`);
@@ -240,7 +289,7 @@ const ReviewForm = ({ productVariantId, orderId, existingReview = null, onSucces
         </label>
         
         {/* Upload Button */}
-        {uploadedImages.length < 5 && (
+        {(existingImages.length + uploadedImages.length) < 5 && (
           <div className="mb-4">
             <label className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-all">
               <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -263,35 +312,62 @@ const ReviewForm = ({ productVariantId, orderId, existingReview = null, onSucces
           </div>
         )}
         
-        {/* Image Preview Grid */}
-        {uploadedImages.length > 0 && (
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-3">
-            {uploadedImages.map((img, index) => (
-              <div key={index} className="relative group aspect-square">
-                <img
-                  src={img.preview}
-                  alt={`Review ${index + 1}`}
-                  className="w-full h-full object-cover rounded-lg border-2 border-gray-200"
-                />
-                <button
-                  type="button"
-                  onClick={() => handleImageRemove(index)}
-                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-                <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 truncate rounded-b-lg">
-                  {img.name}
+        {/* Existing Images (when editing) */}
+        {existingImages.length > 0 && (
+          <div className="mb-4">
+            <p className="text-xs text-gray-600 mb-2">Ảnh hiện có:</p>
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+              {existingImages.map((imgUrl, index) => (
+                <div key={index} className="relative group aspect-square">
+                  <img
+                    src={imgUrl}
+                    alt={`Existing review ${index + 1}`}
+                    className="w-full h-full object-cover rounded-lg border-2 border-gray-200"
+                  />
+                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity rounded-lg flex items-center justify-center">
+                    <span className="text-white text-xs font-medium opacity-0 group-hover:opacity-100">
+                      Ảnh hiện có
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Image Preview Grid - New uploaded images */}
+        {uploadedImages.length > 0 && (
+          <div className="mb-4">
+            <p className="text-xs text-gray-600 mb-2">Ảnh mới thêm:</p>
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+              {uploadedImages.map((img, index) => (
+                <div key={index} className="relative group aspect-square">
+                  <img
+                    src={img.preview}
+                    alt={`New review ${index + 1}`}
+                    className="w-full h-full object-cover rounded-lg border-2 border-blue-300"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleImageRemove(index)}
+                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                  <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 truncate rounded-b-lg">
+                    {img.name}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
         
         <p className="text-xs text-gray-500">
-          {uploadedImages.length}/5 hình ảnh đã chọn
+          {existingImages.length + uploadedImages.length}/5 hình ảnh 
+          {existingImages.length > 0 && ` (${existingImages.length} ảnh hiện có + ${uploadedImages.length} ảnh mới)`}
         </p>
       </div>
 

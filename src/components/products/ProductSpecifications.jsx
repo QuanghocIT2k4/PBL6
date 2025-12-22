@@ -1,7 +1,11 @@
 const ProductSpecifications = ({ product }) => {
-  // ✅ LẤY SPECIFICATIONS TỪ API (product.attributes)
+  // ✅ LẤY SPECIFICATIONS TỪ API
+  // Lưu ý: Attributes nằm ở ProductVariant (variant), không phải Product cha
+  // Về mặt logic: Tất cả variants của cùng một product (ví dụ: iPhone 15 Pro Max) 
+  // nên có thông số kỹ thuật giống nhau (chipset, RAM, camera, pin...)
+  // Chỉ khác nhau về màu sắc, dung lượng lưu trữ
   const getSpecifications = () => {
-    // Nếu có attributes từ API, dùng nó
+    // ✅ Lấy từ variant (attributes nằm ở variant)
     if (product?.attributes && Object.keys(product.attributes).length > 0) {
       return product.attributes;
     }

@@ -58,6 +58,16 @@ export const getStoreAvailablePromotions = async (storeId, params = {}) => {
       };
     }
 
+    console.log('🔍 [getStoreAvailablePromotions] ===== CALLING API =====');
+    console.log('🔍 [getStoreAvailablePromotions] URL: /api/v1/buyer/promotions/store/' + storeId + '/available');
+    console.log('🔍 [getStoreAvailablePromotions] Params:', {
+      orderValue,
+      page,
+      size,
+      sortBy,
+      sortDir,
+    });
+    
     const response = await api.get(`/api/v1/buyer/promotions/store/${storeId}/available`, {
       params: {
         orderValue,
@@ -68,7 +78,16 @@ export const getStoreAvailablePromotions = async (storeId, params = {}) => {
       },
     });
     
-    // Backend trả về empty - không log nữa
+    console.log('🔍 [getStoreAvailablePromotions] ===== API RESPONSE =====');
+    console.log('🔍 [getStoreAvailablePromotions] Response status:', response.status);
+    console.log('🔍 [getStoreAvailablePromotions] Response headers:', response.headers);
+    console.log('🔍 [getStoreAvailablePromotions] Full response:', response);
+    console.log('🔍 [getStoreAvailablePromotions] response.data:', response.data);
+    console.log('🔍 [getStoreAvailablePromotions] response.data type:', typeof response.data);
+    console.log('🔍 [getStoreAvailablePromotions] response.data isArray:', Array.isArray(response.data));
+    if (response.data && typeof response.data === 'object') {
+      console.log('🔍 [getStoreAvailablePromotions] response.data keys:', Object.keys(response.data));
+    }
 
     // Handle different response structures
     let promotions = [];
@@ -107,16 +126,36 @@ export const getStoreAvailablePromotions = async (storeId, params = {}) => {
     }
 
     // Extract promotions from responseData
+    console.log('🔍 [getStoreAvailablePromotions] ===== PARSING RESPONSE DATA =====');
+    console.log('🔍 [getStoreAvailablePromotions] responseData:', responseData);
+    console.log('🔍 [getStoreAvailablePromotions] responseData type:', typeof responseData);
+    console.log('🔍 [getStoreAvailablePromotions] responseData isArray:', Array.isArray(responseData));
+    
     if (responseData) {
       if (Array.isArray(responseData)) {
+        console.log('✅ [getStoreAvailablePromotions] responseData is array');
         promotions = responseData;
       } else if (responseData?.content && Array.isArray(responseData.content)) {
+        console.log('✅ [getStoreAvailablePromotions] responseData.content is array');
         promotions = responseData.content;
       } else if (responseData && typeof responseData === 'object') {
+        console.log('✅ [getStoreAvailablePromotions] responseData is object, extracting...');
         promotions = responseData.content || responseData.promotions || responseData.items || [];
+        console.log('🔍 [getStoreAvailablePromotions] Extracted:', {
+          'responseData.content': responseData.content,
+          'responseData.promotions': responseData.promotions,
+          'responseData.items': responseData.items,
+          'final promotions': promotions
+        });
       }
     }
     
+    console.log('✅ [getStoreAvailablePromotions] Final promotions:', promotions);
+    console.log('✅ [getStoreAvailablePromotions] Promotions count:', promotions.length);
+    if (promotions.length > 0) {
+      console.log('✅ [getStoreAvailablePromotions] First promotion:', promotions[0]);
+    }
+    console.log('🔍 [getStoreAvailablePromotions] ====================================');
     
     // Return success with promotions (even if empty array)
     return {
@@ -193,6 +232,16 @@ export const getPlatformAvailablePromotions = async (params = {}) => {
       };
     }
 
+    console.log('🔍 [getPlatformAvailablePromotions] ===== CALLING API =====');
+    console.log('🔍 [getPlatformAvailablePromotions] URL: /api/v1/buyer/promotions/platform/available');
+    console.log('🔍 [getPlatformAvailablePromotions] Params:', {
+      orderValue,
+      page,
+      size,
+      sortBy,
+      sortDir,
+    });
+    
     const response = await api.get('/api/v1/buyer/promotions/platform/available', {
       params: {
         orderValue,
@@ -203,37 +252,94 @@ export const getPlatformAvailablePromotions = async (params = {}) => {
       },
     });
 
-    if (response.data.success) {
-      const data = response.data.data;
-      // Handle different response structures
-      let promotions = [];
-      
-      if (Array.isArray(data)) {
-        // Direct array
-        promotions = data;
-      } else if (data?.content && Array.isArray(data.content)) {
-        // Paginated response with content array
-        promotions = data.content;
-      } else if (data && typeof data === 'object') {
-        // Try to extract promotions from object
-        promotions = data.content || data.promotions || data.items || [];
-      }
-      
-      return {
-        success: true,
-        data: {
-          content: promotions,
-          totalElements: data?.totalElements || promotions.length,
-          totalPages: data?.totalPages || 1,
-          ...data
-        },
-      };
-    } else {
-      return {
-        success: false,
-        error: response.data.error || 'Không thể tải promotions',
-      };
+    console.log('🔍 [getPlatformAvailablePromotions] ===== API RESPONSE =====');
+    console.log('🔍 [getPlatformAvailablePromotions] Response status:', response.status);
+    console.log('🔍 [getPlatformAvailablePromotions] Response headers:', response.headers);
+    console.log('🔍 [getPlatformAvailablePromotions] Full response:', response);
+    console.log('🔍 [getPlatformAvailablePromotions] response.data:', response.data);
+    console.log('🔍 [getPlatformAvailablePromotions] response.data type:', typeof response.data);
+    console.log('🔍 [getPlatformAvailablePromotions] response.data isArray:', Array.isArray(response.data));
+    if (response.data && typeof response.data === 'object') {
+      console.log('🔍 [getPlatformAvailablePromotions] response.data keys:', Object.keys(response.data));
     }
+
+    // Handle different response structures
+    let promotions = [];
+    let responseData = null;
+
+    // Case 1: Response has success field and data
+    if (response.data?.success !== undefined) {
+      if (response.data.success) {
+        responseData = response.data.data;
+      } else {
+        // Backend returned success: false
+        return {
+          success: true,
+          data: {
+            content: [],
+            totalElements: 0,
+            totalPages: 0
+          },
+          error: response.data.error || response.data.message
+        };
+      }
+    } 
+    // Case 2: Response data is directly the promotions array
+    else if (Array.isArray(response.data)) {
+      responseData = response.data;
+      promotions = response.data;
+    }
+    // Case 3: Response data is an object with nested data
+    else if (response.data?.data !== undefined) {
+      responseData = response.data.data;
+    }
+    // Case 4: Response data is directly the data object (no wrapper)
+    else if (response.data && typeof response.data === 'object') {
+      responseData = response.data;
+    }
+
+    // Extract promotions from responseData
+    console.log('🔍 [getPlatformAvailablePromotions] ===== PARSING RESPONSE DATA =====');
+    console.log('🔍 [getPlatformAvailablePromotions] responseData:', responseData);
+    console.log('🔍 [getPlatformAvailablePromotions] responseData type:', typeof responseData);
+    console.log('🔍 [getPlatformAvailablePromotions] responseData isArray:', Array.isArray(responseData));
+    
+    if (responseData) {
+      if (Array.isArray(responseData)) {
+        console.log('✅ [getPlatformAvailablePromotions] responseData is array');
+        promotions = responseData;
+      } else if (responseData?.content && Array.isArray(responseData.content)) {
+        console.log('✅ [getPlatformAvailablePromotions] responseData.content is array');
+        promotions = responseData.content;
+      } else if (responseData && typeof responseData === 'object') {
+        console.log('✅ [getPlatformAvailablePromotions] responseData is object, extracting...');
+        promotions = responseData.content || responseData.promotions || responseData.items || [];
+        console.log('🔍 [getPlatformAvailablePromotions] Extracted:', {
+          'responseData.content': responseData.content,
+          'responseData.promotions': responseData.promotions,
+          'responseData.items': responseData.items,
+          'final promotions': promotions
+        });
+      }
+    }
+
+    console.log('✅ [getPlatformAvailablePromotions] Final promotions:', promotions);
+    console.log('✅ [getPlatformAvailablePromotions] Promotions count:', promotions.length);
+    if (promotions.length > 0) {
+      console.log('✅ [getPlatformAvailablePromotions] First promotion:', promotions[0]);
+    }
+    console.log('🔍 [getPlatformAvailablePromotions] ====================================');
+    
+    // Return success with promotions (even if empty array)
+    return {
+      success: true,
+      data: {
+        content: promotions,
+        totalElements: responseData?.totalElements || promotions.length,
+        totalPages: responseData?.totalPages || 1,
+        ...(typeof responseData === 'object' && !Array.isArray(responseData) ? responseData : {})
+      },
+    };
   } catch (error) {
     return {
       success: false,

@@ -121,6 +121,12 @@ export const respondToReturnRequest = async (storeId, returnRequestId, data) => 
 
 /**
  * Confirm returned goods are OK
+ * 
+ * ⚠️ LƯU Ý LOGIC CẢNH BÁO:
+ * - Khi store chấp nhận trả hàng (xác nhận hàng OK) → Backend PHẢI cộng 1 cảnh báo NGAY LẬP TỨC
+ * - Bất kể sau đó store có khiếu nại chất lượng và thắng hay không
+ * - Backend cần xử lý: Tăng returnWarningCount lên 1 khi API này được gọi
+ * 
  * @param {string} storeId - Store ID
  * @param {string} returnRequestId - Return request ID
  * @returns {Promise} Updated return request

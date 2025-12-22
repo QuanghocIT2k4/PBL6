@@ -238,20 +238,25 @@ export const ChatProvider = ({ children }) => {
    */
   const createConversation = useCallback(async (data) => {
     try {
+      // ✅ Validate required fields
+      if (!data.storeId) {
+        return null;
+      }
+
       const result = await chatService.createConversation(data);
+      
       if (result.success) {
         // ✅ Reload conversations để lấy conversation với ID đầy đủ từ backend
         await loadConversations();
         
-        // ✅ Tìm conversation vừa tạo (theo storeId)
-        const newConv = conversations.find(c => c.storeId === data.storeId) || result.data;
-        return newConv;
-      } else {
-        console.error('❌ Failed to create conversation:', result.error);
-        return null;
+        // ✅ Tìm conversation vừa tạo (theo storeId hoặc ID từ response)
+        const newConv = result.data || conversations.find(c => c.storeId === data.storeId);
+        
+        if (newConv) return newConv;
+        return result.data;
       }
-    } catch (error) {
-      console.error('❌ Error creating conversation:', error);
+      return null;
+    } catch (_error) {
       return null;
     }
   }, [loadConversations, conversations]);

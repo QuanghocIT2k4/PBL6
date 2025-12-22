@@ -20,6 +20,7 @@ const ShopPage = lazy(() => import('./pages/shop/ShopPage'));
 const CheckoutPage = lazy(() => import('./pages/checkout/CheckoutPage'));
 const OrdersPage = lazy(() => import('./pages/orders/OrdersPage'));
 const OrderDetailPage = lazy(() => import('./pages/orders/OrderDetailPage'));
+const MyReviewsPage = lazy(() => import('./pages/reviews/MyReviewsPage'));
 const SearchResults = lazy(() => import('./pages/search/SearchResults'));
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'));
 const BuyerNotifications = lazy(() => import('./pages/buyer/BuyerNotifications'));
@@ -76,6 +77,7 @@ const AppContent = () => {
         <Route path="/orders/returns/:returnRequestId/dispute" element={<ReturnDisputeCreatePage />} />
         <Route path="/orders/disputes" element={<BuyerDisputesPage />} />
         <Route path="/orders/disputes/:disputeId" element={<BuyerDisputeDetailPage />} />
+        <Route path="/reviews/my" element={<MyReviewsPage />} />
         <Route path="/notifications" element={<BuyerNotifications />} />
         <Route path="/payment/callback" element={<PaymentCallback />} />
         <Route path="/profile" element={<ProfilePage />} />

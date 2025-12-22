@@ -42,7 +42,12 @@ const ShipperDashboard = () => {
   // Update tab when URL changes
   useEffect(() => {
     if (location.pathname === '/shipper/history') {
-      setActiveTab('history');
+      // Nếu đang ở tab processing, giữ nguyên và refresh data
+      if (activeTab === 'processing') {
+        mutateHistory();
+      } else {
+        setActiveTab('history');
+      }
       // ✅ Reset về trang đầu tiên khi chuyển sang tab history
       setCurrentPage(0);
     } else {
@@ -50,7 +55,7 @@ const ShipperDashboard = () => {
       // ✅ Reset về trang đầu tiên khi chuyển sang tab picking-up
       setCurrentPage(0);
     }
-  }, [location.pathname]);
+  }, [location.pathname]); // ✅ Chỉ depend vào location.pathname để tránh vòng lặp
 
   // Fetch picking up shipments
   // ❌ TẮT AUTO-REFRESH - Theo yêu cầu tắt tự động vận chuyển
@@ -74,9 +79,24 @@ const ShipperDashboard = () => {
     ['shipper-history', historyPage],
     () => getShipperHistory({ page: historyPage, size: historyPageSize }),
     { 
-      revalidateOnFocus: false, // Tắt revalidate để không reload khi focus
-      refreshInterval: 0, // Tắt auto-refresh để không load lại liên tục
-      dedupingInterval: 2000 // Tránh duplicate requests
+      revalidateOnFocus: activeTab === 'history' || activeTab === 'processing', // ✅ Bật revalidate khi ở tab history hoặc processing để realtime
+      refreshInterval: 0, // Tắt auto refresh cho page cụ thể, sẽ dùng page 0 riêng
+      dedupingInterval: 2000, // Tránh duplicate requests
+      keepPreviousData: true, // ✅ Giữ data cũ khi load data mới để tránh flash
+      revalidateIfStale: false // ✅ Không revalidate nếu data chưa stale
+    }
+  );
+
+  // ✅ Fetch page 0 riêng để luôn có đơn mới nhất (realtime)
+  const { data: latestHistoryData, mutate: mutateLatestHistory } = useSWR(
+    activeTab === 'history' ? ['shipper-history-latest', 0] : null, // Chỉ fetch khi ở tab history
+    () => getShipperHistory({ page: 0, size: historyPageSize }),
+    { 
+      revalidateOnFocus: true, // ✅ Bật revalidate khi focus vào tab
+      refreshInterval: activeTab === 'history' ? 5000 : 0, // ✅ Auto-refresh mỗi 5 giây khi ở tab history để realtime
+      dedupingInterval: 2000, // Tránh duplicate requests
+      keepPreviousData: true, // ✅ Giữ data cũ khi load data mới để tránh flash
+      revalidateIfStale: false // ✅ Không revalidate nếu data chưa stale
     }
   );
 
@@ -85,21 +105,58 @@ const ShipperDashboard = () => {
   
   useEffect(() => {
     if (activeTab === 'history' && !isHistoryInitialized) {
-      // Reset về trang đầu và clear danh sách khi vào tab history lần đầu
-      setHistoryPage(0);
-      setDisplayedHistoryCount(15);
-      setAllLoadedHistoryShipments([]);
-      setAutoLoadMore(true); // Bật tự động load
+      // ✅ Chỉ reset khi vào tab history lần đầu tiên, không reset khi đã có data
+      if (allLoadedHistoryShipments.length === 0) {
+        setHistoryPage(0);
+        setDisplayedHistoryCount(15);
+        setAllLoadedHistoryShipments([]);
+        setAutoLoadMore(true); // Bật tự động load
+      }
       setIsHistoryInitialized(true);
-    } else if (activeTab !== 'history') {
+    } else if (activeTab !== 'history' && activeTab !== 'processing') {
+      // ✅ Chỉ reset khi chuyển sang tab khác (không phải history hoặc processing)
       setIsHistoryInitialized(false);
       setAutoLoadMore(false); // Tắt khi chuyển tab khác
     }
-  }, [activeTab, isHistoryInitialized]);
+  }, [activeTab, isHistoryInitialized, allLoadedHistoryShipments.length]);
 
-  // ✅ Khi data mới load về, append vào allLoadedHistoryShipments
+  // ✅ Khi data mới load về từ page 0 (đơn mới nhất), merge vào đầu danh sách
   useEffect(() => {
-    if (historyData?.success && historyData.data && isHistoryInitialized) {
+    if (latestHistoryData?.success && latestHistoryData.data && activeTab === 'history') {
+      const newShipments = Array.isArray(latestHistoryData.data?.content) 
+        ? latestHistoryData.data.content 
+        : Array.isArray(latestHistoryData.data) 
+          ? latestHistoryData.data 
+          : [];
+      
+      if (newShipments.length > 0) {
+        // Merge đơn mới nhất vào đầu danh sách (loại bỏ duplicate theo ID)
+        setAllLoadedHistoryShipments(prev => {
+          const map = new Map();
+          // Thêm các đơn mới nhất trước (ưu tiên)
+          newShipments.forEach(s => {
+            if (s?.id) map.set(s.id, s);
+          });
+          // Thêm các đơn cũ (không ghi đè nếu đã có)
+          prev.forEach(s => {
+            if (s?.id && !map.has(s.id)) {
+              map.set(s.id, s);
+            }
+          });
+          // Sắp xếp lại theo thời gian (mới nhất trước)
+          return Array.from(map.values()).sort((a, b) => {
+            const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+            const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+            return timeB - timeA;
+          });
+        });
+      }
+    }
+  }, [latestHistoryData, activeTab]);
+
+  // ✅ Khi data mới load về từ các page khác, append vào allLoadedHistoryShipments
+  useEffect(() => {
+    if (historyData?.success && historyData.data && isHistoryInitialized && historyPage > 0) {
       const newShipments = Array.isArray(historyData.data?.content) 
         ? historyData.data.content 
         : Array.isArray(historyData.data) 
@@ -120,7 +177,7 @@ const ShipperDashboard = () => {
         return Array.from(map.values());
       });
     }
-  }, [historyData, isHistoryInitialized]);
+  }, [historyData, isHistoryInitialized, historyPage]);
 
   // ✅ Tự động load tiếp khi còn đơn
   useEffect(() => {
@@ -228,6 +285,7 @@ const ShipperDashboard = () => {
     ['PICKING_UP', 'PICKING', 'PICKED', 'SHIPPING', 'RETURNING'].includes(s?.status)
   );
   // Merge processingLocal (ưu tiên status mới nhất)
+  // ✅ Sắp xếp đơn mới nhất ở trên (theo createdAt hoặc updatedAt)
   const processingShipments = React.useMemo(() => {
     const map = new Map();
     processingFromHistory.forEach((s) => {
@@ -236,7 +294,14 @@ const ShipperDashboard = () => {
     processingLocal.forEach((s) => {
       map.set(s.id, s);
     });
-    return Array.from(map.values());
+    const allProcessing = Array.from(map.values());
+    
+    // ✅ Sắp xếp theo thời gian mới nhất trước
+    return allProcessing.sort((a, b) => {
+      const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return timeB - timeA; // Mới nhất trước
+    });
   }, [processingFromHistory, processingLocal]);
   
   const totalPickingUpPages = pickingUpData?.data?.totalPages || 0;
@@ -626,6 +691,8 @@ const ShipperDashboard = () => {
                 onClick={() => {
                   setActiveTab('processing');
                   setCurrentPage(0); // ✅ Reset về trang đầu tiên
+                  // ✅ Refresh data khi chuyển sang tab processing để có realtime
+                  mutateHistory();
                   navigate('/shipper/history');
                 }}
                 className={`px-6 py-4 text-sm font-medium ${
@@ -638,11 +705,11 @@ const ShipperDashboard = () => {
               </button>
               <button
                 onClick={() => {
+                  // ✅ Chỉ set tab, không reset page để tránh reload không cần thiết
                   setActiveTab('history');
-                  setCurrentPage(0); // ✅ Reset về trang đầu tiên
                   navigate('/shipper/history');
                 }}
-                className={`px-6 py-4 text-sm font-medium ${
+                className={`px-6 py-4 text-sm font-medium transition-colors ${
                   activeTab === 'history'
                     ? 'border-b-2 border-blue-500 text-blue-600'
                     : 'text-gray-500 hover:text-gray-700'
@@ -1086,11 +1153,12 @@ const ShipperDashboard = () => {
               </>
             ) : (
               <>
-                {historyLoading ? (
+                {/* ✅ Chỉ hiển thị loading khi chưa có data, không hiển thị khi đã có data (tránh flash) */}
+                {historyLoading && filteredHistoryShipments.length === 0 ? (
                   <div className="flex items-center justify-center h-64">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
                   </div>
-                ) : historyError ? (
+                ) : historyError && filteredHistoryShipments.length === 0 ? (
                   <div className="text-center py-12 text-red-600">
                     <p>Không thể tải lịch sử giao hàng</p>
                   </div>

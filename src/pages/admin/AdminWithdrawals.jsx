@@ -6,9 +6,6 @@ import {
   getStoreWithdrawals,
   approveStoreWithdrawal,
   rejectStoreWithdrawal,
-  getCustomerWithdrawals,
-  approveCustomerWithdrawal,
-  rejectCustomerWithdrawal,
   formatCurrency,
   getWithdrawalStatusBadge,
 } from '../../services/admin/adminWalletService';
@@ -18,16 +15,9 @@ const AdminWithdrawals = () => {
   
   const [loading, setLoading] = useState(true);
   
-  // Tab management
-  const [activeTab, setActiveTab] = useState('STORE'); // STORE | CUSTOMER
-  
   // Store withdrawals
   const [storeWithdrawals, setStoreWithdrawals] = useState([]);
   const [storeFilter, setStoreFilter] = useState('PENDING');
-  
-  // Customer withdrawals
-  const [customerWithdrawals, setCustomerWithdrawals] = useState([]);
-  const [customerFilter, setCustomerFilter] = useState('PENDING');
   
   // Modal states
   const [selectedWithdrawal, setSelectedWithdrawal] = useState(null);
@@ -39,32 +29,20 @@ const AdminWithdrawals = () => {
 
   useEffect(() => {
     loadData();
-  }, [activeTab, storeFilter, customerFilter]);
+  }, [storeFilter]);
 
   const loadData = async () => {
     setLoading(true);
     
     try {
-      if (activeTab === 'STORE') {
-        const result = await getStoreWithdrawals({
-          page: 0,
-          size: 20,
-          status: storeFilter === 'ALL' ? undefined : storeFilter,
-        });
-        
-        if (result.success) {
-          setStoreWithdrawals(result.data.content || result.data || []);
-        }
-      } else {
-        const result = await getCustomerWithdrawals({
-          page: 0,
-          size: 20,
-          status: customerFilter === 'ALL' ? undefined : customerFilter,
-        });
-        
-        if (result.success) {
-          setCustomerWithdrawals(result.data.content || result.data || []);
-        }
+      const result = await getStoreWithdrawals({
+        page: 0,
+        size: 20,
+        status: storeFilter === 'ALL' ? undefined : storeFilter,
+      });
+      
+      if (result.success) {
+        setStoreWithdrawals(result.data.content || result.data || []);
       }
     } catch (err) {
       console.error('Error loading data:', err);
@@ -88,9 +66,7 @@ const AdminWithdrawals = () => {
     setProcessing(true);
     
     try {
-      const result = activeTab === 'STORE'
-        ? await approveStoreWithdrawal(selectedWithdrawal.id, approveNote)
-        : await approveCustomerWithdrawal(selectedWithdrawal.id, approveNote);
+      const result = await approveStoreWithdrawal(selectedWithdrawal.id, approveNote);
       
       if (result.success) {
         success(result.message || 'Đã duyệt yêu cầu rút tiền!');
@@ -125,9 +101,7 @@ const AdminWithdrawals = () => {
     setProcessing(true);
     
     try {
-      const result = activeTab === 'STORE'
-        ? await rejectStoreWithdrawal(selectedWithdrawal.id, rejectReason)
-        : await rejectCustomerWithdrawal(selectedWithdrawal.id, rejectReason);
+      const result = await rejectStoreWithdrawal(selectedWithdrawal.id, rejectReason);
       
       if (result.success) {
         success(result.message || 'Đã từ chối yêu cầu rút tiền!');
@@ -146,51 +120,24 @@ const AdminWithdrawals = () => {
     }
   };
 
-  const currentWithdrawals = activeTab === 'STORE' ? storeWithdrawals : customerWithdrawals;
-  const currentFilter = activeTab === 'STORE' ? storeFilter : customerFilter;
-  const setCurrentFilter = activeTab === 'STORE' ? setStoreFilter : setCustomerFilter;
 
   return (
     <div className="space-y-6">
       <AdminPageHeader 
         icon="💰"
         title="Quản lý Rút tiền"
-        subtitle="Xử lý yêu cầu rút tiền của cửa hàng và khách hàng"
+        subtitle="Xử lý yêu cầu rút tiền của cửa hàng"
       />
 
-      {/* Tabs: Store vs Customer */}
       <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="flex gap-4 mb-6">
-          <button
-            onClick={() => setActiveTab('STORE')}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all ${
-              activeTab === 'STORE'
-                ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            🏪 Rút tiền Cửa hàng
-          </button>
-          <button
-            onClick={() => setActiveTab('CUSTOMER')}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all ${
-              activeTab === 'CUSTOMER'
-                ? 'bg-gradient-to-r from-teal-500 to-green-500 text-white shadow-lg'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            👥 Rút tiền Khách hàng
-          </button>
-        </div>
-
         {/* Status Filter */}
         <div className="flex gap-3 mb-6">
-          {['ALL', 'PENDING', 'APPROVED', 'REJECTED'].map((status) => (
+          {['ALL', 'PENDING', 'REJECTED', 'COMPLETED'].map((status) => (
             <button
               key={status}
-              onClick={() => setCurrentFilter(status)}
+              onClick={() => setStoreFilter(status)}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                currentFilter === status
+                storeFilter === status
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
@@ -214,7 +161,7 @@ const AdminWithdrawals = () => {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    {activeTab === 'STORE' ? 'Cửa hàng' : 'Khách hàng'}
+                    Cửa hàng
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Số tiền</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ngân hàng</th>
@@ -224,27 +171,21 @@ const AdminWithdrawals = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {currentWithdrawals.length === 0 ? (
+                {storeWithdrawals.length === 0 ? (
                   <tr>
                     <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
                       Không có yêu cầu rút tiền nào
                     </td>
                   </tr>
                 ) : (
-                  currentWithdrawals.map((wd) => {
+                  storeWithdrawals.map((wd) => {
                     const badge = getWithdrawalStatusBadge(wd.status);
                     return (
                       <tr key={wd.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4">
                           <p className="text-sm font-medium text-gray-900">
-                            {activeTab === 'STORE' 
-                              ? (wd.store?.name || wd.storeName || 'N/A')
-                              : (wd.customer?.fullName || wd.customer?.name || wd.customerName || wd.fullName || wd.userName || wd.user?.fullName || wd.user?.name || 'N/A')
-                            }
+                            {wd.store?.name || wd.storeName || 'N/A'}
                           </p>
-                          {activeTab === 'CUSTOMER' && wd.customer?.email && (
-                            <p className="text-xs text-gray-500">{wd.customer.email}</p>
-                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="text-sm font-bold text-gray-900">
@@ -294,11 +235,7 @@ const AdminWithdrawals = () => {
                                   title: 'Chi tiết yêu cầu rút tiền',
                                   html: `
                                     <div class="text-left space-y-2">
-                                      <p><strong>${activeTab === 'STORE' ? 'Cửa hàng' : 'Khách hàng'}:</strong> ${
-                                        activeTab === 'STORE' 
-                                          ? (wd.store?.name || wd.storeName || 'N/A')
-                                          : (wd.customer?.fullName || wd.customer?.name || wd.customerName || wd.fullName || wd.userName || wd.user?.fullName || wd.user?.name || 'N/A')
-                                      }</p>
+                                      <p><strong>Cửa hàng:</strong> ${wd.store?.name || wd.storeName || 'N/A'}</p>
                                       <p><strong>Số tiền:</strong> ${formatCurrency(wd.amount)}</p>
                                       <p><strong>Ngân hàng:</strong> ${wd.bankName}</p>
                                       <p><strong>Số TK:</strong> ${wd.bankAccountNumber}</p>

@@ -5,6 +5,7 @@ import MainLayout from '../../layouts/MainLayout';
 import { getMyDisputes } from '../../services/buyer/disputeService';
 import { useToast } from '../../context/ToastContext';
 import SEO from '../../components/seo/SEO';
+import { getOrderCode } from '../../utils/displayCodeUtils';
 
 const BuyerDisputesPage = () => {
   const { error: showError } = useToast();
@@ -87,6 +88,26 @@ const BuyerDisputesPage = () => {
 
     const disputeType = detectDisputeType(dispute);
 
+    // ✅ Xử lý PARTIAL_REFUND: Hiển thị số tiền
+    if (decision === 'PARTIAL_REFUND') {
+      let amount = null;
+      // Ưu tiên lấy từ dispute.partialRefundAmount
+      amount = dispute.partialRefundAmount;
+      // Nếu không có, lấy từ returnRequest.partialRefundToBuyer
+      if (!amount && dispute.returnRequest?.partialRefundToBuyer) {
+        amount = dispute.returnRequest.partialRefundToBuyer;
+      }
+      
+      if (amount && typeof amount === 'number' && amount > 0) {
+        const formattedAmount = new Intl.NumberFormat('vi-VN', {
+          style: 'currency',
+          currency: 'VND'
+        }).format(amount);
+        return `Hoàn trả 1 phần (${formattedAmount})`;
+      }
+      return 'Hoàn trả 1 phần';
+    }
+
     // Phân biệt theo loại khiếu nại
     if (disputeType === 'RETURN_QUALITY') {
       // Store khiếu nại chất lượng hàng trả
@@ -119,6 +140,13 @@ const BuyerDisputesPage = () => {
     });
   };
 
+  // Helper lấy ID từ DBRef / object
+  const getIdFromRef = (ref) => {
+    if (!ref) return null;
+    if (typeof ref === 'string' || typeof ref === 'number') return String(ref);
+    return String(ref.$id || ref._id || ref.id || ref.$oid || ref);
+  };
+
   if (error) {
     showError('Không thể tải danh sách khiếu nại');
   }
@@ -131,38 +159,38 @@ const BuyerDisputesPage = () => {
         keywords="khiếu nại, tranh chấp, giải quyết khiếu nại"
         url="https://pbl-6-eight.vercel.app/orders/disputes"
       />
-      <div className="bg-gray-50 min-h-screen py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="bg-gray-50 min-h-screen py-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Header */}
-          <div className="mb-6 flex items-center justify-between">
+          <div className="mb-8 flex items-center justify-between border-b border-gray-200 pb-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              <h1 className="text-3xl font-semibold text-gray-900 mb-1">
                 Khiếu nại của tôi
               </h1>
-              <p className="text-gray-600">
+              <p className="text-sm text-gray-500">
                 Quản lý các khiếu nại về yêu cầu trả hàng
               </p>
             </div>
             <Link
               to="/orders"
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+              className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
             >
               ← Quay lại đơn hàng
             </Link>
           </div>
 
           {/* Tabs: phân loại loại khiếu nại */}
-          <div className="mb-4">
-            <div className="inline-flex rounded-lg border border-gray-200 bg-white overflow-hidden text-sm">
+          <div className="mb-6">
+            <div className="inline-flex rounded-md border border-gray-300 bg-white overflow-hidden text-sm">
               <button
                 type="button"
                 onClick={() => {
                   setDisputeTypeFilter('RETURN_REJECTION');
                   setCurrentPage(0);
                 }}
-                className={`px-4 py-2 border-r border-gray-200 ${
+                className={`px-4 py-2 border-r border-gray-300 transition-colors ${
                   disputeTypeFilter === 'RETURN_REJECTION'
-                    ? 'bg-blue-500 text-white'
+                    ? 'bg-gray-900 text-white'
                     : 'bg-white text-gray-700 hover:bg-gray-50'
                 }`}
               >
@@ -174,9 +202,9 @@ const BuyerDisputesPage = () => {
                   setDisputeTypeFilter('RETURN_QUALITY');
                   setCurrentPage(0);
                 }}
-                className={`px-4 py-2 ${
+                className={`px-4 py-2 transition-colors ${
                   disputeTypeFilter === 'RETURN_QUALITY'
-                    ? 'bg-blue-500 text-white'
+                    ? 'bg-gray-900 text-white'
                     : 'bg-white text-gray-700 hover:bg-gray-50'
                 }`}
               >
@@ -214,65 +242,94 @@ const BuyerDisputesPage = () => {
               </p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {filteredDisputes.map((dispute) => (
-                <div
-                  key={dispute.id || dispute._id}
-                  className="bg-white rounded-lg shadow p-6 hover:shadow-md transition"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-3">
+            <div className="space-y-3">
+              {filteredDisputes.map((dispute) => {
+                const orderId =
+                  getIdFromRef(
+                    dispute.order ||
+                      dispute.orderId ||
+                      dispute.orderRef ||
+                      dispute.returnRequest?.order
+                  );
+                const orderCode = orderId ? getOrderCode(orderId) : null;
+
+                return (
+                  <div
+                    key={dispute.id || dispute._id}
+                    className="bg-white border border-gray-200 rounded-lg p-5 hover:border-gray-300 transition-colors"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex flex-wrap items-center gap-3 mb-4">
                         <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadge(
+                          className={`px-2.5 py-1 rounded text-xs font-medium ${getStatusBadge(
                             dispute.status
                           )}`}
                         >
                           {getStatusLabel(dispute.status)}
                         </span>
-                        <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
+                        <span className="px-2.5 py-1 bg-gray-100 text-gray-700 rounded text-xs font-medium">
                           {getDisputeTypeLabel(detectDisputeType(dispute))}
                         </span>
-                        <span className="text-sm text-gray-500">
+                        <span className="text-xs text-gray-500">
                           {formatDate(dispute.createdAt)}
                         </span>
+                        {orderCode && (
+                          <span className="text-xs font-semibold text-blue-600">
+                            Đơn hàng #{orderCode}
+                          </span>
+                        )}
                       </div>
 
-                      <div className="mb-3">
-                        <p className="text-sm text-gray-600 mb-2">
-                          <span className="font-medium">Số tin nhắn:</span>{' '}
+                      <div className="mb-4 space-y-1">
+                        <p className="text-sm text-gray-700">
+                          <span className="font-medium text-gray-900">Số tin nhắn:</span>{' '}
                           {dispute.messages?.length || 0}
                         </p>
                         {dispute.finalDecision && (
-                          <p className="text-sm text-gray-600">
-                            <span className="font-medium">Kết quả:</span>{' '}
-                            <span className="font-semibold">
+                          <p className="text-sm text-gray-700">
+                            <span className="font-medium text-gray-900">Kết quả:</span>{' '}
+                            <span className="font-semibold text-gray-900">
                               {getComplaintResult(dispute) || dispute.finalDecision}
                             </span>
                           </p>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-4">
+                      <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-gray-100">
+                        {/* Button xem chi tiết khiếu nại */}
+                        <Link
+                          to={`/orders/disputes/${dispute.id || dispute._id}`}
+                          className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-800 transition-colors"
+                        >
+                          Xem chi tiết khiếu nại
+                        </Link>
+
+                        {/* Button xem chi tiết đơn hàng liên quan (nếu có) */}
+                        {orderId && (
+                          <Link
+                            to={`/orders/${orderId}`}
+                            className="px-4 py-2 text-sm font-semibold bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                          >
+                            Xem chi tiết đơn hàng #{orderCode}
+                          </Link>
+                        )}
+
+                        {/* Link tới yêu cầu trả hàng (nếu có) */}
                         {dispute.returnRequest && (
                           <Link
                             to={`/orders/returns/${dispute.returnRequest.id || dispute.returnRequest._id || dispute.returnRequest}`}
-                            className="text-blue-600 hover:underline text-sm"
+                            className="text-sm text-gray-600 hover:text-gray-900 hover:underline"
                           >
-                            Xem yêu cầu trả hàng →
+                            Xem yêu cầu trả hàng
                           </Link>
                         )}
-                        <Link
-                          to={`/orders/disputes/${dispute.id || dispute._id}`}
-                          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm"
-                        >
-                          Xem chi tiết
-                        </Link>
                       </div>
                     </div>
                   </div>
                 </div>
-              ))}
+              );
+              })}
 
               {/* Pagination */}
               {totalPages > 1 && (

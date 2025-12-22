@@ -105,6 +105,74 @@ export const countProductVariantsByStatus = async (storeId) => {
 };
 
 /**
+ * 0.2.1 TÌM KIẾM PRODUCT VARIANT CỦA STORE
+ * GET /api/v1/b2c/product-variants/search/{storeId}
+ * 
+ * Tìm kiếm sản phẩm (product variant) của một cửa hàng cụ thể theo tên hoặc từ khóa.
+ * 
+ * @param {string} storeId - ID của cửa hàng
+ * @param {object} params - Query parameters
+ * @param {string} params.name - Tên sản phẩm hoặc từ khóa tìm kiếm (bắt buộc)
+ * @param {string} params.status - Lọc theo trạng thái (optional)
+ * @param {number} params.page - Số trang (default: 0)
+ * @param {number} params.size - Số lượng mỗi trang (default: 20)
+ * @param {string} params.sortBy - Trường sắp xếp (default: 'createdAt')
+ * @param {string} params.sortDir - Hướng sắp xếp: 'asc' hoặc 'desc' (default: 'desc')
+ * @returns {Promise} Danh sách product variants tìm được
+ */
+export const searchProductVariantsByStore = async (storeId, params = {}) => {
+  try {
+    if (!storeId) {
+      return { success: false, error: 'storeId is required' };
+    }
+
+    if (!params.name || !params.name.trim()) {
+      return { success: false, error: 'Tên sản phẩm hoặc từ khóa tìm kiếm là bắt buộc' };
+    }
+
+    const {
+      name,
+      status,
+      page = 0,
+      size = 20,
+      sortBy = 'createdAt',
+      sortDir = 'desc',
+    } = params;
+
+    const response = await api.get(`/api/v1/b2c/product-variants/search/${storeId}`, {
+      params: {
+        name: name.trim(),
+        ...(status && { status }),
+        page,
+        size,
+        sortBy,
+        sortDir,
+      },
+    });
+
+    if (response.data.success) {
+      const data = response.data.data;
+      
+      if (Array.isArray(data)) {
+        return { success: true, data: data };
+      } else if (data?.content) {
+        // Paginated response
+        return { success: true, data: data.content, pagination: data };
+      } else {
+        return { success: true, data: [] };
+      }
+    } else {
+      return { success: false, error: response.data.error || 'Không thể tìm kiếm sản phẩm' };
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Lỗi khi tìm kiếm sản phẩm',
+    };
+  }
+};
+
+/**
  * 0.3 ĐẾM PRODUCTS THEO TRẠNG THÁI (API mới - tương tự orders)
  * GET /api/v1/b2c/products/store/{storeId}/count-by-status
  * ⚠️ API này có thể chưa có trong Swagger, nhưng thử gọi theo pattern tương tự orders
@@ -544,6 +612,9 @@ export default {
   // Store management
   getProductsByStore,
   getProductVariantsByStore,
+  countProductVariantsByStatus,
+  countProductsByStatus,
+  searchProductVariantsByStore,
   
   // Product CRUD
   createProduct,

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 import AdminPageHeader from '../../components/admin/AdminPageHeader';
 import { useToast } from '../../context/ToastContext';
@@ -58,6 +59,13 @@ const AdminRefundsPage = () => {
       style: 'currency',
       currency: 'VND',
     }).format(amount || 0);
+  };
+
+  // Helper lấy ID từ DBRef / object
+  const getIdFromRef = (ref) => {
+    if (!ref) return null;
+    if (typeof ref === 'string' || typeof ref === 'number') return String(ref);
+    return String(ref.$id || ref._id || ref.id || ref.$oid || ref);
   };
 
   const getStatusBadge = (status) => {
@@ -240,71 +248,85 @@ const AdminRefundsPage = () => {
             <div className="py-12 text-center text-gray-500">Không có yêu cầu hoàn tiền nào.</div>
           ) : (
             <ul className="divide-y divide-gray-200">
-              {refunds.map((refund) => (
-                <li key={refund.id || refund._id} className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusBadge(
-                          refund.status
-                        )}`}
-                      >
-                        {getStatusLabel(refund.status)}
-                      </span>
-                      <span className="text-xs text-gray-500">{formatDate(refund.createdAt)}</span>
-                    </div>
-                    <p className="text-sm text-gray-700">
-                      <span className="font-semibold">Đơn hàng:</span>{' '}
-                      <span className="font-mono">{getOrderCode(refund.orderId || refund.order_id)}</span>
-                    </p>
-                    {(refund.buyerName || refund.buyer_name || refund.buyer?.name || refund.buyer?.fullName || refund.buyerEmail) && (
-                      <p className="text-sm text-gray-600">
-                        <span className="font-semibold">Người mua:</span>{' '}
-                        {refund.buyerName || 
-                         refund.buyer_name || 
-                         refund.buyer?.name || 
-                         refund.buyer?.fullName || 
-                         refund.buyer?.full_name ||
-                         refund.buyerEmail}
-                      </p>
-                    )}
-                    <p className="text-sm text-gray-700">
-                      <span className="font-semibold">Số tiền hoàn:</span>{' '}
-                      <span className="text-green-600 font-bold">
-                        {formatCurrency(refund.refundAmount || refund.amount || 0)}
-                      </span>
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      <span className="font-semibold">Phương thức hoàn trả:</span>{' '}
-                      {getRefundMethodLabel(getRefundMethod(refund))}
-                      {refund.status === 'COMPLETED' && (refund.refundTransactionId || refund.refund_transaction_id) && (
-                        <span className="text-xs text-gray-500 ml-1">
-                          · Mã hoàn tiền: {refund.refundTransactionId || refund.refund_transaction_id}
-                        </span>
-                      )}
-                    </p>
-                  </div>
+              {refunds.map((refund) => {
+                const orderId = getIdFromRef(refund.order || refund.orderId || refund.order_id || refund.orderRef);
+                const orderCode = orderId ? getOrderCode(orderId) : null;
 
-                  <div className="flex items-center gap-2">
-                    {refund.status === 'PENDING' ? (
-                      <button
-                        onClick={() => handleOpenProcessModal(refund)}
-                        disabled={processingId === (refund.id || refund._id)}
-                        className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        Xử lý
-                      </button>
-                    ) : (
-                      <button
-                        disabled
-                        className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-gray-50 text-gray-400 cursor-default"
-                      >
-                        Đã xử lý
-                      </button>
-                    )}
-                  </div>
-                </li>
-              ))}
+                return (
+                  <li key={refund.id || refund._id} className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusBadge(
+                            refund.status
+                          )}`}
+                        >
+                          {getStatusLabel(refund.status)}
+                        </span>
+                        <span className="text-xs text-gray-500">{formatDate(refund.createdAt)}</span>
+                      </div>
+                      <p className="text-sm text-gray-700">
+                        <span className="font-semibold">Đơn hàng:</span>{' '}
+                        <span className="font-mono">{orderCode || getOrderCode(refund.orderId || refund.order_id)}</span>
+                      </p>
+                      {(refund.buyerName || refund.buyer_name || refund.buyer?.name || refund.buyer?.fullName || refund.buyerEmail) && (
+                        <p className="text-sm text-gray-600">
+                          <span className="font-semibold">Người mua:</span>{' '}
+                          {refund.buyerName || 
+                           refund.buyer_name || 
+                           refund.buyer?.name || 
+                           refund.buyer?.fullName || 
+                           refund.buyer?.full_name ||
+                           refund.buyerEmail}
+                        </p>
+                      )}
+                      <p className="text-sm text-gray-700">
+                        <span className="font-semibold">Số tiền hoàn:</span>{' '}
+                        <span className="text-green-600 font-bold">
+                          {formatCurrency(refund.refundAmount || refund.amount || 0)}
+                        </span>
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        <span className="font-semibold">Phương thức hoàn trả:</span>{' '}
+                        {getRefundMethodLabel(getRefundMethod(refund))}
+                        {refund.status === 'COMPLETED' && (refund.refundTransactionId || refund.refund_transaction_id) && (
+                          <span className="text-xs text-gray-500 ml-1">
+                            · Mã hoàn tiền: {refund.refundTransactionId || refund.refund_transaction_id}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Button xem chi tiết đơn hàng */}
+                      {orderId && (
+                        <Link
+                          to={`/orders/${orderId}`}
+                          className="px-4 py-2 text-sm font-semibold bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors"
+                        >
+                          Xem chi tiết đơn hàng #{orderCode}
+                        </Link>
+                      )}
+                      {refund.status === 'PENDING' ? (
+                        <button
+                          onClick={() => handleOpenProcessModal(refund)}
+                          disabled={processingId === (refund.id || refund._id)}
+                          className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          Xử lý
+                        </button>
+                      ) : (
+                        <button
+                          disabled
+                          className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-gray-50 text-gray-400 cursor-default"
+                        >
+                          Đã xử lý
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
 

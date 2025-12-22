@@ -62,14 +62,70 @@ export const getPromotionById = async (promotionId) => {
  */
 export const createPlatformPromotion = async (promotionData) => {
   try {
+    // 🔍 DEBUG: Log payload trước khi gửi
+    console.log('🔍 [adminPromotionService] POST payload:', JSON.stringify(promotionData, null, 2));
+    console.log('🔍 [adminPromotionService] minOrderValue in payload:', promotionData.minOrderValue);
+    console.log('🔍 [adminPromotionService] minOrderValue type:', typeof promotionData.minOrderValue);
+    console.log('🔍 [adminPromotionService] minOrderAmount in payload:', promotionData.minOrderAmount);
+    
     const response = await api.post('/api/v1/admin/promotions/platform', promotionData);
+    
+    // 🔍 DEBUG: Log response từ backend - KIỂM TRA TẤT CẢ FIELD
+    console.log('🔍 [adminPromotionService] POST response:', JSON.stringify(response.data, null, 2));
+    console.log('🔍 [adminPromotionService] Full response data:', response.data?.data);
+    console.log('🔍 [adminPromotionService] Response data type:', typeof response.data?.data);
+    
+    // ⚠️ Backend có thể chỉ trả về message string, không trả về promotion object
+    // Nếu response.data.data là string, cần gọi GET để lấy promotion object
+    let promotionData_result = response.data.data || response.data;
+    
+    // Nếu response chỉ là message string, thử lấy promotion từ code
+    // ⚠️ Backend chỉ trả về message, không trả về promotion object
+    // Cần gọi GET để lấy promotion object và kiểm tra minOrderValue
+    if (typeof promotionData_result === 'string' && promotionData.code) {
+      console.log('⚠️ [adminPromotionService] Backend chỉ trả về message, đang gọi GET để lấy promotion object...');
+      try {
+        // Delay một chút để đảm bảo backend đã lưu vào database
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Delay 1s
+        
+        // Gọi getAllPromotions để tìm promotion mới tạo
+        const response = await api.get('/api/v1/admin/promotions', {
+          params: { page: 0, size: 100, sortBy: 'createdAt', sortDir: 'desc' }
+        });
+        
+        const allPromotionsData = response.data.data || response.data;
+        const promotions = Array.isArray(allPromotionsData?.content) 
+          ? allPromotionsData.content 
+          : (Array.isArray(allPromotionsData) ? allPromotionsData : []);
+        
+        const newPromotion = promotions.find(p => p.code === promotionData.code.toUpperCase());
+        if (newPromotion) {
+          console.log('✅ [adminPromotionService] Tìm thấy promotion mới tạo:', newPromotion);
+          console.log('✅ [adminPromotionService] minOrderValue trong promotion:', newPromotion.minOrderValue);
+          console.log('✅ [adminPromotionService] minOrderAmount trong promotion:', newPromotion.minOrderAmount);
+          console.log('✅ [adminPromotionService] Tất cả fields trong promotion:', Object.keys(newPromotion));
+          promotionData_result = newPromotion;
+        } else {
+          console.warn('⚠️ [adminPromotionService] Không tìm thấy promotion với code:', promotionData.code.toUpperCase());
+          console.warn('⚠️ [adminPromotionService] Danh sách codes có sẵn:', promotions.map(p => p.code));
+        }
+      } catch (err) {
+        console.warn('⚠️ [adminPromotionService] Không thể lấy promotion object:', err);
+      }
+    }
+    
+    console.log('🔍 [adminPromotionService] Final promotion data:', promotionData_result);
+    console.log('🔍 [adminPromotionService] minOrderValue in final data:', promotionData_result?.minOrderValue);
+    console.log('🔍 [adminPromotionService] minOrderAmount in final data:', promotionData_result?.minOrderAmount);
 
     return {
       success: true,
-      data: response.data.data || response.data,
+      data: promotionData_result,
       message: 'Tạo khuyến mãi nền tảng thành công',
     };
   } catch (error) {
+    console.error('❌ [adminPromotionService] POST error:', error);
+    console.error('❌ [adminPromotionService] Error response:', error.response?.data);
     return {
       success: false,
       error: error.response?.data?.message || error.message || 'Không thể tạo khuyến mãi',

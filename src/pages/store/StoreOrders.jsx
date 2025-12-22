@@ -31,70 +31,68 @@ const OrderShipmentButton = ({ orderId, storeId, onNavigate, onCreating, onCreat
 
       console.log('[OrderShipmentButton] 🔍 Bắt đầu kiểm tra shipment cho orderId:', orderId, 'storeId:', storeId);
 
-      // ✅ Cách 1: Thử lấy danh sách shipment của store và filter theo orderId
+      // ✅ Tối ưu: Dùng getShipmentByOrderId thay vì load tất cả shipments (tránh load 100 shipments cho mỗi order card)
       try {
-        console.log('[OrderShipmentButton] 📦 Đang lấy danh sách shipment của store...');
-        const storeShipmentsResult = await getShipmentsByStoreId(storeId, { size: 100 });
-        console.log('[OrderShipmentButton] 📦 Kết quả lấy danh sách shipment:', storeShipmentsResult);
-
-        if (storeShipmentsResult.success && storeShipmentsResult.data) {
-          const shipments = Array.isArray(storeShipmentsResult.data) 
-            ? storeShipmentsResult.data 
-            : (storeShipmentsResult.data.content || storeShipmentsResult.data.data || []);
-          
-          console.log('[OrderShipmentButton] 📦 Danh sách shipment:', shipments);
-          console.log('[OrderShipmentButton] 📦 Số lượng shipment:', shipments.length);
-
-          // Tìm shipment có order.id hoặc order._id hoặc order.$id trùng với orderId
-          const foundShipment = shipments.find(shipment => {
-            const orderRef = shipment.order || shipment.orderRef;
-            const orderIdFromShipment = orderRef?.id || orderRef?._id || orderRef?.$id || orderRef;
-            const orderIdStr = String(orderId);
-            const orderIdFromShipmentStr = String(orderIdFromShipment);
-            
-            console.log('[OrderShipmentButton] 🔍 So sánh:', {
-              orderId: orderIdStr,
-              orderIdFromShipment: orderIdFromShipmentStr,
-              match: orderIdStr === orderIdFromShipmentStr
-            });
-
-            return orderIdStr === orderIdFromShipmentStr;
-          });
-
-          if (foundShipment) {
-            console.log('[OrderShipmentButton] ✅ TÌM THẤY SHIPMENT!', foundShipment);
-            setHasShipment(true);
-            setCheckingShipment(false);
-            return;
-          } else {
-            console.log('[OrderShipmentButton] ❌ Không tìm thấy shipment trong danh sách');
-          }
-        }
-      } catch (err) {
-        console.warn('[OrderShipmentButton] ⚠️ Lỗi khi lấy danh sách shipment:', err);
-      }
-
-      // ✅ Cách 2: Fallback - thử dùng getShipmentByOrderId (có thể không hỗ trợ)
-      try {
-        console.log('[OrderShipmentButton] 🔄 Thử cách 2: getShipmentByOrderId...');
+        console.log('[OrderShipmentButton] 📦 Đang kiểm tra shipment cho order cụ thể...');
         const checkResult = await getShipmentByOrderId(orderId);
-        console.log('[OrderShipmentButton] 🔄 Kết quả getShipmentByOrderId:', checkResult);
+        console.log('[OrderShipmentButton] 📦 Kết quả kiểm tra shipment:', checkResult);
         
-        if (checkResult.data && !checkResult.notFound) {
-          console.log('[OrderShipmentButton] ✅ Shipment found via getShipmentByOrderId, setting hasShipment = true');
-          setHasShipment(true);
-        } else if (checkResult.success && checkResult.data) {
-          console.log('[OrderShipmentButton] ✅ Shipment found (success=true), setting hasShipment = true');
+        if (checkResult.success && checkResult.data) {
+          console.log('[OrderShipmentButton] ✅ Shipment found, setting hasShipment = true');
           setHasShipment(true);
         } else {
-          console.log('[OrderShipmentButton] ❌ No shipment found via getShipmentByOrderId, setting hasShipment = false');
+          console.log('[OrderShipmentButton] ❌ No shipment found, setting hasShipment = false');
           setHasShipment(false);
         }
-      } catch (err) {
-        console.warn('[OrderShipmentButton] ⚠️ Lỗi khi dùng getShipmentByOrderId:', err);
-        setHasShipment(false);
-      } finally {
         setCheckingShipment(false);
+        return;
+      } catch (err) {
+        console.warn('[OrderShipmentButton] ⚠️ Lỗi khi kiểm tra shipment:', err);
+        // Fallback: Thử cách cũ nếu getShipmentByOrderId không hoạt động
+        try {
+          console.log('[OrderShipmentButton] 🔄 Fallback: Thử lấy danh sách shipment của store...');
+          const storeShipmentsResult = await getShipmentsByStoreId(storeId, { size: 20 }); // Giảm size xuống 20 thay vì 100
+          console.log('[OrderShipmentButton] 📦 Kết quả lấy danh sách shipment:', storeShipmentsResult);
+
+          if (storeShipmentsResult.success && storeShipmentsResult.data) {
+            const shipments = Array.isArray(storeShipmentsResult.data) 
+              ? storeShipmentsResult.data 
+              : (storeShipmentsResult.data.content || storeShipmentsResult.data.data || []);
+            
+            console.log('[OrderShipmentButton] 📦 Danh sách shipment:', shipments);
+            console.log('[OrderShipmentButton] 📦 Số lượng shipment:', shipments.length);
+
+            // Tìm shipment có order.id hoặc order._id hoặc order.$id trùng với orderId
+            const foundShipment = shipments.find(shipment => {
+              const orderRef = shipment.order || shipment.orderRef;
+              const orderIdFromShipment = orderRef?.id || orderRef?._id || orderRef?.$id || orderRef;
+              const orderIdStr = String(orderId);
+              const orderIdFromShipmentStr = String(orderIdFromShipment);
+              
+              console.log('[OrderShipmentButton] 🔍 So sánh:', {
+                orderId: orderIdStr,
+                orderIdFromShipment: orderIdFromShipmentStr,
+                match: orderIdStr === orderIdFromShipmentStr
+              });
+
+              return orderIdStr === orderIdFromShipmentStr;
+            });
+
+            if (foundShipment) {
+              console.log('[OrderShipmentButton] ✅ TÌM THẤY SHIPMENT!', foundShipment);
+              setHasShipment(true);
+              setCheckingShipment(false);
+              return;
+            } else {
+              console.log('[OrderShipmentButton] ❌ Không tìm thấy shipment trong danh sách');
+            }
+          }
+          setCheckingShipment(false);
+        } catch (fallbackErr) {
+          console.warn('[OrderShipmentButton] ⚠️ Lỗi khi lấy danh sách shipment:', fallbackErr);
+          setHasShipment(false);
+          setCheckingShipment(false);
+        }
       }
     };
 
@@ -727,14 +725,46 @@ const StoreOrders = () => {
                         </div>
                       </div>
 
-                      {/* Total Amount */}
-                      <div className="mt-auto pt-3 border-t border-gray-100">
+                      {/* Total Amount & Store Revenue */}
+                      <div className="mt-auto pt-3 border-t border-gray-100 space-y-2">
+                        {/* Tổng tiền khách trả */}
                         <div className="flex items-baseline justify-between">
                           <span className="text-xs text-gray-500 font-medium">Tổng tiền:</span>
                           <span className="text-base font-bold text-blue-600">
                             {formatPrice(parseFloat(order.totalPrice) || order.totalAmount || 0)}
                           </span>
                         </div>
+                        {/* Doanh thu store = subtotal - storeDiscount - hoa hồng (tối đa 500k) - KHÔNG bao gồm phí ship */}
+                        {(() => {
+                          // Tính subtotal từ items
+                          const subtotal = order.items && Array.isArray(order.items) && order.items.length > 0
+                            ? order.items.reduce((sum, item) => {
+                                const itemPrice = parseFloat(item.price || item.unitPrice || 0);
+                                const itemQuantity = parseInt(item.quantity || 0);
+                                return sum + (itemPrice * itemQuantity);
+                              }, 0)
+                            : parseFloat(order.productPrice || order.subtotal || 0);
+                          
+                          const storeDiscount = parseFloat(order.storeDiscountAmount || 0);
+                          
+                          // ✅ Tính hoa hồng với giới hạn tối đa 500.000 ₫
+                          const MAX_COMMISSION = 500000;
+                          const calculatedCommission = 0.05 * (subtotal - storeDiscount);
+                          const actualCommission = Math.min(calculatedCommission, MAX_COMMISSION);
+                          
+                          // ✅ Doanh thu store = subtotal - storeDiscount - hoa hồng thực tế - KHÔNG bao gồm phí ship
+                          // ✅ LƯU Ý: Doanh thu khác với số tiền nhận (số tiền nhận = doanh thu + phí ship)
+                          const storeRevenue = Math.round(subtotal - storeDiscount - actualCommission);
+                          
+                          return (
+                            <div className="flex items-baseline justify-between bg-green-50 rounded-lg px-2 py-1.5">
+                              <span className="text-xs text-green-700 font-medium">Doanh thu:</span>
+                              <span className="text-sm font-bold text-green-600">
+                                {formatPrice(storeRevenue)}
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
 

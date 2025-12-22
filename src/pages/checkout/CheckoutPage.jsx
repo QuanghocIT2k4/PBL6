@@ -7,12 +7,12 @@ import { useToast } from '../../context/ToastContext';
 import addressService from '../../services/buyer/addressService';
 import PromoCodeInput from '../../components/promotions/PromoCodeInput';
 import PromotionList from '../../components/promotions/PromotionList';
-import { calculateDiscount } from '../../services/admin/promotionService';
+import { calculateDiscount, formatCurrency } from '../../services/admin/promotionService';
 import { createPaymentUrl } from '../../services/buyer/paymentService';
 import { createMoMoPayment } from '../../services/buyer/momoPaymentService';
 import { getProductVariantById } from '../../services/common/productService';
 import { getStoreById } from '../../services/common/storeService';
-import { calculateShippingFee } from '../../services/common/provinceService';
+import { calculateShippingFee, calculateExpectedDeliveryDate } from '../../services/common/provinceService';
 import SEO from '../../components/seo/SEO';
 
 const CheckoutPage = () => {
@@ -32,6 +32,16 @@ const CheckoutPage = () => {
   const [customerPhone, setCustomerPhone] = useState('');
   const [paymentMethod, setPaymentMethod] = useState(''); // 'COD' | 'BANK_TRANSFER' | etc
   const [note, setNote] = useState('');
+  // ✅ Sửa để hỗ trợ cả platform và store promotions cùng lúc
+  const [appliedPlatformPromotions, setAppliedPlatformPromotions] = useState({
+    orderPromotionCode: null,
+    shippingPromotionCode: null,
+    orderPromotion: null, // Lưu full promotion object để tính discount
+    shippingPromotion: null, // Lưu full promotion object để tính discount
+  }); // { orderPromotionCode, shippingPromotionCode, orderPromotion, shippingPromotion }
+  const [appliedStorePromotions, setAppliedStorePromotions] = useState({}); // { [storeId]: { code, promotion } }
+  
+  // ✅ Giữ lại appliedPromotion để tương thích với UI hiện tại (sẽ refactor sau)
   const [appliedPromotion, setAppliedPromotion] = useState(null); // { code, promotion, discount }
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [storeAddresses, setStoreAddresses] = useState({}); // { storeId: { province } }
@@ -88,7 +98,26 @@ const CheckoutPage = () => {
   }, [items, navigate]);
 
   const productTotal = getSelectedTotalPrice();
-  const discount = appliedPromotion?.discount || 0;
+  // ✅ Tính discount từ cả platform và store promotions
+  // Platform order discount
+  const platformOrderDiscount = appliedPlatformPromotions.orderPromotion 
+    ? calculateDiscount(appliedPlatformPromotions.orderPromotion, productTotal)
+    : 0;
+  // Platform shipping discount
+  const platformShippingDiscount = appliedPlatformPromotions.shippingPromotion 
+    ? calculateDiscount(appliedPlatformPromotions.shippingPromotion, productTotal)
+    : 0;
+  // Store discount (tính tổng từ tất cả stores)
+  const storeDiscountTotal = Object.values(appliedStorePromotions).reduce((total, promo) => {
+    if (promo.promotion) {
+      return total + calculateDiscount(promo.promotion, productTotal);
+    }
+    return total;
+  }, 0);
+  
+  // ✅ Tổng hợp discount
+  const orderDiscount = platformOrderDiscount + storeDiscountTotal;
+  const shippingDiscount = platformShippingDiscount;
   
   // 🔁 Map variantId -> { storeId, storeName } được resolve từ API (nếu thiếu)
   // ⚠️ PHẢI KHAI BÁO TRƯỚC groupedItems vì groupedItems sử dụng nó
@@ -202,13 +231,13 @@ const CheckoutPage = () => {
   
   // ❌ KHÔNG cộng hoa hồng nền tảng vào tiền khách trả
   // Hoa hồng nền tảng (serviceFee/platformCommission) sẽ do backend tính trên doanh thu của người bán
-  // Tổng tiền khách phải trả chỉ gồm: tiền hàng - giảm giá + phí vận chuyển
-  const finalTotal = Math.max(0, productTotal - discount + shippingFee);
+  // Tổng tiền khách phải trả chỉ gồm: tiền hàng - giảm giá đơn hàng + (phí vận chuyển - giảm phí vận chuyển)
+  const finalTotal = Math.max(0, productTotal - orderDiscount + Math.max(0, shippingFee - shippingDiscount));
   
   // Debug log (có thể bật lại khi cần)
   useEffect(() => {
-    // console.log('[Checkout] Totals:', { productTotal, discount, shippingFee, finalTotal });
-  }, [productTotal, discount, appliedPromotion, shippingFee, finalTotal]);
+    // console.log('[Checkout] Totals:', { productTotal, orderDiscount, shippingDiscount, shippingFee, finalTotal });
+  }, [productTotal, orderDiscount, shippingDiscount, appliedPromotion, shippingFee, finalTotal]);
 
   const itemsKey = useMemo(() => items.map(it => it.id).join(','), [items]);
 
@@ -349,10 +378,14 @@ const CheckoutPage = () => {
 
       // ✅ Build selectedItems array
       // ⚠️ Backend đã sửa: cart trả về productVariantId thay vì productId
+      // Swagger schema: { id, productVariantId, colorId, quantity }
       const selectedItems = items.map(it => ({
+        ...(it.id && { id: it.id }), // Optional field theo Swagger
         productVariantId: it.productVariantId || it.product?.id,
         quantity: it.quantity || 1,
-        colorId: it.options?.colorId || it.options?.color || null,
+        ...(it.options?.colorId || it.options?.color ? { 
+          colorId: it.options?.colorId || it.options?.color 
+        } : {}), // Chỉ thêm nếu có giá trị
       }));
       
       // ✅ Build address object
@@ -365,126 +398,369 @@ const CheckoutPage = () => {
         suggestedName: selectedAddress.suggestedName || '', // Optional
       };
       
-      // ✅ Build promotions (platform hoặc store)
+      // ✅ Build promotions (platform và/hoặc store)
       // Theo Swagger: OrderDTO có cả platformPromotions và storePromotions
       // - platformPromotions: { orderPromotionCode, shippingPromotionCode }
       // - storePromotions: { [storeId]: promotionCode }
       
+      // ✅ Sử dụng state mới để hỗ trợ cả 2 loại cùng lúc
       let platformPromotions = null;
       let storePromotions = null;
       
-      if (appliedPromotion) {
-        // ✅ Kiểm tra promotion là của platform hay store
-        // PromoCodeInput đã set isStorePromotion khi tìm thấy
-        const isStorePromotion = appliedPromotion.isStorePromotion === true;
-        
-        // ✅ Check promotion type: SHIPPING vs ORDER
-        const promotionType = appliedPromotion.promotion?.type || appliedPromotion.promotion?.discountType;
-        const isShippingPromotion = promotionType === 'SHIPPING' || promotionType === 'FREE_SHIPPING';
-        
-        console.log('🎫 [Checkout] Promotion details:', {
-          code: appliedPromotion.code,
-          type: promotionType,
-          isShippingPromotion,
-          isStorePromotion,
-          fullPromotion: appliedPromotion.promotion
+      // ✅ Platform promotions (có thể có cả order và shipping)
+      if (appliedPlatformPromotions.orderPromotionCode || appliedPlatformPromotions.shippingPromotionCode) {
+        platformPromotions = {
+          orderPromotionCode: appliedPlatformPromotions.orderPromotionCode || null,
+          shippingPromotionCode: appliedPlatformPromotions.shippingPromotionCode || null,
+        };
+        console.log('🏪 [Checkout] Using platform promotions:', platformPromotions);
+      }
+      
+      // ✅ Store promotions (có thể có nhiều store)
+      // ⚠️ Backend mong đợi: { [storeId]: promotionCode (string) }
+      // Không phải: { [storeId]: { code, promotion } }
+      if (Object.keys(appliedStorePromotions).length > 0) {
+        storePromotions = {};
+        Object.keys(appliedStorePromotions).forEach(storeId => {
+          const promo = appliedStorePromotions[storeId];
+          if (promo && promo.code) {
+            storePromotions[storeId] = promo.code; // ✅ Chỉ gửi code string, không gửi object
+          }
         });
+        console.log('🏬 [Checkout] Using store promotions:', storePromotions);
+      }
+      
+      // ✅ Fallback: Nếu vẫn dùng appliedPromotion cũ (để tương thích)
+      if (!platformPromotions && !storePromotions && appliedPromotion) {
+        const isStorePromotion = appliedPromotion.isStorePromotion === true;
+        const isShippingPromotion = appliedPromotion.isShippingPromotion === true;
         
-        // ❗ Chỉ map khuyến mãi theo store nếu đơn chỉ có 1 store rõ ràng
         if (isStorePromotion && primaryStoreId) {
-          // Store promotion - format: { [storeId]: promotionCode }
           storePromotions = {
             [primaryStoreId]: appliedPromotion.code
           };
-          console.log('🏬 [Checkout] Using store promotion:', storePromotions);
         } else {
-          // Platform promotion - phân biệt shipping vs order
           platformPromotions = {
             orderPromotionCode: isShippingPromotion ? null : appliedPromotion.code,
             shippingPromotionCode: isShippingPromotion ? appliedPromotion.code : null,
           };
-          console.log('🏪 [Checkout] Using platform promotion:', platformPromotions);
         }
       }
       
-      const orderData = {
-        selectedItems,
-        paymentMethod: paymentMethod.toUpperCase(), // ✅ Đã cập nhật: Không còn chuyển VNPAY thành BANK_TRANSFER
-        note: note.trim(),
-        address: addressDTO,
-        ...(platformPromotions && { platformPromotions }),
-        ...(storePromotions && Object.keys(storePromotions).length > 0 && { storePromotions }),
-      };
-
+      // ✅ Tính ngày giao dự kiến dựa trên địa chỉ store và buyer
+      let expectedDeliveryDate = null;
+      if (selectedAddress?.province && primaryStoreId && storeAddresses[primaryStoreId]?.province) {
+        const storeProvince = storeAddresses[primaryStoreId].province;
+        const buyerProvince = selectedAddress.province;
+        const expectedDate = calculateExpectedDeliveryDate(storeProvince, buyerProvince);
+        // Format: ISO string (YYYY-MM-DDTHH:mm:ss.sssZ)
+        expectedDeliveryDate = expectedDate.toISOString();
+        console.log('📅 [Checkout] Expected delivery date:', {
+          storeProvince,
+          buyerProvince,
+          expectedDate: expectedDeliveryDate,
+          days: Math.ceil((expectedDate - new Date()) / (1000 * 60 * 60 * 24))
+        });
+      }
+      
+      // ✅ Đảm bảo chỉ gửi code string, không gửi object
+      // Clean platformPromotions - chỉ giữ lại code strings, loại bỏ null
+      // Swagger schema: { orderPromotionCode, shippingPromotionCode, applyShippingToStores[] }
+      // ⚠️ QUAN TRỌNG: Backend cần applyShippingToStores để biết store nào được áp dụng platform promotion
+      // và tạo AdminRevenue với revenueType = PLATFORM_DISCOUNT_LOSS
+      let cleanPlatformPromotions = null;
+      if (platformPromotions) {
+        cleanPlatformPromotions = {};
+        
+        // Chỉ thêm orderPromotionCode nếu là string và không null
+        if (typeof platformPromotions.orderPromotionCode === 'string' && platformPromotions.orderPromotionCode.trim()) {
+          const orderCode = platformPromotions.orderPromotionCode.trim();
+          cleanPlatformPromotions.orderPromotionCode = orderCode;
+          
+          // ⚠️ Log để debug: Kiểm tra promotion có minOrderValue không
+          const orderPromo = appliedPlatformPromotions.orderPromotion;
+          if (orderPromo) {
+            console.log('🔍 [Checkout] Order Promotion Details:', {
+              code: orderCode,
+              hasMinOrderValue: orderPromo.minOrderValue !== null && orderPromo.minOrderValue !== undefined,
+              minOrderValue: orderPromo.minOrderValue,
+              promotion: orderPromo
+            });
+          }
+        }
+        
+        // Chỉ thêm shippingPromotionCode nếu là string và không null
+        if (typeof platformPromotions.shippingPromotionCode === 'string' && platformPromotions.shippingPromotionCode.trim()) {
+          const shippingCode = platformPromotions.shippingPromotionCode.trim();
+          cleanPlatformPromotions.shippingPromotionCode = shippingCode;
+          
+          // ⚠️ Log để debug: Kiểm tra promotion có minOrderValue không
+          const shippingPromo = appliedPlatformPromotions.shippingPromotion;
+          if (shippingPromo) {
+            console.log('🔍 [Checkout] Shipping Promotion Details:', {
+              code: shippingCode,
+              hasMinOrderValue: shippingPromo.minOrderValue !== null && shippingPromo.minOrderValue !== undefined,
+              minOrderValue: shippingPromo.minOrderValue,
+              promotion: shippingPromo
+            });
+          }
+        }
+        
+        // ✅ LUÔN thêm applyShippingToStores khi có platform promotions (cả order và shipping)
+        // Backend cần field này để biết store nào được áp dụng platform promotion
+        // và tạo AdminRevenue với revenueType = PLATFORM_DISCOUNT_LOSS
+        if (uniqueStores.length > 0) {
+          cleanPlatformPromotions.applyShippingToStores = uniqueStores
+            .map(s => s.storeId)
+            .filter(id => id); // Chỉ lấy storeId hợp lệ
+        }
+        
+        // Chỉ thêm nếu có ít nhất 1 code (không gửi object rỗng)
+        if (Object.keys(cleanPlatformPromotions).length === 0) {
+          cleanPlatformPromotions = null;
+        }
+      }
+      
+      // Clean storePromotions - đảm bảo tất cả values đều là string
+      let cleanStorePromotions = null;
+      if (storePromotions && Object.keys(storePromotions).length > 0) {
+        cleanStorePromotions = {};
+        Object.keys(storePromotions).forEach(storeId => {
+          const code = storePromotions[storeId];
+          if (typeof code === 'string' && code.trim()) {
+            cleanStorePromotions[storeId] = code.trim();
+            
+            // ⚠️ Log để debug: Kiểm tra promotion có minOrderValue không
+            const storePromo = appliedStorePromotions[storeId]?.promotion;
+            if (storePromo) {
+              console.log('🔍 [Checkout] Store Promotion Details:', {
+                storeId,
+                code: code.trim(),
+                hasMinOrderValue: storePromo.minOrderValue !== null && storePromo.minOrderValue !== undefined,
+                minOrderValue: storePromo.minOrderValue,
+                promotion: storePromo
+              });
+            }
+          }
+        });
+        // Chỉ thêm nếu có ít nhất 1 code
+        if (Object.keys(cleanStorePromotions).length === 0) {
+          cleanStorePromotions = null;
+        }
+      }
+      
+      // ✅ SHOPEE STYLE: Tách đơn hàng theo store
+      // Nếu có nhiều store → tạo nhiều đơn hàng riêng biệt
+      const ordersToCreate = [];
+      
+      if (uniqueStores.length > 1) {
+        // ✅ Có nhiều store → tách thành nhiều đơn hàng
+        console.log('🛒 [Checkout] Multiple stores detected, splitting into separate orders:', uniqueStores.length);
+        
+        for (const store of uniqueStores) {
+          const storeGroup = groupedItems.find(g => g.storeId === store.storeId);
+          if (!storeGroup || !storeGroup.items || storeGroup.items.length === 0) continue;
+          
+          // ✅ Lấy items của store này
+          const storeItems = storeGroup.items.map(it => ({
+            ...(it.id && { id: it.id }),
+            productVariantId: it.productVariantId || it.product?.id,
+            quantity: it.quantity || 1,
+            ...(it.options?.colorId || it.options?.color ? { 
+              colorId: it.options?.colorId || it.options?.color 
+            } : {}),
+          }));
+          
+          // ✅ Tính shipping fee riêng cho store này
+          let storeShippingFee = 30000; // Default
+          if (store.storeId && storeAddresses[store.storeId]?.province && selectedAddress?.province) {
+            const storeProvince = storeAddresses[store.storeId].province;
+            const buyerProvince = selectedAddress.province;
+            const storeWeight = storeGroup.items.reduce((sum, item) => {
+              return sum + ((item.quantity || 1) * 0.5); // 0.5kg per item
+            }, 0);
+            storeShippingFee = calculateShippingFee(storeProvince, buyerProvince, storeWeight);
+          }
+          
+          // ✅ Tính ngày giao dự kiến riêng cho store này
+          let storeExpectedDeliveryDate = null;
+          if (store.storeId && storeAddresses[store.storeId]?.province && selectedAddress?.province) {
+            const storeProvince = storeAddresses[store.storeId].province;
+            const buyerProvince = selectedAddress.province;
+            const expectedDate = calculateExpectedDeliveryDate(storeProvince, buyerProvince);
+            storeExpectedDeliveryDate = expectedDate.toISOString();
+          }
+          
+          // ✅ Store promotions chỉ cho store này
+          const storePromotionForThisStore = cleanStorePromotions?.[store.storeId] 
+            ? { [store.storeId]: cleanStorePromotions[store.storeId] }
+            : null;
+          
+          // ✅ Platform promotions (áp dụng chung cho tất cả stores)
+          // ⚠️ QUAN TRỌNG: Luôn gửi applyShippingToStores khi có platform promotions
+          // để backend biết store nào được áp dụng và tạo AdminRevenue với PLATFORM_DISCOUNT_LOSS
+          const storePlatformPromotions = cleanPlatformPromotions ? {
+            ...cleanPlatformPromotions,
+            // ✅ LUÔN thêm applyShippingToStores với storeId này (cả order và shipping promotion)
+            // Backend cần field này để tạo AdminRevenue với revenueType = PLATFORM_DISCOUNT_LOSS
+            applyShippingToStores: [store.storeId]
+          } : null;
+          
+          const storeOrderData = {
+            selectedItems: storeItems,
+            paymentMethod: paymentMethod.toUpperCase(),
+            note: note.trim(),
+            address: addressDTO,
+            ...(storePlatformPromotions && { platformPromotions: storePlatformPromotions }),
+            ...(storePromotionForThisStore && { storePromotions: storePromotionForThisStore }),
+            ...(storeExpectedDeliveryDate && { expectedDeliveryDate: storeExpectedDeliveryDate }),
+          };
+          
+          ordersToCreate.push({
+            storeId: store.storeId,
+            storeName: store.storeName,
+            orderData: storeOrderData,
+            shippingFee: storeShippingFee,
+          });
+          
+          console.log(`📦 [Checkout] Prepared order for store ${store.storeName}:`, {
+            items: storeItems.length,
+            shippingFee: storeShippingFee,
+            orderData: storeOrderData
+          });
+        }
+      } else {
+        // ✅ Chỉ có 1 store → tạo 1 đơn hàng như cũ
+        const orderData = {
+          selectedItems,
+          paymentMethod: paymentMethod.toUpperCase(),
+          note: note.trim(),
+          address: addressDTO,
+          ...(cleanPlatformPromotions && { platformPromotions: cleanPlatformPromotions }),
+          ...(cleanStorePromotions && { storePromotions: cleanStorePromotions }),
+          ...(expectedDeliveryDate && { expectedDeliveryDate }),
+        };
+        
+        ordersToCreate.push({
+          storeId: primaryStoreId || uniqueStores[0]?.storeId,
+          storeName: uniqueStores[0]?.storeName || 'Store',
+          orderData,
+          shippingFee: shippingFee,
+        });
+      }
+      
       // 🔍 DEBUG LOGS
       console.log('🛒 [CHECKOUT DEBUG] ===== CHECKOUT REQUEST =====');
+      console.log('🛒 [CHECKOUT DEBUG] Number of stores:', uniqueStores.length);
+      console.log('🛒 [CHECKOUT DEBUG] Orders to create:', ordersToCreate.length);
       console.log('🛒 [CHECKOUT DEBUG] Payment Method:', paymentMethod);
-      console.log('🛒 [CHECKOUT DEBUG] Payment Method (uppercase):', paymentMethod.toUpperCase());
-      console.log('🛒 [CHECKOUT DEBUG] Selected Items:', selectedItems);
       console.log('🛒 [CHECKOUT DEBUG] Address DTO:', addressDTO);
-      console.log('🛒 [CHECKOUT DEBUG] Platform Promotions:', platformPromotions);
-      console.log('🛒 [CHECKOUT DEBUG] Store Promotions:', storePromotions);
-      console.log('🛒 [CHECKOUT DEBUG] Final Order Data:', orderData);
+      console.log('🛒 [CHECKOUT DEBUG] Platform Promotions:', cleanPlatformPromotions);
+      console.log('🛒 [CHECKOUT DEBUG] Store Promotions:', cleanStorePromotions);
+      console.log('🛒 [CHECKOUT DEBUG] Orders Data:', ordersToCreate);
       console.log('🛒 [CHECKOUT DEBUG] ================================');
       
-      console.log('📦 [Checkout] Order data:', JSON.stringify(orderData, null, 2));
-      console.log('🎫 [Checkout] Applied promotion:', appliedPromotion);
-      console.log('🏪 [Checkout] Primary Store ID:', primaryStoreId);
-      console.log('💰 [Checkout] Order total:', productTotal);
-      console.log('💸 [Checkout] Discount:', discount);
-      console.log('💵 [Checkout] Final total:', finalTotal);
+      // ✅ Tạo tất cả đơn hàng (song song hoặc tuần tự)
+      const orderResults = [];
+      for (const orderInfo of ordersToCreate) {
+        console.log(`📦 [Checkout] Creating order for store: ${orderInfo.storeName}`);
+        const result = await createOrder(orderInfo.orderData);
+        orderResults.push({
+          ...result,
+          storeId: orderInfo.storeId,
+          storeName: orderInfo.storeName,
+        });
+        
+        if (!result.success) {
+          console.error(`❌ [Checkout] Failed to create order for store ${orderInfo.storeName}:`, result.error);
+        } else {
+          console.log(`✅ [Checkout] Order created for store ${orderInfo.storeName}:`, result.data);
+        }
+      }
       
-      const result = await createOrder(orderData);
+      // ✅ Kiểm tra kết quả
+      const successResults = orderResults.filter(r => r.success);
+      const failedResults = orderResults.filter(r => !r.success);
+      
+      if (failedResults.length > 0) {
+        error(`Có ${failedResults.length} đơn hàng không thể tạo. Vui lòng thử lại.`);
+        setIsPlacingOrder(false);
+        return;
+      }
+      
+      // ✅ Lấy tất cả order IDs
+      const allOrderIds = [];
+      successResults.forEach(result => {
+        if (Array.isArray(result.data)) {
+          result.data.forEach(order => {
+            allOrderIds.push(order.id || order.orderId);
+          });
+        } else if (result.data) {
+          allOrderIds.push(result.data.id || result.data.orderId);
+        }
+      });
+      
+      const result = {
+        success: successResults.length > 0,
+        data: successResults.map(r => r.data).flat(),
+        orderIds: allOrderIds,
+        ordersCount: successResults.length,
+      };
       
       // 🔍 DEBUG RESPONSE
       console.log('🛒 [CHECKOUT DEBUG] ===== CHECKOUT RESPONSE =====');
       console.log('🛒 [CHECKOUT DEBUG] Result Success:', result.success);
+      console.log('🛒 [CHECKOUT DEBUG] Orders Created:', result.ordersCount);
+      console.log('🛒 [CHECKOUT DEBUG] Order IDs:', result.orderIds);
       console.log('🛒 [CHECKOUT DEBUG] Result Data:', result.data);
-      console.log('🛒 [CHECKOUT DEBUG] Result Error:', result.error);
-      console.log('🛒 [CHECKOUT DEBUG] Full Result:', result);
       console.log('🛒 [CHECKOUT DEBUG] =================================');
       
       if (result.success) {
-        console.log('✅ [Checkout] Order created:', result.data);
+        console.log('✅ [Checkout] Orders created:', result.data);
         
-        // ✅ Lấy orderId từ response (có thể là object hoặc array)
-        let orderId = null;
-        if (Array.isArray(result.data) && result.data.length > 0) {
-          // Nếu là array, lấy order đầu tiên
-          orderId = result.data[0]?.id || result.data[0]?.orderId;
-        } else if (result.data) {
-          // Nếu là object
-          orderId = result.data.id || result.data.orderId;
-        }
+        // ✅ Lấy orderId đầu tiên để xử lý payment (hoặc có thể xử lý tất cả)
+        const orderId = result.orderIds[0] || null;
+        const totalAmount = finalTotal; // Tổng tiền của tất cả đơn hàng
         
-        console.log('✅ [Checkout] Extracted Order ID:', orderId);
+        console.log('✅ [Checkout] First Order ID:', orderId);
+        console.log('✅ [Checkout] Total Orders:', result.ordersCount);
+        console.log('✅ [Checkout] Total Amount:', totalAmount);
         
         removeSelectedItems();
+        
+        // ✅ Hiển thị thông báo thành công
+        if (result.ordersCount > 1) {
+          success(`🎉 Đã tạo ${result.ordersCount} đơn hàng thành công! (${uniqueStores.map(s => s.storeName).join(', ')})`);
+        } else {
+          success('🎉 Đặt hàng thành công! Cảm ơn bạn đã mua hàng.');
+        }
         
         // ✅ Nếu chọn VNPay → Tạo payment URL và redirect
         if (paymentMethod === 'VNPAY') {
           console.log('💳 [Checkout] VNPay selected, creating payment URL...');
-          console.log('💳 [Checkout] Order ID:', orderId);
-          console.log('💳 [Checkout] Final total:', finalTotal);
+          console.log('💳 [Checkout] Order IDs:', result.orderIds);
+          console.log('💳 [Checkout] Total amount:', totalAmount);
+          
+          // ✅ Tạo orderInfo với tất cả orderIds để backend có thể liên kết
+          const orderInfo = result.ordersCount > 1 
+            ? `Thanh toán ${result.ordersCount} đơn hàng (${result.orderIds.join(', ')})`
+            : `Thanh toán đơn hàng ${orderId || 'chưa có ID'}`;
           
           const paymentResult = await createPaymentUrl({
-            amount: finalTotal,
+            amount: totalAmount,
             language: 'vn',
-            // Có thể thêm orderId vào đây nếu backend cần
+            orderInfo: orderInfo, // ✅ Truyền orderInfo với tất cả orderIds
+            orderIds: result.orderIds, // ✅ Truyền orderIds để backend liên kết payment với các đơn hàng
           });
           
           if (paymentResult.success && paymentResult.data?.paymentUrl) {
             console.log('✅ [Checkout] Payment URL created:', paymentResult.data.paymentUrl);
             
-            // Mở VNPay trong tab mới NGAY LẬP TỨC
+            // Mở VNPay trong tab mới
             const vnpayWindow = window.open(paymentResult.data.paymentUrl, '_blank');
             
             if (vnpayWindow) {
-              success('🎉 Đơn hàng đã tạo! Vui lòng thanh toán trên tab mới. Check console để debug!');
-              // TODO: Uncomment để auto redirect
-              // setTimeout(() => {
-              //   navigate('/orders');
-              // }, 2000);
+              success('🎉 Đơn hàng đã tạo! Vui lòng thanh toán trên tab mới.');
             } else {
               error('Trình duyệt chặn popup! Vui lòng cho phép popup và thử lại.');
             }
@@ -496,12 +772,14 @@ const CheckoutPage = () => {
         // ✅ Nếu chọn MoMo → Tạo payment request và redirect
         else if (paymentMethod === 'MOMO') {
           console.log('💳 [Checkout] MoMo selected, creating payment request...');
-          console.log('💳 [Checkout] Order ID:', orderId);
-          console.log('💳 [Checkout] Final total:', finalTotal);
+          console.log('💳 [Checkout] Order IDs:', result.orderIds);
+          console.log('💳 [Checkout] Total amount:', totalAmount);
           
-          // ✅ Truyền orderId và orderInfo để backend có thể liên kết với order
-          const orderInfo = `Thanh toán đơn hàng ${orderId || 'chưa có ID'}`;
-          const momoResult = await createMoMoPayment(finalTotal, orderId, orderInfo);
+          // ✅ Truyền orderId đầu tiên, orderInfo và orderIds để backend có thể liên kết với nhiều orders
+          const orderInfo = result.ordersCount > 1 
+            ? `Thanh toán ${result.ordersCount} đơn hàng (${result.orderIds.join(', ')})`
+            : `Thanh toán đơn hàng ${orderId || 'chưa có ID'}`;
+          const momoResult = await createMoMoPayment(totalAmount, orderId, orderInfo, result.orderIds);
           
           if (momoResult.success && momoResult.data?.payUrl) {
             console.log('✅ [Checkout] MoMo payment URL created:', momoResult.data.payUrl);
@@ -513,7 +791,6 @@ const CheckoutPage = () => {
             
             if (momoWindow) {
               success('🎉 Đơn hàng đã tạo! Vui lòng thanh toán qua MoMo trên tab mới.');
-              // TODO: Có thể thêm logic để check payment status sau khi thanh toán
             } else {
               error('Trình duyệt chặn popup! Vui lòng cho phép popup và thử lại.');
             }
@@ -524,7 +801,6 @@ const CheckoutPage = () => {
         }
         else {
           // COD hoặc payment method khác → Redirect về orders
-          success('🎉 Đặt hàng thành công! Cảm ơn bạn đã mua hàng.');
           setTimeout(() => {
             navigate('/orders');
           }, 2000);
@@ -762,55 +1038,208 @@ const CheckoutPage = () => {
               </div>
             </div>
 
-            {/* Mã giảm giá */}
-            <div className="mb-4">
-              <PromoCodeInput
-                orderTotal={productTotal}
-                storeId={primaryStoreId}
-                productIds={items.map(it => it.productVariantId || it.product?.id)}
-                onApplySuccess={(promoData) => {
-                  setAppliedPromotion(promoData);
-                  success(`✨ Áp dụng mã ${promoData.code} thành công!`);
-                }}
-                onRemove={() => {
-                  setAppliedPromotion(null);
-                  success('Đã xóa mã khuyến mãi');
-                }}
-                appliedPromotion={appliedPromotion}
-              />
-              <div className="mt-2">
-                <PromotionList
-                  orderTotal={productTotal}
-                  storeId={primaryStoreId}
-                  productIds={items.map(it => it.productVariantId || it.product?.id)}
-                  selectedCode={appliedPromotion?.code}
-                  onSelectPromotion={(promotion, isStorePromotion = false) => {
-                    console.log('🎁 [Checkout] Selected promotion:', promotion);
-                    console.log('🎁 [Checkout] Promotion structure:', {
-                      code: promotion.code,
-                      discountType: promotion.discountType || promotion.type,
-                      discountValue: promotion.discountValue || promotion.value,
-                      maxDiscountAmount: promotion.maxDiscountAmount || promotion.maxDiscountValue,
-                      isStorePromotion,
-                      fullPromotion: promotion
-                    });
-                    console.log('🎁 [Checkout] Order total:', productTotal);
+            {/* ✅ Mã giảm giá - 2 phần riêng biệt */}
+            <div className="mb-4 space-y-4">
+              {/* ✅ GỘP TẤT CẢ MÃ KHUYẾN MÃI VÀO 1 SECTION GỌN GÀNG (Giống Shopee) */}
+              <div className="border border-gray-200 rounded-lg p-4 bg-white">
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  🎁 Mã giảm giá
+                </label>
+                
+                {/* Input mã khuyến mãi sàn */}
+                <div className="mb-3">
+                  <PromoCodeInput
+                    orderTotal={productTotal}
+                    storeId={null}
+                    productIds={items.map(it => it.productVariantId || it.product?.id)}
+                    onApplySuccess={(promoData) => {
+                      const isShippingPromotion = promoData.isShippingPromotion === true;
+                      setAppliedPlatformPromotions(prev => ({
+                        ...prev,
+                        orderPromotionCode: isShippingPromotion ? prev.orderPromotionCode : promoData.code,
+                        shippingPromotionCode: isShippingPromotion ? promoData.code : prev.shippingPromotionCode,
+                        orderPromotion: isShippingPromotion ? prev.orderPromotion : promoData.promotion,
+                        shippingPromotion: isShippingPromotion ? promoData.promotion : prev.shippingPromotion,
+                      }));
+                      success(`✨ Áp dụng mã sàn ${promoData.code} thành công!`);
+                    }}
+                    onRemove={() => {
+                      const isShippingPromotion = appliedPlatformPromotions.shippingPromotionCode !== null;
+                      setAppliedPlatformPromotions(prev => ({
+                        ...prev,
+                        orderPromotionCode: isShippingPromotion ? prev.orderPromotionCode : null,
+                        shippingPromotionCode: isShippingPromotion ? null : prev.shippingPromotionCode,
+                        orderPromotion: isShippingPromotion ? prev.orderPromotion : null,
+                        shippingPromotion: isShippingPromotion ? null : prev.shippingPromotion,
+                      }));
+                      success('Đã xóa mã khuyến mãi sàn');
+                    }}
+                    appliedPromotion={
+                      appliedPlatformPromotions.orderPromotionCode || appliedPlatformPromotions.shippingPromotionCode
+                        ? { 
+                            code: appliedPlatformPromotions.orderPromotionCode || appliedPlatformPromotions.shippingPromotionCode,
+                            promotion: appliedPlatformPromotions.orderPromotion || appliedPlatformPromotions.shippingPromotion || null
+                          }
+                        : null
+                    }
+                  />
+                </div>
+
+                {/* Input mã khuyến mãi cửa hàng - GỌN GÀNG HƠN (Giống Shopee) */}
+                {uniqueStores.length > 1 && (
+                  <div className="mb-3">
+                    {/* ✅ Hiển thị mã đã áp dụng với khung giống mã sàn */}
+                    {Object.keys(appliedStorePromotions).length > 0 && (
+                      <div className="space-y-3 mb-2">
+                        {uniqueStores.map((store) => {
+                          const promo = appliedStorePromotions[store.storeId];
+                          if (!promo) return null;
+                          
+                          // ✅ Tính discount giống như mã sàn
+                          const promotion = promo.promotion || {};
+                          const storeGroup = groupedItems.find(g => g.storeId === store.storeId);
+                          const storeItems = storeGroup?.items || [];
+                          const storeTotal = storeItems.reduce((sum, item) => {
+                            const price = typeof item.product?.price === 'string'
+                              ? parseInt(item.product.price.replace(/\./g, '') || 0)
+                              : parseInt(item.product?.price || 0);
+                            return sum + (price * parseInt(item.quantity || 0));
+                          }, 0);
+                          const discount = promotion ? calculateDiscount(promotion, storeTotal) : 0;
+                          
+                          return (
+                            <div key={store.storeId} className="bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 border-2 border-green-300 rounded-xl p-4 shadow-md">
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center space-x-2 mb-2 flex-wrap">
+                                    <span className="text-2xl">🎉</span>
+                                    <span className="font-mono font-bold text-green-700 bg-white px-3 py-1 rounded-lg shadow-sm border border-green-200">
+                                      {promo.code}
+                                    </span>
+                                    {promotion && (
+                                      <span className="text-xs bg-gradient-to-r from-green-400 to-emerald-500 text-white px-3 py-1 rounded-full font-bold shadow-md">
+                                        {promotion.discountType === 'PERCENTAGE' 
+                                          ? `Giảm ${promotion.discountValue}%`
+                                          : promotion.discountType === 'FIXED'
+                                          ? `Giảm ${formatCurrency(promotion.discountValue)}`
+                                          : 'Giảm giá'}
+                                      </span>
+                                    )}
+                                    <span className="text-xs text-gray-600 bg-white px-2 py-1 rounded border border-gray-200">
+                                      {store.storeName}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-gray-700 font-medium mb-1">
+                                    {promotion?.description || 'Giảm giá đơn hàng'}
+                                  </p>
+                                  {discount > 0 && (
+                                    <p className="text-base font-bold text-green-600 flex items-center space-x-1">
+                                      <span>💰</span>
+                                      <span>Tiết kiệm: {formatCurrency(discount)}</span>
+                                    </p>
+                                  )}
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    setAppliedStorePromotions(prev => {
+                                      const newState = { ...prev };
+                                      delete newState[store.storeId];
+                                      return newState;
+                                    });
+                                    success(`Đã xóa mã ${store.storeName}`);
+                                  }}
+                                  className="ml-4 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 font-medium text-sm transition-all shadow-md hover:scale-105"
+                                >
+                                  ✕ Xóa
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Danh sách mã khuyến mãi có sẵn - GỘP VÀO 1 SECTION (Giống Shopee) */}
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  {/* ✅ Mã khuyến mãi sàn */}
+                  <div className="mb-4">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-2">
+                      🏪 Mã khuyến mãi sàn
+                    </h4>
+                    <PromotionList
+                      orderTotal={productTotal}
+                      storeId={null} // ✅ Chỉ lấy platform promotions
+                      productIds={items.map(it => it.productVariantId || it.product?.id)}
+                      selectedCode={
+                        appliedPlatformPromotions.orderPromotionCode || 
+                        appliedPlatformPromotions.shippingPromotionCode
+                      }
+                      onSelectPromotion={(promotion, isStorePromotion = false) => {
+                        if (!isStorePromotion) {
+                          // Platform promotion
+                          const discount = calculateDiscount(promotion, productTotal);
+                          const applicableFor = promotion.applicableFor || promotion.applicableForType;
+                          const isShippingPromotion = applicableFor === 'SHIPPING';
+                          
+                          setAppliedPlatformPromotions(prev => ({
+                            ...prev,
+                            orderPromotionCode: isShippingPromotion ? prev.orderPromotionCode : promotion.code,
+                            shippingPromotionCode: isShippingPromotion ? promotion.code : prev.shippingPromotionCode,
+                            orderPromotion: isShippingPromotion ? prev.orderPromotion : promotion,
+                            shippingPromotion: isShippingPromotion ? promotion : prev.shippingPromotion,
+                          }));
+                          success(`✨ Áp dụng mã sàn ${promotion.code} thành công!`);
+                        }
+                      }}
+                    />
+                  </div>
+                  
+                  {/* ✅ Mã khuyến mãi cửa hàng - Render riêng cho từng store */}
+                  {uniqueStores.map((store) => {
+                    const storeGroup = groupedItems.find(g => g.storeId === store.storeId);
+                    const storeItems = storeGroup?.items || [];
+                    const storeTotal = storeItems.reduce((sum, item) => {
+                      const price = typeof item.product?.price === 'string'
+                        ? parseInt(item.product.price.replace(/\./g, '') || 0)
+                        : parseInt(item.product?.price || 0);
+                      return sum + (price * parseInt(item.quantity || 0));
+                    }, 0);
+                    const storeProductIds = storeItems.map(it => it.productVariantId || it.product?.id);
                     
-                    const discount = calculateDiscount(promotion, productTotal);
-                    console.log('🎁 [Checkout] Calculated discount:', discount);
+                    console.log(`🔍 [Checkout] Rendering PromotionList for store: ${store.storeName}`);
+                    console.log(`🔍 [Checkout] storeId: ${store.storeId}`);
+                    console.log(`🔍 [Checkout] storeTotal: ${storeTotal}`);
+                    console.log(`🔍 [Checkout] storeProductIds:`, storeProductIds);
                     
-                    const promoData = {
-                      code: promotion.code,
-                      promotion,
-                      discount,
-                      isStorePromotion, // ✅ Lưu thông tin là store hay platform
-                    };
-                    console.log('🎁 [Checkout] Setting applied promotion:', promoData);
-                    
-                    setAppliedPromotion(promoData);
-                    success(`✨ Áp dụng mã ${promotion.code} thành công!`);
-                  }}
-                />
+                    return (
+                      <div key={store.storeId} className="mt-4 pt-4 border-t border-gray-200">
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">
+                          🏬 Mã khuyến mãi {store.storeName}
+                        </h4>
+                        <PromotionList
+                          orderTotal={storeTotal}
+                          storeId={store.storeId} // ✅ Truyền storeId cụ thể
+                          productIds={storeProductIds}
+                          selectedCode={appliedStorePromotions[store.storeId]?.code}
+                          onSelectPromotion={(promotion, isStorePromotion = true) => {
+                            if (isStorePromotion) {
+                              setAppliedStorePromotions(prev => ({
+                                ...prev,
+                                [store.storeId]: {
+                                  code: promotion.code,
+                                  promotion: promotion
+                                }
+                              }));
+                              success(`✨ Áp dụng mã ${promotion.code} cho ${store.storeName} thành công!`);
+                            }
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
             
@@ -827,7 +1256,6 @@ const CheckoutPage = () => {
                     <div>• <strong>Cùng vùng:</strong> 30,000đ</div>
                     <div>• <strong>Vùng lân cận:</strong> 45,000đ</div>
                     <div>• <strong>Vùng xa (Bắc↔Nam):</strong> 60,000đ</div>
-                    <div>• <strong>Phụ phí:</strong> 5,000đ/kg (sau 1kg đầu, mặc định 1sp = 500g)</div>
                   </div>
                 </div>
               </div>
@@ -835,16 +1263,22 @@ const CheckoutPage = () => {
             
             <div className="space-y-2 text-sm">
               <div className="flex justify-between"><span>Tạm tính</span><span>{formatPrice(productTotal)}đ</span></div>
-              {discount > 0 && (
+              {orderDiscount > 0 && (
                 <div className="flex justify-between text-green-600">
                   <span>Giảm giá</span>
-                  <span>-{formatPrice(discount)}đ</span>
+                  <span>-{formatPrice(orderDiscount)}đ</span>
                 </div>
               )}
               <div className="flex justify-between">
                 <span>Phí vận chuyển</span>
                 <span>{formatPrice(shippingFee)}đ</span>
               </div>
+              {shippingDiscount > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span>Giảm phí vận chuyển</span>
+                  <span>-{formatPrice(shippingDiscount)}đ</span>
+                </div>
+              )}
               <div className="border-t pt-2 font-semibold text-lg flex justify-between">
                 <span>Tổng cộng</span>
                 <span className="text-red-600">

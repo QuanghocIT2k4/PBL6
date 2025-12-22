@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useChat } from '../../context/ChatContext';
 import { useAuth } from '../../context/AuthContext';
 import MainLayout from '../../layouts/MainLayout';
@@ -27,17 +27,30 @@ const ChatPage = () => {
     sendMessage,
     deleteMessage,
     loadMoreMessages,
-    handleTyping
+    handleTyping,
+    loadConversations
   } = useChat();
 
   const [showSidebar, setShowSidebar] = useState(true);
+  const hasLoadedRef = useRef(false);
+
+  // ✅ Load conversations khi component mount lần đầu
+  useEffect(() => {
+    if (user?.id && !hasLoadedRef.current) {
+      loadConversations();
+      hasLoadedRef.current = true;
+    }
+    return () => {
+      hasLoadedRef.current = false;
+    };
+  }, [user, loadConversations]);
 
   // ⭐ Clear currentConversation khi unmount (navigate ra khỏi chat page)
   useEffect(() => {
     return () => {
       selectConversation(null);
     };
-  }, []);
+  }, [selectConversation]);
 
   const handleSelectConversation = (conversation) => {
     selectConversation(conversation);
@@ -47,8 +60,55 @@ const ChatPage = () => {
     }
   };
 
-  const handleSendMessage = (content) => {
-    sendMessage(content, 'TEXT');
+  const handleSendMessage = async (content, attachments = {}) => {
+    const { files = [], images = [] } = attachments;
+    
+    // ✅ Xử lý upload files và images trước
+    let uploadedAttachments = [];
+    
+    // Upload images
+    if (images.length > 0) {
+      // TODO: Implement image upload API call
+      // For now, we'll send as base64 or URL
+      for (const image of images) {
+        uploadedAttachments.push({
+          type: 'IMAGE',
+          url: URL.createObjectURL(image), // Temporary, should upload to server
+          fileName: image.name,
+          fileSize: image.size
+        });
+      }
+    }
+    
+    // Upload files
+    if (files.length > 0) {
+      // TODO: Implement file upload API call
+      for (const file of files) {
+        uploadedAttachments.push({
+          type: 'FILE',
+          url: URL.createObjectURL(file), // Temporary, should upload to server
+          fileName: file.name,
+          fileSize: file.size
+        });
+      }
+    }
+    
+    // ✅ Gửi message với attachments
+    if (uploadedAttachments.length > 0) {
+      // Nếu có attachments, gửi từng attachment
+      for (const attachment of uploadedAttachments) {
+        sendMessage(content || '', attachment.type === 'IMAGE' ? 'IMAGE' : 'FILE', {
+          attachments: [attachment]
+        });
+      }
+      // Nếu có content, gửi thêm message text
+      if (content.trim()) {
+        sendMessage(content, 'TEXT');
+      }
+    } else {
+      // Chỉ gửi text nếu không có attachments
+      sendMessage(content, 'TEXT');
+    }
   };
 
   return (

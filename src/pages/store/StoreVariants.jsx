@@ -205,7 +205,7 @@ const StoreVariants = () => {
 
   const getStatusBadge = (status) => {
     const badges = {
-      APPROVED: { bg: 'bg-green-100', text: 'text-green-800', label: 'Đã duyệt' },
+      APPROVED: { bg: 'bg-transparent', text: 'text-gray-400', label: '' },
       PENDING: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Chờ duyệt' },
       REJECTED: { bg: 'bg-red-100', text: 'text-red-800', label: 'Bị từ chối' },
     };
@@ -273,7 +273,7 @@ const StoreVariants = () => {
                         <span className="text-lg">✅</span>
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-gray-600">Đã duyệt</p>
+                        <p className="text-sm font-medium text-gray-600">Đã phê duyệt</p>
                         <p className="text-xl font-bold text-gray-900">{variants.filter(v => v.status === 'APPROVED').length}</p>
                       </div>
                     </div>
@@ -325,7 +325,7 @@ const StoreVariants = () => {
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               >
                 <option value="ALL">Tất cả trạng thái</option>
-                <option value="APPROVED">Đã duyệt</option>
+                <option value="APPROVED">Đã phê duyệt</option>
                 <option value="PENDING">Chờ duyệt</option>
                 <option value="REJECTED">Bị từ chối</option>
               </select>

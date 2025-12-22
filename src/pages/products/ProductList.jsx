@@ -70,7 +70,6 @@ const ProductList = () => {
     // ✅ Lấy brands từ hardcode mapping
     const brandsForCategory = getBrandsByCategory(category);
     setCategoryBrands(brandsForCategory);
-    console.log(`🏷️ Category "${category}" → ${brandsForCategory.length} brands:`, brandsForCategory);
     
     // Scroll to top mượt mà khi chuyển danh mục
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -85,7 +84,6 @@ const ProductList = () => {
       // 3. Đang ở trang 1 (để tránh fetch nhiều lần)
       if (totalElements === undefined && actualTotalItems === null && currentPage === 1 && !loading) {
         try {
-          console.log('🔍 Fetching total items count...');
           // Fetch với size lớn để lấy tổng số (hoặc dùng API count nếu có)
           const { getLatestProductVariants } = await import('../../services/common/productService');
           const result = await getLatestProductVariants({ 
@@ -96,11 +94,10 @@ const ProductList = () => {
           });
           
           if (result.success && result.data?.totalElements) {
-            console.log('✅ Total items from API:', result.data.totalElements);
             setActualTotalItems(result.data.totalElements);
           }
         } catch (err) {
-          console.error('❌ Error fetching total items:', err);
+          // Silent fail
         }
       }
     };
@@ -112,7 +109,6 @@ const ProductList = () => {
   useEffect(() => {
     if (location.state?.selectedBrand) {
       const brandName = location.state.selectedBrand;
-      console.log('🏷️ Auto-selecting brand from navigation:', brandName);
       setFilters(prev => ({ ...prev, brands: [brandName] }));
       // Clear navigation state để không bị auto-select lại khi refresh
       navigate(location.pathname, { replace: true, state: {} });
@@ -158,7 +154,6 @@ const ProductList = () => {
       
       const categoryName = KEY_TO_API_NAME[category] || category;
       
-      console.log('🎨🏷️ Calling Category+Brand APIs:', { category: categoryName, brand: selectedBrand });
       
       setCategoryBrandLoading(true);
       
@@ -181,8 +176,6 @@ const ProductList = () => {
           })
         ]);
         
-        console.log('✅ Products API Result:', productsResult);
-        console.log('✅ Variants API Result:', variantsResult);
         
         // ✅ Ưu tiên dùng Product Variants (vì có đầy đủ thông tin hơn)
         // Fallback sang Products nếu không có variants
@@ -190,8 +183,7 @@ const ProductList = () => {
         let totalElementsFromAPI = null;
         
         if (variantsResult.success && variantsResult.data) {
-          console.log('📦 Using Product Variants data');
-          finalProducts = (variantsResult.data.content || []).map(variant => ({
+          finalProducts = (variantsResult.data.content || variantsResult.data || []).map(variant => ({
             id: variant.id,
             name: variant.name,
             images: variant.images || (variant.primaryImage ? [variant.primaryImage] : []),
@@ -203,11 +195,13 @@ const ProductList = () => {
             variantId: variant.id,
             ...variant,
           }));
-          // ✅ Lưu totalElements từ API response
-          totalElementsFromAPI = variantsResult.data.totalElements;
+          // ✅ Lưu totalElements từ API response (ưu tiên totalElements, sau đó totalItems, sau đó tính từ content)
+          totalElementsFromAPI = variantsResult.data.totalElements ?? 
+                                 variantsResult.data.totalItems ?? 
+                                 variantsResult.data.page?.totalElements ??
+                                 (variantsResult.data.content ? variantsResult.data.content.length : 0);
         } else if (productsResult.success && productsResult.data) {
-          console.log('📦 Using Products data (fallback)');
-          finalProducts = (productsResult.data.content || []).map(product => ({
+          finalProducts = (productsResult.data.content || productsResult.data || []).map(product => ({
             id: product.id,
             name: product.name,
             images: product.images || [],
@@ -218,17 +212,17 @@ const ProductList = () => {
             ...product,
           }));
           // ✅ Lưu totalElements từ API response
-          totalElementsFromAPI = productsResult.data.totalElements;
+          totalElementsFromAPI = productsResult.data.totalElements ?? 
+                                 productsResult.data.totalItems ?? 
+                                 productsResult.data.page?.totalElements ??
+                                 (productsResult.data.content ? productsResult.data.content.length : 0);
         } else {
-          console.warn('⚠️ No data from both APIs');
           finalProducts = [];
           totalElementsFromAPI = 0;
         }
-        
         setCategoryBrandProducts(finalProducts);
         setCategoryBrandTotalElements(totalElementsFromAPI);
       } catch (err) {
-        console.error('❌ Category+Brand API Exception:', err);
         setCategoryBrandProducts([]);
         setCategoryBrandTotalElements(0);
       } finally {
@@ -280,13 +274,6 @@ const ProductList = () => {
         });
       });
       
-      // ✅ Debug log để kiểm tra
-      console.log('🔍 Brand Filter Debug:', {
-        selectedBrands: debouncedFilters.brands,
-        totalProducts: products.length,
-        filteredCount: result.length,
-        sampleProducts: result.slice(0, 3).map(p => p.name)
-      });
     }
     // Price filter (giá là string VNĐ; loại bỏ ký tự)
     const min = parsePrice(debouncedFilters.minPrice);
@@ -309,10 +296,10 @@ const ProductList = () => {
   let totalItems = null;
   let totalPages = 1;
   
-  if (categoryBrandTotalElements !== null && categoryBrandTotalElements !== undefined) {
+  if (categoryBrandTotalElements !== null && categoryBrandTotalElements !== undefined && categoryBrandTotalElements > 0) {
     // Nếu có totalElements từ category+brand API
     totalItems = categoryBrandTotalElements;
-    totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+    totalPages = Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE));
   } else if (actualTotalItems !== null && actualTotalItems > 0) {
     // ✅ Ưu tiên dùng actualTotalItems (đã fetch một lần)
     totalItems = actualTotalItems;
@@ -340,33 +327,43 @@ const ProductList = () => {
   }
   
   // ✅ FORCE: Nếu tổng số sản phẩm hiển thị < ITEMS_PER_PAGE → chỉ có 1 trang
-  if (allFilteredProducts.length < ITEMS_PER_PAGE && currentPage === 1) {
+  // ✅ QUAN TRỌNG: Khi filter brand, nếu số items thực tế < ITEMS_PER_PAGE → chỉ có 1 trang
+  if (categoryBrandProducts !== null) {
+    // Đang dùng API filter brand
+    if (categoryBrandProducts.length < ITEMS_PER_PAGE) {
+      // Nếu số items < ITEMS_PER_PAGE → chỉ có 1 trang
+      totalPages = 1;
+      totalItems = categoryBrandProducts.length;
+    } else {
+      // Nếu số items >= ITEMS_PER_PAGE → tính lại totalPages từ totalElements
+      if (categoryBrandTotalElements !== null && categoryBrandTotalElements > 0) {
+        totalPages = Math.max(1, Math.ceil(categoryBrandTotalElements / ITEMS_PER_PAGE));
+        totalItems = categoryBrandTotalElements;
+      }
+    }
+  } else if (allFilteredProducts.length < ITEMS_PER_PAGE && currentPage === 1) {
+    // Không filter brand, ở trang 1 và có ít items
     totalPages = 1;
     totalItems = allFilteredProducts.length;
   }
   
   // ✅ Đảm bảo totalPages ít nhất bằng currentPage (nếu đang ở trang > 1)
-  if (currentPage > totalPages) {
+  // ✅ NHƯNG: Nếu đang filter brand và chỉ có ít items → không tăng totalPages
+  if (currentPage > totalPages && categoryBrandProducts === null) {
+    // Chỉ tăng totalPages nếu KHÔNG đang dùng categoryBrandProducts (filter brand)
     totalPages = currentPage + 1; // Cho phép thêm 1 trang để user có thể thử
+  } else if (currentPage > totalPages && categoryBrandProducts !== null) {
+    // Nếu đang filter brand và currentPage > totalPages → có thể totalElements sai
+    // Điều chỉnh totalPages dựa trên số items thực tế
+    if (categoryBrandProducts.length === 0 && currentPage > 1) {
+      // Nếu không có items và đang ở trang > 1 → chỉ có 1 trang
+      totalPages = 1;
+    } else if (categoryBrandProducts.length < ITEMS_PER_PAGE && currentPage > 1) {
+      // Nếu có ít hơn ITEMS_PER_PAGE items và đang ở trang > 1 → chỉ có 1 trang
+      totalPages = 1;
+    }
   }
   
-  // ✅ Debug log để kiểm tra
-  console.log('📊 Pagination Calculation:', {
-    categoryBrandTotalElements,
-    actualTotalItems,
-    paginationTotalPages: pagination?.totalPages,
-    paginationTotalElements: pagination?.totalElements,
-    totalElements,
-    allFilteredProductsLength: allFilteredProducts.length,
-    currentPage,
-    calculatedTotalPages: totalPages,
-    calculatedTotalItems: totalItems,
-    // ✅ Thêm thông tin debug
-    isLoading: loading || categoryBrandLoading,
-    hasCategoryBrandProducts: categoryBrandProducts !== null,
-    filtersBrands: filters.brands,
-    category: category
-  });
   
   // ✅ Với server-side pagination, không cần slice nữa vì API đã trả về đúng số lượng
   // Nhưng vẫn giữ slice để xử lý trường hợp filter client-side
@@ -398,7 +395,6 @@ const ProductList = () => {
     // ✅ CHO PHÉP THAY ĐỔI CATEGORY từ dropdown filter
     // Nếu category từ newFilters khác với URL category → Navigate sang trang đó
     if (newFilters.category && newFilters.category !== category) {
-      console.log('📂 Category changed via dropdown:', newFilters.category);
       navigate(`/products/${newFilters.category}`);
       return; // Navigate sẽ trigger useEffect để load dữ liệu mới
     }
@@ -430,11 +426,10 @@ const ProductList = () => {
   // ✅ Tự động điều chỉnh nếu trang hiện tại không có dữ liệu
   useEffect(() => {
     // Nếu đã load xong và không có sản phẩm nhưng đang ở trang > 1
-    if (!loading && allFilteredProducts.length === 0 && currentPage > 1) {
-      console.log('⚠️ Trang hiện tại không có dữ liệu, quay về trang 1');
+    if (!loading && !categoryBrandLoading && allFilteredProducts.length === 0 && currentPage > 1) {
       setCurrentPage(1);
     }
-  }, [loading, allFilteredProducts.length, currentPage]);
+  }, [loading, categoryBrandLoading, allFilteredProducts.length, currentPage, categoryBrandProducts]);
 
   // ✅ Tính toán các trang cần hiển thị - HIỂN THỊ TẤT CẢ (không có "...")
   const getVisiblePages = () => {

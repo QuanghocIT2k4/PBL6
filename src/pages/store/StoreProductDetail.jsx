@@ -5,6 +5,14 @@ import StoreStatusGuard from '../../components/store/StoreStatusGuard';
 import { useStoreContext } from '../../context/StoreContext';
 import { getProductById, getProductVariants, getProductVariantById } from '../../services/common/productService';
 import { useToast } from '../../hooks/useToast';
+import ProductComments from '../../components/products/ProductComments';
+import ReviewList from '../../components/reviews/ReviewList';
+import ProductGallery from '../../components/products/ProductGallery';
+import ProductInfo from '../../components/products/ProductInfo';
+import ProductSpecifications from '../../components/products/ProductSpecifications';
+import ShopInfo from '../../components/products/ShopInfo';
+import { useProductDetail } from '../../hooks/useProductDetail';
+import { useStoreInfo } from '../../hooks/useStoreInfo';
 
 const StoreProductDetail = () => {
   const { productId, variantId } = useParams();
@@ -14,6 +22,15 @@ const StoreProductDetail = () => {
   const [variants, setVariants] = useState([]);
   const [loading, setLoading] = useState(true);
   const toast = useToast();
+  
+  // ✅ Gọi hooks ở top level (không được gọi conditionally)
+  const { product: variantData, loading: variantLoading, error: variantError } = useProductDetail(variantId || null);
+  
+  // ✅ Lấy productId từ variant để fetch store info
+  const variantStoreId = variantData?.storeId || variantData?.store_id || variantData?.store?.id;
+  const variantStoreName = variantData?.storeName || variantData?.store_name || variantData?.store?.name;
+  const productIdFromVariant = variantData?.productId || variantData?.product_id || variantData?.product?.id || variantData?.product?.productId;
+  const { store: variantStore, loading: storeLoading, error: storeError } = useStoreInfo(variantStoreId || null);
 
   useEffect(() => {
     fetchProductDetail();
@@ -199,191 +216,115 @@ const StoreProductDetail = () => {
 
   // ✅ Nếu xem variant detail (có variantId) → hiển thị variant detail, không cần product
   if (variantId) {
-    const currentVariant = variants[0];
-    if (!currentVariant) {
+    if (variantLoading) {
       return (
         <StoreLayout>
-          <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
-              <div className="text-6xl mb-4">📦</div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Biến thể không tồn tại</h2>
-              <p className="text-gray-600 mb-6">Biến thể này không tồn tại hoặc đã bị xóa.</p>
-              <button
-                onClick={() => navigate('/store-dashboard/product-variants')}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold transition-all"
-              >
-                ← Quay lại danh sách
-              </button>
+          <StoreStatusGuard currentStore={currentStore} pageName="chi tiết biến thể">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-4 text-gray-600">Đang tải biến thể...</p>
+              </div>
             </div>
-          </div>
+          </StoreStatusGuard>
         </StoreLayout>
       );
     }
 
-    // ✅ Hiển thị variant detail page
+    if (variantError || !variantData) {
+      return (
+        <StoreLayout>
+          <StoreStatusGuard currentStore={currentStore} pageName="chi tiết biến thể">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
+                <div className="text-6xl mb-4">📦</div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Biến thể không tồn tại</h2>
+                <p className="text-gray-600 mb-6">Biến thể này không tồn tại hoặc đã bị xóa.</p>
+                <button
+                  onClick={() => navigate('/store-dashboard/product-variants')}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold transition-all"
+                >
+                  ← Quay lại danh sách
+                </button>
+              </div>
+            </div>
+          </StoreStatusGuard>
+        </StoreLayout>
+      );
+    }
+
+    // ✅ Hiển thị variant detail page giống trang buyer
     return (
       <StoreLayout>
         <StoreStatusGuard currentStore={currentStore} pageName="chi tiết biến thể">
-          <div className="min-h-screen bg-gray-50 py-8 px-4">
-            <div className="max-w-4xl mx-auto">
-              {/* Header */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-                      <span className="text-2xl">🎨</span>
-                    </div>
-                    <div>
-                      <h1 className="text-xl font-bold text-gray-900">Chi tiết biến thể</h1>
-                      <p className="text-sm text-gray-500">{currentVariant.name || currentVariant.productName}</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => navigate('/store-dashboard/product-variants')}
-                    className="px-4 py-2 text-gray-600 hover:text-gray-900 font-medium transition-colors"
-                  >
-                    ← Quay lại
-                  </button>
-                </div>
+          {/* Breadcrumb */}
+          <div className="bg-gray-50 py-4">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <nav className="flex" aria-label="Breadcrumb">
+                <ol className="flex items-center space-x-2 text-sm">
+                  <li>
+                    <button
+                      onClick={() => navigate('/store-dashboard/product-variants')}
+                      className="text-gray-500 hover:text-gray-700"
+                    >
+                      Danh sách biến thể
+                    </button>
+                  </li>
+                  <li>
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                  </li>
+                  <li>
+                    <span className="text-gray-900 font-medium">{variantData.name || variantData.productName}</span>
+                  </li>
+                </ol>
+              </nav>
+            </div>
+          </div>
+
+          {/* Product Detail - Giống trang buyer */}
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {/* PHẦN 1: Gallery + Product Info (50:50) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+              {/* Product Gallery */}
+              <div>
+                <ProductGallery product={variantData} />
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Left: Image */}
-                <div className="lg:col-span-1">
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                    <div className="aspect-square bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg overflow-hidden">
-                      {currentVariant.primaryImage || currentVariant.images?.[0] ? (
-                        <img
-                          src={currentVariant.primaryImage || currentVariant.images[0]}
-                          alt={currentVariant.name || currentVariant.productName}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-300 text-6xl">
-                          🎨
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right: Info */}
-                <div className="lg:col-span-2 space-y-6">
-                  {/* Basic Info */}
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h2 className="text-lg font-bold text-gray-900 mb-4">📋 Thông tin cơ bản</h2>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Tên biến thể</label>
-                        <div className="px-4 py-3 bg-gray-50 rounded-lg border border-gray-200">
-                          <p className="text-gray-900 font-medium">{currentVariant.name || currentVariant.productName}</p>
-                        </div>
-                      </div>
-
-                      {currentVariant.attributes && Object.keys(currentVariant.attributes).length > 0 && (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Thuộc tính</label>
-                          <div className="flex flex-wrap gap-2">
-                            {Object.entries(currentVariant.attributes).map(([key, value]) => (
-                              <span key={key} className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-200 text-sm font-medium">
-                                {key}: {value}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {currentVariant.sku && (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">SKU</label>
-                          <div className="px-4 py-3 bg-gray-50 rounded-lg border border-gray-200">
-                            <p className="text-gray-900 font-mono text-sm">{currentVariant.sku}</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Price & Stock */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                          <span className="text-2xl">💰</span>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-600 mb-1">Giá bán</p>
-                          <p className="text-2xl font-bold text-green-600">{formatPrice(currentVariant.price || 0)}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                          (currentVariant.stock ?? currentVariant.stockQuantity ?? 0) <= 0 
-                            ? 'bg-red-100' 
-                            : (currentVariant.stock ?? currentVariant.stockQuantity ?? 0) < 10 
-                            ? 'bg-yellow-100' 
-                            : 'bg-blue-100'
-                        }`}>
-                          <span className="text-2xl">📦</span>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-600 mb-1">Tồn kho</p>
-                          <p className={`text-2xl font-bold ${
-                            (currentVariant.stock ?? currentVariant.stockQuantity ?? 0) <= 0 
-                              ? 'text-red-600' 
-                              : (currentVariant.stock ?? currentVariant.stockQuantity ?? 0) < 10 
-                              ? 'text-yellow-600' 
-                              : 'text-blue-600'
-                          }`}>
-                            {currentVariant.stock ?? currentVariant.stockQuantity ?? 0}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Status */}
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h2 className="text-lg font-bold text-gray-900 mb-4">📊 Trạng thái</h2>
-                    <div className="flex flex-wrap gap-2">
-                      {(() => {
-                        // ✅ Dùng hàm deriveApprovalStatus để xử lý nhiều format
-                        const status = deriveApprovalStatus(currentVariant);
-                        const badge = 
-                          status === 'APPROVED' ? { label: '✅ Đã duyệt', className: 'bg-green-100 text-green-800 border border-green-200' } :
-                          status === 'PENDING' ? { label: '⏳ Chờ duyệt', className: 'bg-yellow-100 text-yellow-800 border border-yellow-200' } :
-                          status === 'REJECTED' ? { label: '❌ Từ chối', className: 'bg-red-100 text-red-800 border border-red-200' } :
-                          { label: '📋 Không xác định', className: 'bg-gray-100 text-gray-800 border border-gray-200' };
-                        return (
-                          <span className={`px-4 py-2 rounded-lg text-sm font-semibold ${badge.className}`}>
-                            {badge.label}
-                          </span>
-                        );
-                      })()}
-                    </div>
-                  </div>
-
-                  {/* Product Info (if available) */}
-                  {product && (
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                      <h2 className="text-lg font-bold text-gray-900 mb-4">🔗 Sản phẩm cha</h2>
-                      <div className="space-y-2">
-                        <p className="text-sm text-gray-600">Tên sản phẩm:</p>
-                        <p className="text-gray-900 font-medium">{product.name}</p>
-                        <button
-                          onClick={() => navigate(`/store-dashboard/products/${product.id || product._id}`)}
-                          className="mt-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
-                        >
-                          Xem chi tiết sản phẩm →
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
+              {/* Product Info */}
+              <div>
+                <ProductInfo
+                  product={variantData}
+                  variantsOverride={[]}
+                  initialVariantId={variantId}
+                  isStoreView={true}
+                />
               </div>
+            </div>
+
+            {/* PHẦN 2: Specifications (100% width cho store owner) */}
+            <div className="mb-12">
+              <ProductSpecifications product={variantData} />
+            </div>
+
+            {/* PHẦN 3: Reviews (100% width) */}
+            <div className="mb-12">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">Đánh giá sản phẩm</h2>
+              <ReviewList
+                productVariantId={variantId}
+                onWriteReview={null} // Store owner không thể viết đánh giá
+                isStoreView={true} // ✅ Đánh dấu đây là store view
+              />
+            </div>
+
+            {/* PHẦN 4: Comments (100% width) */}
+            <div className="mb-12">
+              <ProductComments
+                productVariantId={variantId}
+                productId={productIdFromVariant}
+                isStoreView={true}
+              />
             </div>
           </div>
         </StoreStatusGuard>
@@ -488,7 +429,7 @@ const StoreProductDetail = () => {
                       product.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
                       'bg-red-100 text-red-800'
                     }`}>
-                      {product.status === 'APPROVED' ? '✅ Đã duyệt' :
+                      {product.status === 'APPROVED' ? '' :
                        product.status === 'PENDING' ? '⏳ Chờ duyệt' :
                        '❌ Từ chối'}
                     </span>
@@ -599,6 +540,42 @@ const StoreProductDetail = () => {
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Reviews Section - Store Owner xem đánh giá */}
+            <div className="mt-8 border-t pt-8">
+              <h2 className="text-2xl font-bold mb-6">Đánh giá sản phẩm</h2>
+              {variants.length > 0 && variants[0]?.id ? (
+                <ReviewList
+                  productVariantId={variants[0].id}
+                  onWriteReview={null} // Store owner không thể viết đánh giá
+                  isStoreView={true} // ✅ Đánh dấu đây là store view
+                />
+              ) : variantId ? (
+                <ReviewList
+                  productVariantId={variantId}
+                  onWriteReview={null}
+                  isStoreView={true} // ✅ Đánh dấu đây là store view
+                />
+              ) : null}
+            </div>
+
+            {/* Comments Section - Store Owner có thể reply */}
+            <div className="mt-8 border-t pt-8">
+              <h2 className="text-2xl font-bold mb-6">Bình luận sản phẩm</h2>
+              {variants.length > 0 && variants[0]?.id ? (
+                <ProductComments
+                  productVariantId={variants[0].id}
+                  productId={productId}
+                  isStoreView={true}
+                />
+              ) : variantId ? (
+                <ProductComments
+                  productVariantId={variantId}
+                  productId={productId}
+                  isStoreView={true}
+                />
+              ) : null}
             </div>
 
             {/* Actions */}

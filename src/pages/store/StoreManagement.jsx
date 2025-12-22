@@ -188,7 +188,7 @@ const StoreManagement = () => {
 
   const getStatusBadge = (status) => {
     const statusMap = {
-      'APPROVED': { text: 'Đã duyệt', color: 'bg-green-100 text-green-700 border-green-300' },
+      'APPROVED': { text: '', color: 'bg-transparent text-gray-400 border-transparent' },
       'PENDING': { text: 'Chờ duyệt', color: 'bg-yellow-100 text-yellow-700 border-yellow-300' },
       'REJECTED': { text: 'Từ chối', color: 'bg-red-100 text-red-700 border-red-300' },
     };

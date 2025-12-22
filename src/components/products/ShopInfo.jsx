@@ -8,6 +8,14 @@ const ShopInfo = ({ shop, storeName, storeId, product }) => {
   // ✅ Sử dụng shop từ API hoặc fallback sang storeName/storeId từ product
   // ✅ Nếu chỉ có storeId mà chưa có data, tạo object tạm với store ID
   const displayStore = shop || (storeName ? { name: storeName, id: storeId } : null) || (storeId ? { name: `Store #${storeId.slice(-8)}`, id: storeId } : null);
+  // ✅ Recipient (store owner) for chat
+  const recipientId =
+    displayStore?.owner?.id ||
+    displayStore?.ownerId ||
+    displayStore?.owner?.userId ||
+    displayStore?.owner?.user?.id ||
+    null;
+
   
   // ✅ Get full image URL for logo
   const logoImageUrl = getFullImageUrl(displayStore?.logoUrl);
@@ -15,13 +23,6 @@ const ShopInfo = ({ shop, storeName, storeId, product }) => {
   const handleViewShop = () => {
     if (displayStore?.id) {
       navigate(`/store/${displayStore.id}`);
-    }
-  };
-
-  const handleCallShop = () => {
-    const phone = displayStore?.owner?.phone || displayStore?.phone;
-    if (phone) {
-      window.open(`tel:${phone.replace(/[^0-9+]/g, '')}`);
     }
   };
 
@@ -109,28 +110,17 @@ const ShopInfo = ({ shop, storeName, storeId, product }) => {
             Xem Shop
           </button>
           <ChatButton
-            storeId={displayStore?.id}
-            storeName={displayStore?.name}
+            storeId={displayStore?.id || storeId}
+            storeName={displayStore?.name || storeName}
+            recipientId={recipientId}
             productId={product?.id}
             productName={product?.name}
             type="BUYER_SELLER"
-            className="flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
           >
             Chat Ngay
           </ChatButton>
         </div>
-        
-        {(displayStore?.owner?.phone || displayStore?.phone) && (
-          <button
-            onClick={handleCallShop}
-            className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
-          >
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
-            </svg>
-            📞 Gọi điện: {displayStore?.owner?.phone || displayStore?.phone}
-          </button>
-        )}
       </div>
 
       {/* Promotions - Hiển thị nếu có từ API */}

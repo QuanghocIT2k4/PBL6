@@ -54,6 +54,11 @@ export const getMyOrders = async (params = {}) => {
 
 /**
  * Complete order - Xác nhận hoàn tất đơn hàng
+ * 
+ * ⚠️ LƯU Ý BACKEND:
+ * - Khi đơn hàng DELIVERED: Chỉ cộng vào pendingAmount, KHÔNG tạo transaction
+ * - Khi đơn hàng COMPLETED (gọi API này): Chuyển từ pendingAmount → Balance, tạo transaction
+ * 
  * @param {string} orderId - Order ID
  * @returns {Promise} Updated order
  */
@@ -81,16 +86,27 @@ export const completeOrder = async (orderId) => {
  */
 export const getOrderById = async (orderId) => {
   try {
+    if (!orderId) {
+      return {
+        success: false,
+        error: 'Order ID is required',
+      };
+    }
+    
     const response = await api.get(`/api/v1/buyer/orders/${orderId}`);
     return {
       success: true,
       data: response.data.data || response.data,
     };
   } catch (error) {
-    console.error('Error fetching order:', error);
+    // ✅ Chỉ log error nếu không phải 400/404 (order not found)
+    if (error?.response?.status !== 400 && error?.response?.status !== 404) {
+      console.error('Error fetching order:', error);
+    }
+    
     return {
       success: false,
-      error: error.message || 'Không thể tải chi tiết đơn hàng',
+      error: error.response?.data?.message || error.response?.data?.error || error.message || 'Không thể tải chi tiết đơn hàng',
     };
   }
 };
@@ -197,6 +213,12 @@ export const cancelOrder = async (orderId, reason = '') => {
  */
 export const getOrderStatusBadge = (status) => {
   const badges = {
+    COMPLETED: {
+      bg: 'bg-emerald-100',
+      text: 'text-emerald-800',
+      label: 'Hoàn tất',
+      icon: '✅',
+    },
     PENDING: {
       bg: 'bg-yellow-100',
       text: 'text-yellow-800',
@@ -286,7 +308,7 @@ export const canCancelOrder = (status) => {
  * @returns {boolean} Can review
  */
 export const canReviewOrder = (status) => {
-  // Cho phép review khi đơn hàng đã giao (DELIVERED) hoặc hoàn thành (COMPLETED)
+  // DELIVERED tức là đã hoàn thành rồi
   return status === 'DELIVERED' || status === 'COMPLETED';
 };
 

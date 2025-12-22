@@ -13,12 +13,13 @@ import {
   getStoreDisputes,
   getReturnRequestCounts,
 } from '../../services/b2c/returnService';
+import { getOrderCode } from '../../utils/displayCodeUtils';
 import { useToast } from '../../context/ToastContext';
 import { confirmAction } from '../../utils/sweetalert';
 import ReturnRequestDetailModal from './components/ReturnRequestDetailModal';
 
 const StoreReturnRequestsPage = () => {
-  const { currentStore, userStores, selectStore, loading: storeLoading } = useStoreContext();
+  const { currentStore, userStores, selectStore, loading: storeLoading, fetchUserStores } = useStoreContext();
   // Auto-chọn chi nhánh nếu chưa chọn nhưng có danh sách store
   useEffect(() => {
     if (storeLoading) return;
@@ -52,10 +53,14 @@ const StoreReturnRequestsPage = () => {
     { revalidateOnFocus: false }
   );
 
-  // Fetch disputes để match với return requests
+  const returnRequests = data?.success ? (data.data?.content || data.data || []) : [];
+  const totalPages = data?.data?.totalPages || 0;
+
+  // ✅ Tối ưu: Giảm số lượng disputes fetch từ 1000 xuống 50 để tăng tốc độ load
+  // Chỉ fetch disputes khi có storeKey (không cần đợi returnRequests)
   const { data: disputesData } = useSWR(
-    storeKey ? ['store-disputes', storeKey] : null,
-    () => getStoreDisputes(storeKey, { page: 0, size: 1000 }),
+    storeKey ? ['store-disputes', storeKey, 'minimal'] : null,
+    () => getStoreDisputes(storeKey, { page: 0, size: 50 }), // Giảm từ 1000 xuống 50
     { revalidateOnFocus: false }
   );
 
@@ -66,18 +71,18 @@ const StoreReturnRequestsPage = () => {
     { revalidateOnFocus: false }
   );
 
-  const returnRequests = data?.success ? (data.data?.content || data.data || []) : [];
-  const totalPages = data?.data?.totalPages || 0;
-
-  // Tạo map dispute theo returnRequestId
+  // ✅ Tạo map dispute theo returnRequestId (chỉ khi có dữ liệu)
   const disputes = disputesData?.success ? (disputesData.data?.content || disputesData.data || []) : [];
   const disputeMap = new Map();
-  disputes.forEach(dispute => {
-    const returnRequestId = dispute.returnRequest?.id || dispute.returnRequest?._id || dispute.returnRequest;
-    if (returnRequestId) {
-      disputeMap.set(String(returnRequestId), dispute);
-    }
-  });
+  // Chỉ tạo map nếu có disputes và return requests
+  if (disputes.length > 0 && returnRequests.length > 0) {
+    disputes.forEach(dispute => {
+      const returnRequestId = dispute.returnRequest?.id || dispute.returnRequest?._id || dispute.returnRequest;
+      if (returnRequestId) {
+        disputeMap.set(String(returnRequestId), dispute);
+      }
+    });
+  }
 
   // Thống kê theo API count-by-status (ưu tiên dùng BE tính sẵn)
   const statusCounts = countsData?.success
@@ -133,6 +138,13 @@ const StoreReturnRequestsPage = () => {
       month: '2-digit',
       year: 'numeric',
     });
+  };
+
+  // Helper lấy ID từ DBRef / object
+  const getIdFromRef = (ref) => {
+    if (!ref) return null;
+    if (typeof ref === 'string' || typeof ref === 'number') return String(ref);
+    return String(ref.$id || ref._id || ref.id || ref.$oid || ref);
   };
 
   const handleRespond = async (returnRequestId, approved) => {
@@ -227,7 +239,13 @@ const StoreReturnRequestsPage = () => {
       return;
     }
 
-    const confirmed = await confirmAction('xác nhận hàng trả về không có vấn đề');
+    // ⚠️ LƯU Ý LOGIC CẢNH BÁO:
+    // - Khi store chấp nhận trả hàng (xác nhận hàng OK) → Cộng 1 cảnh báo NGAY LẬP TỨC
+    // - Bất kể sau đó store có khiếu nại chất lượng và thắng hay không
+    // - Backend cần xử lý: Tăng returnWarningCount lên 1 khi API confirm-ok được gọi
+    const confirmed = await confirmAction(
+      'xác nhận hàng trả về không có vấn đề. ⚠️ Bạn sẽ bị cộng 1 cảnh báo vi phạm.'
+    );
     if (!confirmed) return;
 
     setProcessingId(returnRequestId);
@@ -235,8 +253,15 @@ const StoreReturnRequestsPage = () => {
       const result = await confirmReturnOK(currentStore.id, returnRequestId);
 
       if (result.success) {
-        success('Đã xác nhận hàng trả về không có vấn đề');
+        success('Đã xác nhận hàng trả về không có vấn đề. ⚠️ Bạn đã bị cộng 1 cảnh báo vi phạm.');
         mutate();
+        
+        // ✅ Refresh store info để cập nhật số lần cảnh báo
+        if (fetchUserStores) {
+          setTimeout(async () => {
+            await fetchUserStores();
+          }, 1000); // Đợi 1 giây để backend xử lý xong
+        }
       } else {
         showError(result.error || 'Không thể xác nhận hàng trả về');
       }
@@ -273,25 +298,55 @@ const StoreReturnRequestsPage = () => {
   return (
     <StoreStatusGuard currentStore={currentStore} loading={storeLoading} pageName="yêu cầu trả hàng">
       <StoreLayout>
-        <div className="bg-gray-50 min-h-screen py-6">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-blue-600 uppercase">Yêu cầu trả hàng</p>
-                <h1 className="text-2xl font-bold text-gray-900">Quản lý yêu cầu trả hàng từ khách</h1>
-                <p className="text-sm text-gray-600">Xem, phản hồi và xử lý hoàn tiền</p>
-              </div>
-              <Link
-                to="/store-dashboard/orders"
-                className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg shadow-sm hover:bg-gray-100 transition"
-              >
-                ← Quay lại đơn hàng
-              </Link>
-            </div>
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="mb-8">
+            <div className="relative bg-gradient-to-r from-cyan-200 to-blue-200 rounded-2xl p-6">
+              {/* Status Badge - Top Right trong khung xanh dương */}
+              {/* Ẩn badge trạng thái đã duyệt */}
+              {currentStore?.status && currentStore.status !== 'APPROVED' && (
+                <div className="absolute top-4 right-4 z-10">
+                  <div className={`px-4 py-2 rounded-full text-sm font-medium border shadow-md ${
+                    currentStore.status === 'PENDING'
+                      ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
+                      : currentStore.status === 'REJECTED'
+                      ? 'bg-red-100 text-red-800 border-red-300'
+                      : 'bg-gray-100 text-gray-800 border-gray-300'
+                  }`}>
+                    {currentStore.status === 'PENDING'
+                      ? 'Chờ duyệt'
+                      : currentStore.status === 'REJECTED'
+                      ? 'Đã từ chối'
+                      : currentStore.status}
+                  </div>
+                </div>
+              )}
+              <div className="bg-white rounded-2xl p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 to-blue-400 rounded-xl flex items-center justify-center">
+                      <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h1 className="text-3xl font-bold">
+                        <span className="text-cyan-600">Yêu cầu</span>{' '}
+                        <span className="text-blue-600">trả hàng</span>
+                      </h1>
+                      <p className="text-gray-600 mt-1">Quản lý yêu cầu trả hàng từ khách - Xem, phản hồi và xử lý hoàn tiền</p>
+                    </div>
+                  </div>
+                  <Link
+                    to="/store-dashboard/orders"
+                    className="px-4 py-2 bg-gray-500 text-white rounded-lg shadow-sm hover:bg-gray-600 transition"
+                  >
+                    ← Quay lại đơn hàng
+                  </Link>
+                </div>
 
-            {/* Summary cards - dùng dữ liệu count-by-status từ BE */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                {/* Summary cards - Nằm trong cùng khung */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
               {isLoadingCounts ? (
                 [...Array(5)].map((_, idx) => (
                   <div
@@ -348,37 +403,43 @@ const StoreReturnRequestsPage = () => {
                   </div>
                 ))
               )}
+                </div>
+              </div>
             </div>
+          </div>
 
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
             {/* Filters */}
-            <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-3 flex gap-2 flex-wrap">
-              <button
-                onClick={() => setStatusFilter(null)}
-                className={`px-4 py-2 rounded-lg border transition ${
-                  statusFilter === null
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-                }`}
-              >
-                Tất cả
-              </button>
-              {['PENDING', 'APPROVED', 'READY_TO_RETURN', 'RETURNING', 'RETURNED', 'REFUNDED', 'REJECTED'].map((status) => (
+            <div className="bg-gradient-to-r from-white to-gray-50 rounded-2xl shadow-lg border border-gray-200 p-4">
+              <div className="flex flex-wrap gap-2">
                 <button
-                  key={status}
-                  onClick={() => setStatusFilter(status)}
-                  className={`px-4 py-2 rounded-lg border transition ${
-                    statusFilter === status
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                      : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                  onClick={() => setStatusFilter(null)}
+                  className={`px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
+                    statusFilter === null
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md shadow-blue-200 transform scale-105'
+                      : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-blue-300 hover:bg-blue-50 hover:shadow-sm'
                   }`}
                 >
-                  {getStatusLabel(status)}
+                  Tất cả
                 </button>
-              ))}
+                {['PENDING', 'APPROVED', 'READY_TO_RETURN', 'RETURNING', 'RETURNED', 'REFUNDED', 'REJECTED'].map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => setStatusFilter(status)}
+                    className={`px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
+                      statusFilter === status
+                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md shadow-blue-200 transform scale-105'
+                        : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-blue-300 hover:bg-blue-50 hover:shadow-sm'
+                    }`}
+                  >
+                    {getStatusLabel(status)}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Return Requests List */}
-            <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
+            <div className="bg-white border border-gray-200 rounded-2xl shadow-lg p-6">
               {isLoading ? (
                 <div className="text-center py-12">
                   <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -410,6 +471,8 @@ const StoreReturnRequestsPage = () => {
                     // Tìm dispute liên quan đến return request này
                     const dispute = request.dispute || disputeMap.get(String(request.id || request._id));
                     const hasDispute = dispute && (request.status === 'DISPUTED' || request.status === 'RETURN_DISPUTED');
+                    const orderId = getIdFromRef(request.order || request.orderId || request.orderRef);
+                    const orderCode = orderId ? getOrderCode(orderId) : null;
                     
                     return (
                       <div
@@ -532,6 +595,27 @@ const StoreReturnRequestsPage = () => {
                                   type="button"
                                   onClick={() => handleOpenDetail(request.id || request._id)}
                                   className="px-4 py-2 bg-white text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition"
+                                >
+                                  Xem chi tiết yêu cầu
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Nút xem chi tiết cho mọi trạng thái khác để shop vẫn tra cứu được */}
+                            {request.status !== 'PENDING' && !hasDispute && (
+                              <div className="flex flex-wrap gap-2 mt-4">
+                                {orderId && (
+                                  <Link
+                                    to={`/store-dashboard/orders/${orderId}`}
+                                    className="px-4 py-2 text-sm font-semibold bg-white text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors"
+                                  >
+                                    Xem chi tiết đơn hàng #{orderCode}
+                                  </Link>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenDetail(request.id || request._id)}
+                                  className="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
                                 >
                                   Xem chi tiết yêu cầu
                                 </button>

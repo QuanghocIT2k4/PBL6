@@ -7,6 +7,7 @@ import ShopInfo from '../../components/products/ShopInfo';
 import ProductSection from '../../components/common/ProductSection';
 import ReviewList from '../../components/reviews/ReviewList';
 import ReviewForm from '../../components/reviews/ReviewForm';
+import ProductComments from '../../components/products/ProductComments';
 import SEO from '../../components/seo/SEO';
 import { ProductSchema, BreadcrumbSchema } from '../../components/seo/StructuredData';
 import { useState, useEffect } from 'react';
@@ -268,16 +269,22 @@ const ProductDetail = () => {
           />
         </div>
 
-        {/* ✅ PHẦN 4: Related Products (100% width) */}
+        {/* PHẦN 4: Comments (100% width) - Bình luận sản phẩm */}
         <div className="mb-12">
+          <ProductComments productVariantId={id} productId={productIdFromVariant} />
+        </div>
+
+        {/* ✅ PHẦN 5: Related Products (100% width) */}
+        <div className="mb-12">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Sản phẩm liên quan</h2>
           {relatedLoading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
               <p className="mt-4 text-gray-600">Đang tải sản phẩm liên quan...</p>
             </div>
-          ) : relatedProducts.length > 0 ? (
+          ) : relatedProducts && relatedProducts.length > 0 ? (
             <ProductSection
-              title="Sản phẩm liên quan"
+              title=""
               products={relatedProducts}
               onProductClick={handleRelatedProductClick}
               backgroundColor="bg-gray-50"

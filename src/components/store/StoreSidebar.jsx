@@ -1,10 +1,113 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useStoreContext } from '../../context/StoreContext';
+import { getStoreNotifications } from '../../services/b2c/storeNotificationService';
 
 const StoreSidebar = () => {
   const { currentStore, userStores } = useStoreContext();
   const location = useLocation();
+  const [violationCount, setViolationCount] = useState(null); // { currentCount, maxCount, remainingCount }
+
+  // ✅ Fetch và parse số lần cảnh báo vi phạm từ store info hoặc notifications
+  useEffect(() => {
+    const fetchViolationCount = async () => {
+      if (!currentStore?.id) {
+        setViolationCount(null);
+        return;
+      }
+
+      // ✅ Ưu tiên 1: Lấy từ store info nếu có returnWarningCount
+      if (currentStore?.returnWarningCount !== undefined && currentStore?.returnWarningCount !== null) {
+        const currentCount = parseInt(currentStore.returnWarningCount, 10) || 0;
+        const maxCount = 5;
+        const remainingCount = maxCount - currentCount;
+        if (currentCount > 0) {
+          setViolationCount({ currentCount, maxCount, remainingCount });
+          return;
+        } else {
+          setViolationCount(null);
+          return;
+        }
+      }
+
+      // ✅ Ưu tiên 2: Tìm trong notifications nếu store info không có
+      try {
+        const result = await getStoreNotifications(currentStore.id, {
+          page: 0,
+          size: 50, // Tăng size để tìm được notification cũ hơn
+          isRead: null, // Lấy cả đã đọc và chưa đọc
+        });
+
+        if (result.success) {
+          const notifList = result.data?.content || result.data?.notifications || [];
+          
+          // ✅ Tìm notification cảnh báo vi phạm (nhiều pattern khác nhau)
+          const violationNotif = notifList.find((notif) => {
+            const message = (notif.message || '').toLowerCase();
+            // Pattern 1: "xác nhận hàng trả về không có vấn đề" + "Đây là lần thứ" + "sẽ bị khóa"
+            if (message.includes('xác nhận hàng trả về không có vấn đề') && 
+                message.includes('đây là lần thứ') && 
+                message.includes('sẽ bị khóa')) {
+              return true;
+            }
+            // Pattern 2: "cảnh báo vi phạm" + số lần
+            if (message.includes('cảnh báo vi phạm') && message.includes('lần')) {
+              return true;
+            }
+            // Pattern 3: "đã bị cảnh báo" + số
+            if (message.includes('đã bị cảnh báo') && /\d+/.test(message)) {
+              return true;
+            }
+            // Pattern 4: "giao hàng lỗi" + số lần
+            if (message.includes('giao hàng lỗi') && message.includes('lần')) {
+              return true;
+            }
+            return false;
+          });
+
+          if (violationNotif) {
+            const message = violationNotif.message || '';
+            // Tìm số lần cảnh báo từ nhiều pattern
+            let match = message.match(/đây là lần thứ\s+(\d+)/i);
+            if (!match) {
+              match = message.match(/đã bị cảnh báo\s+(\d+)/i);
+            }
+            if (!match) {
+              match = message.match(/(\d+)\s*\/\s*5/i); // Format: "1/5"
+            }
+            if (!match) {
+              match = message.match(/cảnh báo.*?(\d+)/i);
+            }
+            if (!match) {
+              match = message.match(/lần thứ\s+(\d+)/i);
+            }
+            
+            const currentCount = match ? parseInt(match[1], 10) : 0;
+            const maxCount = 5;
+            const remainingCount = maxCount - currentCount;
+            
+            if (currentCount > 0) {
+              setViolationCount({ currentCount, maxCount, remainingCount });
+            } else {
+              setViolationCount(null);
+            }
+          } else {
+            setViolationCount(null);
+          }
+        } else {
+          setViolationCount(null);
+        }
+      } catch (err) {
+        console.error('Error fetching violation count:', err);
+        setViolationCount(null);
+      }
+    };
+
+    fetchViolationCount();
+    // Refresh mỗi 30 giây
+    const interval = setInterval(fetchViolationCount, 30000);
+    return () => clearInterval(interval);
+  }, [currentStore?.id, currentStore?.returnWarningCount]);
 
   const isActive = (path) => {
     return location.pathname === path;
@@ -19,7 +122,7 @@ const StoreSidebar = () => {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'APPROVED': return 'bg-green-100 text-green-800 border-green-200';
+      case 'APPROVED': return 'bg-transparent text-gray-300 border-transparent';
       case 'PENDING': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'REJECTED': return 'bg-red-100 text-red-800 border-red-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
@@ -28,7 +131,7 @@ const StoreSidebar = () => {
 
   const getStatusText = (status) => {
     switch (status) {
-      case 'APPROVED': return 'Đã duyệt';
+      case 'APPROVED': return '';
       case 'PENDING': return 'Chờ duyệt';
       case 'REJECTED': return 'Bị từ chối';
       default: return 'Không xác định';
@@ -112,6 +215,21 @@ const StoreSidebar = () => {
                 }
               </span>
             </p>
+          )}
+          
+          {/* ✅ Hiển thị số lần cảnh báo vi phạm */}
+          {violationCount && (
+            <div className="mt-2 p-2 bg-yellow-900/30 border border-yellow-600/50 rounded-lg">
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-yellow-400">⚠️</span>
+                <span className="text-yellow-300 font-medium">
+                  Cảnh báo: {violationCount.currentCount}/{violationCount.maxCount}
+                </span>
+                <span className="text-red-400 font-semibold">
+                  (Còn {violationCount.remainingCount} lần)
+                </span>
+              </div>
+            </div>
           )}
         </div>
 

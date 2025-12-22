@@ -5,7 +5,7 @@ import { useVariants } from '../../hooks/useVariants';
 import { getAttributeLabel } from '../../utils/attributeLabels';
 import Button from '../ui/Button';
 
-const ProductInfo = ({ product, variantsOverride = [], initialVariantId }) => {
+const ProductInfo = ({ product, variantsOverride = [], initialVariantId, isStoreView = false }) => {
   const navigate = useNavigate();
   const { addToCart, isInCart, getProductQuantityInCart } = useCart();
   
@@ -379,63 +379,65 @@ const ProductInfo = ({ product, variantsOverride = [], initialVariantId }) => {
           </div>
         )}
         </>
-      ) : (
-        <div className="text-gray-500 text-sm italic">Sản phẩm này không có tùy chọn</div>
+      ) : null}
+
+      {/* Quantity - Chỉ hiển thị cho buyer */}
+      {!isStoreView && (
+        <div>
+          <h3 className="text-sm font-medium text-gray-900 mb-2">Số lượng:</h3>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setQuantity(Math.max(1, quantity - 1))}
+              className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center"
+            >
+              -
+            </button>
+            <span className="text-lg font-medium min-w-[2rem] text-center">
+              {quantity}
+            </span>
+            <button
+              onClick={() => setQuantity(quantity + 1)}
+              className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center"
+            >
+              +
+            </button>
+          </div>
+        </div>
       )}
 
-      {/* Quantity */}
-      <div>
-        <h3 className="text-sm font-medium text-gray-900 mb-2">Số lượng:</h3>
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={() => setQuantity(Math.max(1, quantity - 1))}
-            className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center"
+      {/* Action Buttons - Chỉ hiển thị cho buyer */}
+      {!isStoreView && (
+        <div className="space-y-3">
+          <Button
+            onClick={handleBuyNow}
+            className="w-full bg-gradient-to-r from-red-600 to-red-700"
+            size="lg"
+            loading={isBuying}
+            disabled={isAdding || isBuying}
           >
-            -
-          </button>
-          <span className="text-lg font-medium min-w-[2rem] text-center">
-            {quantity}
-          </span>
-          <button
-            onClick={() => setQuantity(quantity + 1)}
-            className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center"
+            {isBuying ? 'Đang xử lý...' : 'Mua ngay'}
+          </Button>
+          
+          <Button
+            onClick={handleAddToCart}
+            variant="outline"
+            className="w-full border-2 border-blue-600 text-blue-600"
+            size="lg"
+            loading={isAdding}
+            disabled={isAdding || isBuying}
           >
-            +
-          </button>
+            <div className="flex items-center justify-center">
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-1.5 4M7 13v8a2 2 0 002 2h6a2 2 0 002-2v-8m-9 0V9a2 2 0 012-2h6a2 2 0 012 2v4.01"/>
+              </svg>
+              Thêm vào giỏ hàng
+            </div>
+          </Button>
         </div>
-      </div>
+      )}
 
-      {/* Action Buttons */}
-      <div className="space-y-3">
-        <Button
-          onClick={handleBuyNow}
-          className="w-full bg-gradient-to-r from-red-600 to-red-700"
-          size="lg"
-          loading={isBuying}
-          disabled={isAdding || isBuying}
-        >
-          {isBuying ? 'Đang xử lý...' : 'Mua ngay'}
-        </Button>
-        
-        <Button
-          onClick={handleAddToCart}
-          variant="outline"
-          className="w-full border-2 border-blue-600 text-blue-600"
-          size="lg"
-          loading={isAdding}
-          disabled={isAdding || isBuying}
-        >
-          <div className="flex items-center justify-center">
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-1.5 4M7 13v8a2 2 0 002 2h6a2 2 0 002-2v-8m-9 0V9a2 2 0 012-2h6a2 2 0 012 2v4.01"/>
-            </svg>
-            Thêm vào giỏ hàng
-          </div>
-        </Button>
-      </div>
-
-      {/* Cart Status */}
-      {productInCart && (
+      {/* Cart Status - Chỉ hiển thị cho buyer */}
+      {!isStoreView && productInCart && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-3">
           <div className="flex items-center text-green-700">
             <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -446,8 +448,8 @@ const ProductInfo = ({ product, variantsOverride = [], initialVariantId }) => {
         </div>
       )}
 
-      {/* Additional Info - Platform-level benefits (có thể giữ) */}
-      {product && (
+      {/* Additional Info - Platform-level benefits - Chỉ hiển thị cho buyer */}
+      {!isStoreView && product && (
         <div className="border-t pt-4 space-y-2 text-sm text-gray-600">
           <div className="flex items-center space-x-2">
             <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">

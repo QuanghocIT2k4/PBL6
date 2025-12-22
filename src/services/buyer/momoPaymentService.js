@@ -19,6 +19,7 @@ import api from '../common/api';
  * @param {number} amount - Số tiền thanh toán (VND), kiểu number
  * @param {string} orderId - Order ID từ hệ thống (optional nhưng backend có thể cần)
  * @param {string} orderInfo - Thông tin đơn hàng (optional)
+ * @param {Array<string>} orderIds - Mảng các order IDs (để liên kết nhiều đơn hàng với 1 payment)
  * @returns {Object} { success, data: { payUrl, orderId, ... }, error }
  * 
  * @example
@@ -26,8 +27,11 @@ import api from '../common/api';
  * if (result.success) {
  *   window.location.href = result.data.payUrl;
  * }
+ * 
+ * @example - Nhiều đơn hàng
+ * const result = await createMoMoPayment(24630000, 'order_001', 'Thanh toán 2 đơn hàng', ['order_001', 'order_002']);
  */
-export const createMoMoPayment = async (amount, orderId = null, orderInfo = null) => {
+export const createMoMoPayment = async (amount, orderId = null, orderInfo = null, orderIds = []) => {
   // ✅ Khai báo requestBody ở scope cao hơn để có thể dùng trong catch block
   let requestBody = {
     amount: amount,
@@ -49,6 +53,11 @@ export const createMoMoPayment = async (amount, orderId = null, orderInfo = null
     // ✅ Thêm orderId nếu có (backend có thể cần để liên kết với order)
     if (orderId) {
       requestBody.orderId = orderId;
+    }
+
+    // ✅ Thêm orderIds nếu có (để liên kết nhiều đơn hàng với 1 payment)
+    if (orderIds && Array.isArray(orderIds) && orderIds.length > 0) {
+      requestBody.orderIds = orderIds;
     }
 
     // ✅ Thêm orderInfo nếu có (mô tả đơn hàng)

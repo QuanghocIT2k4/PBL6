@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Swal from 'sweetalert2';
 import StoreLayout from '../../layouts/StoreLayout';
 import StoreStatusGuard from '../../components/store/StoreStatusGuard';
 import { useStoreContext } from '../../context/StoreContext';
@@ -13,6 +14,7 @@ import {
   formatNotificationTime,
   getNotificationIcon,
   getNotificationColor,
+  formatNotificationMessage,
 } from '../../services/b2c/storeNotificationService';
 
 const StoreNotifications = () => {
@@ -25,6 +27,7 @@ const StoreNotifications = () => {
   const [filter, setFilter] = useState('all'); // all, unread, read
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  const [processedViolationIds, setProcessedViolationIds] = useState(new Set()); // Track đã hiển thị toast
 
   useEffect(() => {
     if (currentStore?.id) {
@@ -49,7 +52,14 @@ const StoreNotifications = () => {
         const data = result.data;
         const notifList = data.content || data.notifications || [];
 
+        // ✅ Kiểm tra và hiển thị toast cho cảnh báo vi phạm mới
         if (pageNum === 0) {
+          // Chỉ kiểm tra khi load trang đầu tiên để tránh spam toast
+          notifList.forEach((notif) => {
+            if (!notif.isRead && !processedViolationIds.has(notif.id)) {
+              checkAndShowViolationToast(notif);
+            }
+          });
           setNotifications(notifList);
         } else {
           setNotifications((prev) => [...prev, ...notifList]);
@@ -120,6 +130,56 @@ const StoreNotifications = () => {
   const handleLoadMore = () => {
     if (!loading && hasMore) {
       loadNotifications(page + 1);
+    }
+  };
+
+  // ✅ Hàm kiểm tra và hiển thị toast cho cảnh báo vi phạm
+  const checkAndShowViolationToast = (notification) => {
+    if (!notification || !notification.message) return;
+
+    const message = notification.message;
+    // Kiểm tra xem có phải cảnh báo vi phạm không
+    const isViolationWarning = message.includes('xác nhận hàng trả về không có vấn đề') && 
+                               message.includes('Đây là lần thứ') && 
+                               message.includes('sẽ bị khóa');
+
+    if (isViolationWarning) {
+      // Parse số lần hiện tại từ message
+      // Ví dụ: "Đây là lần thứ 1 trong tháng này"
+      const match = message.match(/Đây là lần thứ\s+(\d+)/i);
+      const currentCount = match ? parseInt(match[1], 10) : 0;
+      const maxCount = 5; // Số lần tối đa trước khi bị khóa
+      const remainingCount = maxCount - currentCount;
+
+      // Đánh dấu đã xử lý để tránh hiển thị lại
+      setProcessedViolationIds((prev) => new Set([...prev, notification.id]));
+
+      // Hiển thị toast cảnh báo
+      const toastMessage = `⚠️ CẢNH BÁO VI PHẠM\n\n` +
+        `Bạn đã xác nhận hàng trả về không có vấn đề ${currentCount} lần trong tháng này.\n\n` +
+        `📊 Số lần đã bị cảnh báo: ${currentCount}/5\n` +
+        `⚠️ Còn lại: ${remainingCount} lần nữa sẽ bị khóa cửa hàng!\n\n` +
+        `Vui lòng cẩn thận hơn khi xác nhận hàng trả về.`;
+
+      // Sử dụng Swal để hiển thị cảnh báo nổi bật
+      Swal.fire({
+        icon: 'warning',
+        title: '⚠️ Cảnh báo vi phạm',
+        html: `
+          <div style="text-align: left;">
+            <p style="margin-bottom: 12px;">Bạn đã xác nhận hàng trả về không có vấn đề <strong>${currentCount} lần</strong> trong tháng này.</p>
+            <div style="background-color: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+              <p style="font-size: 14px; font-weight: 600; color: #92400e; margin-bottom: 8px;">📊 Thống kê:</p>
+              <p style="font-size: 14px; color: #78350f; margin-bottom: 4px;">• Số lần đã bị cảnh báo: <strong>${currentCount}/5</strong></p>
+              <p style="font-size: 14px; color: #78350f;">• Còn lại: <strong style="color: #dc2626;">${remainingCount} lần</strong> nữa sẽ bị khóa cửa hàng!</p>
+            </div>
+            <p style="font-size: 14px; color: #4b5563;">⚠️ Vui lòng cẩn thận hơn khi xác nhận hàng trả về.</p>
+          </div>
+        `,
+        confirmButtonText: 'Đã hiểu',
+        confirmButtonColor: '#f59e0b',
+        width: '500px',
+      });
     }
   };
 
@@ -204,12 +264,29 @@ const StoreNotifications = () => {
                   const color = getNotificationColor(notification.type);
                   const timeAgo = formatNotificationTime(notification.createdAt);
 
+                  // ✅ Parse thông tin cảnh báo vi phạm từ message
+                  const parseViolationInfo = (message) => {
+                    if (!message) return null;
+                    const isViolationWarning = message.includes('xác nhận hàng trả về không có vấn đề') && 
+                                             message.includes('Đây là lần thứ') && 
+                                             message.includes('sẽ bị khóa');
+                    if (!isViolationWarning) return null;
+
+                    const match = message.match(/Đây là lần thứ\s+(\d+)/i);
+                    const currentCount = match ? parseInt(match[1], 10) : 0;
+                    const maxCount = 5;
+                    const remainingCount = maxCount - currentCount;
+                    return { currentCount, maxCount, remainingCount };
+                  };
+
+                  const violationInfo = parseViolationInfo(notification.message);
+
                   return (
                     <div
                       key={notification.id}
                       className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
                         !notification.isRead ? 'bg-blue-50/30' : ''
-                      }`}
+                      } ${violationInfo ? 'border-l-4 border-yellow-500 bg-yellow-50/30' : ''}`}
                       onClick={() => handleNotificationClick(notification)}
                     >
                       <div className="flex gap-4">
@@ -225,19 +302,42 @@ const StoreNotifications = () => {
                         {/* Content */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
-                            <h3
-                              className={`text-base font-medium text-gray-900 ${
-                                !notification.isRead ? 'font-semibold' : ''
-                              }`}
-                            >
-                              {notification.title}
-                            </h3>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h3
+                                  className={`text-base font-medium text-gray-900 ${
+                                    !notification.isRead ? 'font-semibold' : ''
+                                  }`}
+                                >
+                                  {notification.title}
+                                </h3>
+                                {/* ✅ Badge hiển thị số lần cảnh báo */}
+                                {violationInfo && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800 border border-yellow-300">
+                                    <span>⚠️</span>
+                                    <span>Lần {violationInfo.currentCount}/{violationInfo.maxCount}</span>
+                                    <span className="text-red-600">(Còn {violationInfo.remainingCount} lần)</span>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                             {!notification.isRead && (
                               <span className="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-2"></span>
                             )}
                           </div>
 
-                          <p className="text-sm text-gray-600 mt-1">{notification.message}</p>
+                          <p className="text-sm text-gray-600 mt-1">{formatNotificationMessage(notification.message)}</p>
+                          
+                          {/* ✅ Hiển thị thông tin cảnh báo chi tiết */}
+                          {violationInfo && (
+                            <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+                              <div className="flex items-center gap-2 text-xs flex-wrap">
+                                <span className="font-semibold text-yellow-800">📊 Thống kê:</span>
+                                <span className="text-yellow-700">Đã cảnh báo {violationInfo.currentCount}/{violationInfo.maxCount} lần</span>
+                                <span className="text-red-600 font-semibold">• Còn {violationInfo.remainingCount} lần nữa sẽ bị khóa!</span>
+                              </div>
+                            </div>
+                          )}
 
                           <div className="flex items-center justify-between mt-2">
                             <p className="text-xs text-gray-400">{timeAgo}</p>

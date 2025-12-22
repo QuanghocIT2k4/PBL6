@@ -195,28 +195,25 @@ export const getProvinceRegion = (provinceName) => {
   
   const name = provinceName.toLowerCase();
   
-  // Vùng Bắc
+  // ✅ Vùng Bắc (14 tỉnh/thành phố) - Theo file JSON 34 tỉnh
   const bacProvinces = [
-    'hà nội', 'hải phòng', 'hải dương', 'hưng yên', 'hà nam', 'nam định', 'thái bình',
-    'ninh bình', 'vĩnh phúc', 'bắc ninh', 'quảng ninh', 'lạng sơn', 'cao bằng', 'bắc kạn',
-    'thái nguyên', 'tuyên quang', 'yên bái', 'lào cai', 'điện biên', 'sơn la', 'lai châu',
-    'hoà bình', 'phú thọ', 'bắc giang'
+    'hà nội', 'hải phòng', 'hưng yên', 'ninh bình',
+    'bắc ninh', 'quảng ninh', 'lạng sơn', 'cao bằng',
+    'thái nguyên', 'tuyên quang', 'lào cai', 'điện biên', 'sơn la', 'lai châu',
+    'phú thọ'
   ];
   
-  // Vùng Trung
+  // ✅ Vùng Trung (12 tỉnh/thành phố) - Theo file JSON 34 tỉnh
   const trungProvinces = [
-    'thanh hóa', 'nghệ an', 'hà tĩnh', 'quảng bình', 'quảng trị', 'thừa thiên huế',
-    'đà nẵng', 'quảng nam', 'quảng ngãi', 'bình định', 'phú yên', 'khánh hòa',
-    'ninh thuận', 'bình thuận', 'kon tum', 'gia lai', 'đắk lắk', 'đắk nông', 'lâm đồng'
+    'thanh hóa', 'nghệ an', 'hà tĩnh', 'quảng trị', 'huế',
+    'đà nẵng', 'quảng ngãi', 'gia lai', 'khánh hòa',
+    'đắk lắk', 'lâm đồng'
   ];
   
-  // Vùng Nam
+  // ✅ Vùng Nam (8 tỉnh/thành phố) - Theo file JSON 34 tỉnh
   const namProvinces = [
-    'bình phước', 'tây ninh', 'bình dương', 'đồng nai', 'bà rịa - vũng tàu',
-    'thành phố hồ chí minh', 'hồ chí minh', 'tp. hồ chí minh', 'tp hcm',
-    'long an', 'tiền giang', 'bến tre', 'trà vinh', 'vĩnh long', 'đồng tháp',
-    'an giang', 'kiên giang', 'cà mau', 'bạc liêu', 'sóc trăng', 'hậu giang',
-    'cần thơ'
+    'tây ninh', 'đồng nai', 'hồ chí minh', 'tp. hồ chí minh', 'tp hcm', 'tp.hcm',
+    'đồng tháp', 'vĩnh long', 'an giang', 'cần thơ', 'cà mau'
   ];
   
   if (bacProvinces.some(p => name.includes(p))) {
@@ -325,6 +322,88 @@ export const calculateShippingFee = (fromProvince, toProvince, weight = 0.5) => 
   return 30000;
 };
 
+/**
+ * Calculate expected delivery date based on provinces and regions
+ * 
+ * QUY TẮC TÍNH NGÀY GIAO DỰ KIẾN:
+ * 1. CÙNG TỈNH: Tên tỉnh giống nhau → 1 ngày
+ * 2. CÙNG VÙNG: Cùng vùng Bắc, hoặc cùng vùng Trung, hoặc cùng vùng Nam → 2 ngày
+ * 3. VÙNG LÂN CẬN: Bắc ↔ Trung hoặc Trung ↔ Nam → 3 ngày
+ * 4. VÙNG XA: Bắc ↔ Nam (bỏ qua Trung) → 5 ngày
+ * 
+ * @param {string} fromProvince - Tên tỉnh của store (VD: "Thành phố Đà Nẵng")
+ * @param {string} toProvince - Tên tỉnh của buyer (VD: "Thành phố Hồ Chí Minh")
+ * @param {Date} startDate - Ngày bắt đầu tính (mặc định là hôm nay)
+ * @returns {Date} Ngày giao dự kiến
+ */
+export const calculateExpectedDeliveryDate = (fromProvince, toProvince, startDate = new Date()) => {
+  if (!fromProvince || !toProvince) {
+    // Default: 3 ngày nếu thiếu thông tin
+    const defaultDate = new Date(startDate);
+    defaultDate.setDate(defaultDate.getDate() + 3);
+    return defaultDate;
+  }
+  
+  // Chuẩn hóa tên tỉnh (chuyển về chữ thường, bỏ khoảng trắng thừa, loại bỏ "tỉnh", "thành phố")
+  const normalizeProvinceName = (name) => {
+    return name.toLowerCase()
+      .trim()
+      .replace(/^(tỉnh|thành phố|tp\.?)\s+/i, '') // Loại bỏ "Tỉnh", "Thành phố", "TP."
+      .replace(/\s+/g, ' '); // Chuẩn hóa khoảng trắng
+  };
+  
+  const from = normalizeProvinceName(fromProvince);
+  const to = normalizeProvinceName(toProvince);
+  
+  let daysToAdd = 3; // Default: 3 ngày
+  
+  // ============================================
+  // 1. CÙNG TỈNH: So sánh tên tỉnh đã chuẩn hóa
+  // ============================================
+  if (from === to) {
+    daysToAdd = 1; // ✅ Cùng tỉnh: 1 ngày
+  } else {
+    // ============================================
+    // 2. XÁC ĐỊNH VÙNG: Bắc, Trung, hoặc Nam
+    // ============================================
+    const fromRegion = getProvinceRegion(fromProvince);
+    const toRegion = getProvinceRegion(toProvince);
+    
+    if (!fromRegion || !toRegion) {
+      daysToAdd = 3; // Default nếu không xác định được vùng
+    } else if (fromRegion === toRegion) {
+      // ============================================
+      // 3. CÙNG VÙNG: Cùng vùng Bắc, Trung, hoặc Nam
+      // ============================================
+      daysToAdd = 2; // ✅ Cùng vùng: 2 ngày
+    } else if (
+      // ============================================
+      // 4. VÙNG LÂN CẬN: Bắc ↔ Trung hoặc Trung ↔ Nam
+      // ============================================
+      (fromRegion === 'Bắc' && toRegion === 'Trung') ||
+      (fromRegion === 'Trung' && toRegion === 'Bắc') ||
+      (fromRegion === 'Trung' && toRegion === 'Nam') ||
+      (fromRegion === 'Nam' && toRegion === 'Trung')
+    ) {
+      daysToAdd = 3; // ✅ Vùng lân cận: 3 ngày
+    } else if (
+      // ============================================
+      // 5. VÙNG XA: Bắc ↔ Nam (bỏ qua Trung)
+      // ============================================
+      (fromRegion === 'Bắc' && toRegion === 'Nam') ||
+      (fromRegion === 'Nam' && toRegion === 'Bắc')
+    ) {
+      daysToAdd = 5; // ✅ Vùng xa: 5 ngày
+    }
+  }
+  
+  // Tính ngày giao dự kiến
+  const expectedDate = new Date(startDate);
+  expectedDate.setDate(expectedDate.getDate() + daysToAdd);
+  
+  return expectedDate;
+};
+
 export default {
   getAllDivisions,
   getProvinces,
@@ -334,5 +413,6 @@ export default {
   getProvinceByCode,
   getProvinceRegion,
   calculateShippingFee,
+  calculateExpectedDeliveryDate,
 };
 

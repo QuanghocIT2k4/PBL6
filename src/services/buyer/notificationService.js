@@ -1,4 +1,5 @@
 import api from '../common/api';
+import { getOrderCode } from '../../utils/displayCodeUtils';
 
 /**
  * BUYER NOTIFICATION SERVICE
@@ -181,4 +182,49 @@ export const getNotificationColor = (type) => {
   };
   
   return colors[type] || colors.DEFAULT;
+};
+
+/**
+ * Format số tiền trong message notification
+ * VD: "2.05E+7 VNĐ" → "20,500,000 VNĐ"
+ */
+const formatMoneyInMessage = (message) => {
+  if (!message) return message;
+  
+  const moneyRegex = /(\d+\.?\d*(?:E[+-]?\d+)?)\s*(VNĐ|VND|đ)/gi;
+  
+  return message.replace(moneyRegex, (match, number, currency) => {
+    try {
+      const parsedNumber = parseFloat(number);
+      if (isNaN(parsedNumber)) return match;
+      const formattedNumber = new Intl.NumberFormat('vi-VN').format(Math.round(parsedNumber));
+      return `${formattedNumber} ${currency}`;
+    } catch (e) {
+      return match;
+    }
+  });
+};
+
+/**
+ * Thay thế order ID trong message bằng mã hiển thị
+ * VD: "#6946aa94d8883c759b13a779" → "#DH1234"
+ */
+const replaceOrderIdInMessage = (message) => {
+  if (!message) return message;
+  
+  const orderIdRegex = /#?([0-9a-f]{24}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi;
+  
+  return message.replace(orderIdRegex, (match, orderId) => {
+    const hasHash = match.startsWith('#');
+    const displayCode = getOrderCode(orderId);
+    return hasHash ? `#${displayCode}` : displayCode;
+  });
+};
+
+/**
+ * Format notification message (format money + replace order ID)
+ */
+export const formatNotificationMessage = (message) => {
+  if (!message) return message;
+  return replaceOrderIdInMessage(formatMoneyInMessage(message));
 };

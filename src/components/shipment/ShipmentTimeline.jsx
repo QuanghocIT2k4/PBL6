@@ -183,19 +183,6 @@ const ShipmentTimeline = ({ shipment }) => {
         </div>
       )}
 
-      {shipment.status === 'DELIVERED' && (
-        <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-          <div className="flex items-start">
-            <span className="text-2xl mr-3">🎉</span>
-            <div>
-              <h4 className="text-sm font-medium text-green-900">Giao hàng thành công</h4>
-              <p className="text-sm text-green-700 mt-1">
-                Đơn hàng đã được giao đến khách hàng
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

@@ -226,7 +226,7 @@ const ShipmentCard = ({ orderId, storeId }) => {
           <div className="flex items-start">
             <span className="text-sm text-gray-500 w-32">Địa chỉ giao:</span>
             <span className="text-sm text-gray-900">
-              {formatAddress(shipment.address)}
+              {formatAddress(shipment.toAddress || shipment.address)}
             </span>
           </div>
 
@@ -312,12 +312,17 @@ const ShipmentCard = ({ orderId, storeId }) => {
             </div>
           )}
         </div>
+      </div>
 
-        {/* Toggle History Button */}
-        {shipment.history && shipment.history.length > 0 && (
+      {/* Timeline - Hiển thị luôn */}
+      <ShipmentTimeline shipment={shipment} />
+      
+      {/* Toggle History Button - Đặt sau timeline */}
+      {shipment.history && shipment.history.length > 0 && (
+        <div className="bg-white rounded-lg shadow-sm p-6">
           <button
             onClick={() => setShowHistory(!showHistory)}
-            className="mt-2 w-full py-2 px-4 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+            className="w-full py-2 px-4 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
           >
             {showHistory ? (
               <>
@@ -335,11 +340,8 @@ const ShipmentCard = ({ orderId, storeId }) => {
               </>
             )}
           </button>
-        )}
-      </div>
-
-      {/* Timeline - Hiển thị luôn */}
-      <ShipmentTimeline shipment={shipment} />
+        </div>
+      )}
       
       {/* History Section */}
       {showHistory && shipment.history && shipment.history.length > 0 && (
@@ -357,7 +359,9 @@ const ShipmentCard = ({ orderId, storeId }) => {
                     const match = line.match(/^(.+?):\s(.+)$/);
                     if (match) {
                       const timestampPart = match[1];
-                      const message = match[2];
+                      let message = match[2];
+                      // Loại bỏ các status code tiếng Anh trong ngoặc đơn như (READY_TO_PICK), (SHIPPING), (DELIVERED), etc.
+                      message = message.replace(/\s*\([A-Z_]+\)\s*$/g, '').trim();
                       let date = null;
                       try {
                         const d = new Date(timestampPart);
@@ -380,10 +384,12 @@ const ShipmentCard = ({ orderId, storeId }) => {
                         message,
                       };
                     }
+                    // Nếu không match format, vẫn loại bỏ status code nếu có
+                    let cleanMessage = line.replace(/\s*\([A-Z_]+\)\s*$/g, '').trim();
                     return {
                       raw: line,
                       timestamp: null,
-                      message: line,
+                      message: cleanMessage || line,
                     };
                   })
                 : rawHistory.map((h) => ({

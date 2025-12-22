@@ -92,6 +92,26 @@ const BuyerDisputeDetailPage = () => {
 
     const disputeType = detectDisputeType(dispute);
 
+    // ✅ Xử lý PARTIAL_REFUND: Hiển thị số tiền
+    if (decision === 'PARTIAL_REFUND') {
+      let amount = null;
+      // Ưu tiên lấy từ dispute.partialRefundAmount
+      amount = dispute.partialRefundAmount;
+      // Nếu không có, lấy từ returnRequest.partialRefundToBuyer
+      if (!amount && dispute.returnRequest?.partialRefundToBuyer) {
+        amount = dispute.returnRequest.partialRefundToBuyer;
+      }
+      
+      if (amount && typeof amount === 'number' && amount > 0) {
+        const formattedAmount = new Intl.NumberFormat('vi-VN', {
+          style: 'currency',
+          currency: 'VND'
+        }).format(amount);
+        return `Hoàn trả 1 phần (${formattedAmount})`;
+      }
+      return 'Hoàn trả 1 phần';
+    }
+
     // Phân biệt theo loại khiếu nại
     if (disputeType === 'RETURN_QUALITY') {
       // Store khiếu nại chất lượng hàng trả

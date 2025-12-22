@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import useSWR from 'swr';
 import { getAdminDisputeDetail, addAdminDisputeMessage, resolveDispute, resolveQualityDispute } from '../../services/admin/disputeService';
+import { getAdminOrderById } from '../../services/admin/adminOrderService';
+import { incrementStoreWarning } from '../../services/admin/adminStoreService';
 import { useToast } from '../../context/ToastContext';
 import { confirmAction } from '../../utils/sweetalert';
 
@@ -21,6 +23,22 @@ const AdminDisputeDetailPage = () => {
   const chatSectionRef = useRef(null);
   const [previewAttachment, setPreviewAttachment] = useState(null); // { url, type }
 
+  // ✅ Helper: Format số với dấu chấm (100000 -> 100.000)
+  const formatNumberWithDots = (value) => {
+    if (!value) return '';
+    // Loại bỏ tất cả ký tự không phải số
+    const numericValue = value.toString().replace(/[^\d]/g, '');
+    if (!numericValue) return '';
+    // Format với dấu chấm
+    return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+
+  // ✅ Helper: Parse số từ format có dấu chấm (100.000 -> 100000)
+  const parseFormattedNumber = (value) => {
+    if (!value) return '';
+    return value.toString().replace(/\./g, '');
+  };
+
   const { data, error, isLoading, mutate } = useSWR(
     ['admin-dispute-detail', disputeId],
     () => getAdminDisputeDetail(disputeId),
@@ -32,6 +50,29 @@ const AdminDisputeDetailPage = () => {
   );
 
   const dispute = data?.success ? data.data : null;
+  
+  // ✅ Lấy orderId từ dispute - dispute có orderId trực tiếp
+  const orderId = dispute?.orderId || 
+                  dispute?.returnRequest?.order?.id || 
+                  dispute?.returnRequest?.order?._id || 
+                  dispute?.returnRequest?.orderId ||
+                  dispute?.returnRequest?.order ||
+                  dispute?.order?.id ||
+                  dispute?.order?._id ||
+                  dispute?.order;
+  
+  // ✅ Gọi API lấy chi tiết đơn hàng nếu có orderId
+  // ⚠️ LƯU Ý: API này có thể chưa được implement ở backend (xem BACKEND_ISSUES.md)
+  const { data: orderData, error: orderError } = useSWR(
+    orderId ? ['admin-order-detail', orderId] : null,
+    () => getAdminOrderById(orderId),
+    { 
+      revalidateOnFocus: false,
+      shouldRetryOnError: false // Không retry nếu API không tồn tại
+    }
+  );
+  
+  const orderDetail = orderData?.success ? orderData.data : null;
 
   const getStatusBadge = (status) => {
     const badges = {
@@ -61,17 +102,39 @@ const AdminDisputeDetailPage = () => {
     return labels[type] || type;
   };
 
-  const getDecisionLabel = (decision, disputeType) => {
+  const getDecisionLabel = (decision, disputeType, dispute = null) => {
     if (!decision) return '';
+    
+    // ✅ Xử lý PARTIAL_REFUND: Hiển thị số tiền
+    if (decision === 'PARTIAL_REFUND') {
+      let amount = null;
+      if (dispute) {
+        // Ưu tiên lấy từ dispute.partialRefundAmount
+        amount = dispute.partialRefundAmount;
+        // Nếu không có, lấy từ returnRequest.partialRefundToBuyer
+        if (!amount && dispute.returnRequest?.partialRefundToBuyer) {
+          amount = dispute.returnRequest.partialRefundToBuyer;
+        }
+      }
+      
+      if (amount && typeof amount === 'number' && amount > 0) {
+        const formattedAmount = new Intl.NumberFormat('vi-VN', {
+          style: 'currency',
+          currency: 'VND'
+        }).format(amount);
+        return `Hoàn trả 1 phần (${formattedAmount})`;
+      }
+      return 'Hoàn trả 1 phần';
+    }
     
     // Phân biệt theo loại khiếu nại để hiển thị đúng
     if (disputeType === 'RETURN_QUALITY') {
       // Store khiếu nại chất lượng hàng trả
       if (decision === 'APPROVE_STORE') {
-        return 'Khiếu nại thành công (hàng trả về không đạt)';
+        return 'Chấp nhận khiếu nại của store (không hoàn tiền)';
       }
       if (decision === 'REJECT_STORE') {
-        return 'Khiếu nại thất bại (hàng trả về đạt)';
+        return 'Từ chối khiếu nại của store (hàng trả về đạt)';
       }
     } else {
       // RETURN_REJECTION: Người mua khiếu nại từ chối trả hàng
@@ -183,11 +246,43 @@ const AdminDisputeDetailPage = () => {
 
     // Validate số tiền hoàn một phần (nếu chọn PARTIAL_REFUND)
     if (decision === 'PARTIAL_REFUND') {
-      const amount = Number(partialRefundAmount);
-      if (!partialRefundAmount || Number.isNaN(amount) || amount <= 0) {
+      // ✅ Parse số từ format có dấu chấm
+      const amountStr = parseFormattedNumber(partialRefundAmount);
+      const amount = Number(amountStr);
+      
+      if (!partialRefundAmount || !amountStr || Number.isNaN(amount) || amount <= 0) {
         showError('Vui lòng nhập số tiền hoàn một phần hợp lệ (> 0)');
         return;
       }
+
+      // ✅ VALIDATION: Số tiền hoàn một phần phải NHỎ HƠN tổng tiền gốc sản phẩm - giảm giá của shop - hoa hồng của sàn
+      // Công thức: maxRefundAmount = productPrice - storeDiscountAmount - platformCommission
+      // ⚠️ LƯU Ý: Phí ship người mua chịu, KHÔNG được hoàn
+      // ✅ Ưu tiên dùng orderDetail từ API, fallback về order từ dispute
+      const order = orderDetail || dispute?.returnRequest?.order;
+      
+      if (order) {
+        const productPrice = parseFloat(order.productPrice || order.totalPrice || 0);
+        const storeDiscountAmount = parseFloat(order.storeDiscountAmount || 0);
+        const platformCommission = parseFloat(order.platformCommission || order.serviceFee || 0);
+        
+        // ✅ Số tiền tối đa có thể hoàn = Tổng tiền gốc sản phẩm - Giảm giá của shop - Hoa hồng của sàn
+        // Phí ship người mua chịu, không được hoàn
+        const maxRefundAmount = productPrice - storeDiscountAmount - platformCommission;
+        
+        // ✅ Validation: Số tiền hoàn một phần phải NHỎ HƠN (không bằng) maxRefundAmount
+        if (amount >= maxRefundAmount) {
+          showError(
+            `Số tiền hoàn một phần (${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)}) ` +
+            `phải NHỎ HƠN số tiền tối đa có thể hoàn ` +
+            `(${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(maxRefundAmount)}). ` +
+            `Công thức: Tổng tiền sản phẩm - Giảm giá shop - Hoa hồng sàn. ` +
+            `Lưu ý: Phí ship người mua chịu, không được hoàn.`
+          );
+          return;
+        }
+      }
+      // Nếu không có order data, vẫn cho phép submit (backend sẽ validate)
     }
 
     const confirmed = await confirmAction('giải quyết khiếu nại này');
@@ -203,27 +298,37 @@ const AdminDisputeDetailPage = () => {
       let result;
       const decisionIsStore = decision === 'APPROVE_STORE' || decision === 'REJECT_STORE';
       const decisionIsReturn = decision === 'APPROVE_RETURN' || decision === 'REJECT_RETURN';
+      const decisionIsPartialRefund = decision === 'PARTIAL_REFUND';
 
       // Chặn sai quyết định theo loại khiếu nại
       if (detectDisputeType(dispute) === 'RETURN_QUALITY' && decisionIsReturn) {
-        showError('Đây là khiếu nại chất lượng hàng trả. Vui lòng chọn quyết định phù hợp (Chấp nhận/Từ chối hàng trả về).');
+        showError('Đây là khiếu nại chất lượng hàng trả. Vui lòng chọn quyết định phù hợp (Chấp nhận/Từ chối hàng trả về/Hoàn tiền một phần).');
         setIsResolving(false);
         return;
       }
-      if (detectDisputeType(dispute) === 'RETURN_REJECTION' && decisionIsStore) {
+      if (detectDisputeType(dispute) === 'RETURN_REJECTION' && (decisionIsStore || decisionIsPartialRefund)) {
         showError('Đây là khiếu nại từ chối trả hàng. Vui lòng chọn quyết định phù hợp (Chấp nhận/Từ chối trả hàng).');
         setIsResolving(false);
         return;
       }
 
-      if (decisionIsStore || decision === 'PARTIAL_REFUND') {
-        // Khiếu nại chất lượng hàng trả (store khởi tạo) + hoàn tiền 1 phần
+      if (decisionIsStore || decisionIsPartialRefund) {
+        // Khiếu nại chất lượng hàng trả (store khởi tạo)
         const payload = {
-          decision,
+          decision: decision,
           reason: adminNote,
         };
+        
+        // ⚠️ LOGIC CẢNH BÁO: Kiểm tra có return request không
+        // Nếu store thắng (APPROVE_STORE) và có return request → Cần cộng cảnh báo
+        const hasReturnRequest = dispute?.returnRequest || dispute?.returnRequestId;
+        if (decision === 'APPROVE_STORE' && hasReturnRequest) {
+          payload.hasReturnRequest = true; // Gửi flag để backend biết cần cộng cảnh báo
+        }
+        
         if (decision === 'PARTIAL_REFUND') {
-          payload.partialRefundAmount = Number(partialRefundAmount);
+          // ✅ Parse số từ format có dấu chấm trước khi gửi
+          payload.partialRefundAmount = Number(parseFormattedNumber(partialRefundAmount));
         }
         result = await resolveQualityDispute(disputeId, payload);
       } else if (decisionIsReturn) {
@@ -241,6 +346,35 @@ const AdminDisputeDetailPage = () => {
         const disputeType = detectDisputeType(dispute);
         const decisionLabel = getDecisionLabel(decision, disputeType);
         showSuccess(`Đã giải quyết khiếu nại: ${decisionLabel}`);
+        
+        // ⚠️ LOGIC CẢNH BÁO STORE: Nếu store thắng nhưng có return request → Cộng cảnh báo
+        if (decision === 'APPROVE_STORE' && dispute?.returnRequest) {
+          // Có return request → Store đã giao hàng lỗi → Cần cộng 1 cảnh báo
+          const storeId = dispute?.store?.id || dispute?.store?._id || dispute?.storeId;
+          if (storeId) {
+            try {
+              // Gọi API để cộng cảnh báo cho store
+              const warningResult = await incrementStoreWarning(storeId, 
+                `Giao hàng lỗi (có return request) dù thắng khiếu nại chất lượng đơn #${disputeId?.substring(0, 8)}`
+              );
+              
+              if (warningResult.success) {
+                setTimeout(() => {
+                  showSuccess(`⚠️ Đã cộng 1 cảnh báo cho store vì đã giao hàng lỗi (có return request).`);
+                }, 1500);
+              } else {
+                // Nếu API chưa tồn tại, backend sẽ tự động xử lý
+                setTimeout(() => {
+                  showSuccess(`⚠️ Lưu ý: Store đã giao hàng lỗi (có return request) nên sẽ bị cộng 1 cảnh báo (backend tự động xử lý).`);
+                }, 1500);
+              }
+            } catch (err) {
+              console.error('Error incrementing store warning:', err);
+              // Backend sẽ tự động xử lý
+            }
+          }
+        }
+        
         setShowResolveModal(false);
         mutate();
         
@@ -366,12 +500,103 @@ const AdminDisputeDetailPage = () => {
           )}
         </div>
 
+        {/* ✅ Chi tiết đơn hàng - Hiển thị để admin biết số tiền tối đa có thể hoàn */}
+        {/* ✅ Ưu tiên dùng orderDetail từ API, fallback về order từ dispute */}
+        {(() => {
+          // Ưu tiên dùng orderDetail từ API (đầy đủ hơn), fallback về order từ dispute
+          const order = orderDetail || dispute?.returnRequest?.order;
+          
+          if (!order) {
+            // Không hiển thị gì nếu không có order data (xem BACKEND_ISSUES.md)
+            return null;
+          }
+          
+          const productPrice = parseFloat(order.productPrice || order.totalPrice || 0);
+          const storeDiscountAmount = parseFloat(order.storeDiscountAmount || 0);
+          const platformCommission = parseFloat(order.platformCommission || order.serviceFee || 0);
+          const shippingFee = parseFloat(order.shippingFee || 0);
+          const platformDiscountAmount = parseFloat(order.platformDiscountAmount || 0);
+          
+          // ✅ Số tiền tối đa có thể hoàn = Tổng tiền gốc sản phẩm - Giảm giá của shop - Hoa hồng của sàn
+          // Công thức: maxRefundAmount = productPrice - storeDiscountAmount - platformCommission
+          // ⚠️ LƯU Ý: Phí ship người mua chịu, KHÔNG được hoàn
+          const maxRefundAmount = productPrice - storeDiscountAmount - platformCommission;
+          
+          // ✅ Lấy orderId từ order object (không conflict với orderId ở scope ngoài)
+          const currentOrderId = order.id || order._id || order.orderId;
+          const orderCode = currentOrderId ? String(currentOrderId).substring(0, 8).toUpperCase() : 'N/A';
+          
+          return (
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-blue-900">💰 Chi tiết đơn hàng</h3>
+                  {currentOrderId && (
+                    <p className="text-xs text-gray-600 mt-1">
+                      Mã đơn hàng: <span className="font-mono font-semibold">{orderCode}</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="text-gray-600">Tổng tiền sản phẩm:</span>
+                  <span className="ml-2 font-semibold text-gray-900">
+                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(productPrice)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Giảm giá của shop:</span>
+                  <span className="ml-2 font-semibold text-red-600">
+                    -{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(storeDiscountAmount)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Hoa hồng của sàn:</span>
+                  <span className="ml-2 font-semibold text-orange-600">
+                    -{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(platformCommission)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Phí ship:</span>
+                  <span className="ml-2 font-semibold text-gray-700">
+                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(shippingFee)}
+                    <span className="text-xs text-gray-500 ml-1">(Người mua chịu)</span>
+                  </span>
+                </div>
+                {platformDiscountAmount > 0 && (
+                  <div className="col-span-2">
+                    <span className="text-gray-600">Giảm giá sàn:</span>
+                    <span className="ml-2 font-semibold text-purple-600">
+                      -{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(platformDiscountAmount)}
+                    </span>
+                  </div>
+                )}
+                <div className="col-span-2 pt-2 border-t border-blue-300">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600 font-medium">Số tiền tối đa có thể hoàn một phần:</span>
+                    <span className="text-lg font-bold text-blue-700">
+                      {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(maxRefundAmount)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    (= Tổng tiền sản phẩm - Giảm giá shop - Hoa hồng sàn)
+                  </p>
+                  <p className="text-xs text-red-600 mt-1 font-medium">
+                    ⚠️ Lưu ý: Phí ship người mua chịu, không được hoàn.
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {dispute.finalDecision && (
           <div className="mt-4 space-y-2">
             <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
               <p className="text-sm text-green-800">
                 <span className="font-medium">Kết quả khiếu nại:</span>{' '}
-                {getDecisionLabel(dispute.finalDecision, detectDisputeType(dispute))}
+                {getDecisionLabel(dispute.finalDecision, detectDisputeType(dispute), dispute)}
               </p>
               {dispute.adminNote && (
                 <p className="text-sm text-green-700 mt-1">{dispute.adminNote}</p>
@@ -562,21 +787,24 @@ const AdminDisputeDetailPage = () => {
                 </label>
                 <select
                   value={decision}
-                  onChange={(e) => setDecision(e.target.value)}
+                  onChange={(e) => {
+                    setDecision(e.target.value);
+                    setPartialRefundAmount(''); // Reset partialRefundAmount khi thay đổi decision
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 >
                   <option value="">Chọn quyết định</option>
                   {(() => {
                     const disputeTypeDetected = detectDisputeType(dispute);
                     if (disputeTypeDetected === 'RETURN_QUALITY') {
-                      // Khiếu nại chất lượng hàng trả (Store khởi tạo) – có thêm option hoàn tiền 1 phần
+                      // Khiếu nại chất lượng hàng trả (Store khởi tạo) – có 3 options theo backend
                       return (
                         <>
                           <option value="APPROVE_STORE">
-                            Khiếu nại thành công (hàng trả về không đạt)
+                            Chấp nhận khiếu nại của store (hàng trả về không đạt)
                           </option>
                           <option value="REJECT_STORE">
-                            Khiếu nại thất bại (hàng trả về đạt)
+                            Từ chối khiếu nại của store (hàng trả về đạt)
                           </option>
                           <option value="PARTIAL_REFUND">
                             Hoàn tiền một phần cho người mua
@@ -609,17 +837,61 @@ const AdminDisputeDetailPage = () => {
                     Số tiền hoàn một phần cho người mua (VND)
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     id="partialRefundAmount"
-                    min={0}
-                    value={partialRefundAmount}
-                    onChange={(e) => setPartialRefundAmount(e.target.value)}
+                    value={formatNumberWithDots(partialRefundAmount)}
+                    onChange={(e) => {
+                      // ✅ Parse và format lại với dấu chấm
+                      const parsed = parseFormattedNumber(e.target.value);
+                      setPartialRefundAmount(parsed);
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Nhập số tiền hoàn một phần"
+                    placeholder="Nhập số tiền hoàn một phần (VD: 1.000.000)"
                   />
-                  <p className="mt-1 text-xs text-gray-500">
-                    Số tiền này sẽ được hoàn lại cho người mua và ghi nhận vào Return Request.
-                  </p>
+                  {(() => {
+                    // ✅ Ưu tiên dùng orderDetail từ API, fallback về order từ dispute
+                    const order = orderDetail || dispute?.returnRequest?.order;
+                    
+                    if (!order) return null;
+                    
+                    const productPrice = parseFloat(order.productPrice || order.totalPrice || 0);
+                    const storeDiscountAmount = parseFloat(order.storeDiscountAmount || 0);
+                    const platformCommission = parseFloat(order.platformCommission || order.serviceFee || 0);
+                    
+                    // ✅ Số tiền tối đa có thể hoàn = Tổng tiền gốc sản phẩm - Giảm giá của shop - Hoa hồng của sàn
+                    // Công thức: maxRefundAmount = productPrice - storeDiscountAmount - platformCommission
+                    // ⚠️ LƯU Ý: Phí ship người mua chịu, KHÔNG được hoàn
+                    const maxRefundAmount = productPrice - storeDiscountAmount - platformCommission;
+                    
+                    // ✅ Parse số tiền đã nhập để so sánh
+                    const enteredAmount = Number(parseFormattedNumber(partialRefundAmount));
+                    
+                    return (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-xs text-gray-500">
+                          <span className="font-semibold">Lưu ý:</span> Phí ship người mua chịu, không được hoàn.
+                        </p>
+                        <p className="text-xs text-blue-600">
+                          <span className="font-semibold">Số tiền tối đa có thể hoàn:</span>{' '}
+                          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(maxRefundAmount)}
+                          {' '}(= Tổng tiền gốc sản phẩm - Giảm giá shop - Hoa hồng sàn)
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          <span className="font-semibold">Công thức:</span> Số tiền hoàn một phần phải <strong>NHỎ HƠN</strong> số tiền tối đa trên.
+                        </p>
+                        {partialRefundAmount && enteredAmount >= maxRefundAmount && (
+                          <p className="text-xs text-red-600 font-semibold">
+                            ⚠️ Số tiền nhập phải NHỎ HƠN số tiền tối đa cho phép!
+                          </p>
+                        )}
+                        {partialRefundAmount && enteredAmount <= 0 && (
+                          <p className="text-xs text-red-600 font-semibold">
+                            ⚠️ Số tiền hoàn một phần phải lớn hơn 0!
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
               <div>
@@ -638,7 +910,39 @@ const AdminDisputeDetailPage = () => {
               <div className="flex gap-3">
                 <button
                   onClick={handleResolve}
-                  disabled={!decision || !adminNote?.trim() || isResolving}
+                  disabled={(() => {
+                    // Disable nếu thiếu decision hoặc adminNote
+                    if (!decision || !adminNote?.trim() || isResolving) return true;
+                    
+                    // Nếu là PARTIAL_REFUND, kiểm tra số tiền hợp lệ
+                    if (decision === 'PARTIAL_REFUND') {
+                      // Kiểm tra số tiền đã nhập chưa
+                      const amountStr = parseFormattedNumber(partialRefundAmount);
+                      const amount = Number(amountStr);
+                      
+                      // Nếu chưa nhập số tiền hoặc số tiền không hợp lệ cơ bản
+                      if (!partialRefundAmount || !amountStr || Number.isNaN(amount) || amount <= 0) {
+                        return true; // Số tiền không hợp lệ
+                      }
+                      
+                      // Kiểm tra giới hạn nếu có order data
+                      const order = orderDetail || dispute?.returnRequest?.order;
+                      if (order) {
+                        const productPrice = parseFloat(order.productPrice || order.totalPrice || 0);
+                        const storeDiscountAmount = parseFloat(order.storeDiscountAmount || 0);
+                        const platformCommission = parseFloat(order.platformCommission || order.serviceFee || 0);
+                        const maxRefundAmount = productPrice - storeDiscountAmount - platformCommission;
+                        
+                        // Số tiền phải NHỎ HƠN maxRefundAmount
+                        if (amount >= maxRefundAmount) {
+                          return true; // Vượt quá giới hạn
+                        }
+                      }
+                      // Nếu không có order data, vẫn cho phép submit (backend sẽ validate)
+                    }
+                    
+                    return false; // Cho phép submit
+                  })()}
                   className="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition disabled:opacity-50"
                 >
                   {isResolving ? 'Đang xử lý...' : 'Xác nhận'}

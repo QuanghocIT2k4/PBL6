@@ -101,16 +101,25 @@ export const getProductVariantReviewStats = async (productVariantId) => {
  */
 export const createReview = async (reviewData) => {
   try {
-    console.log('📝 [ReviewService] Creating review with data:', reviewData);
+    console.log('📝 [ReviewService] ===== CREATE REVIEW START =====');
+    console.log('📝 [ReviewService] Review data received:', reviewData);
+    console.log('📝 [ReviewService] Rating:', reviewData?.rating);
+    console.log('📝 [ReviewService] Comment:', reviewData?.comment);
+    console.log('📝 [ReviewService] ProductVariantId:', reviewData?.productVariantId);
+    console.log('📝 [ReviewService] OrderId:', reviewData?.orderId);
+    console.log('📝 [ReviewService] ImageFiles count:', reviewData?.imageFiles?.length || 0);
 
     // Guard tối thiểu
     if (!reviewData?.rating || reviewData.rating < 1 || reviewData.rating > 5) {
+      console.error('❌ [ReviewService] Invalid rating:', reviewData?.rating);
       return { success: false, error: 'Vui lòng chọn số sao (1-5).' };
     }
     if (!reviewData?.productVariantId) {
+      console.error('❌ [ReviewService] Missing productVariantId');
       return { success: false, error: 'Thiếu productVariantId.' };
     }
     if (!reviewData?.orderId) {
+      console.error('❌ [ReviewService] Missing orderId');
       return { success: false, error: 'Thiếu orderId.' };
     }
     
@@ -125,30 +134,55 @@ export const createReview = async (reviewData) => {
       ...(reviewData.orderId && { orderId: reviewData.orderId }),
     };
     
-    console.log('📝 [ReviewService] Review JSON:', reviewJson);
+    console.log('📝 [ReviewService] Review JSON to send:', JSON.stringify(reviewJson, null, 2));
     
     // ✅ Gửi review như Blob với Content-Type application/json (giống createProductVariant và createStore)
     // Swagger UI hiển thị review là object, nhưng trong multipart/form-data cần gửi như Blob
     const reviewBlob = new Blob([JSON.stringify(reviewJson)], { type: 'application/json' });
     formData.append('review', reviewBlob, 'review.json'); // đặt filename để tránh bị hiểu thành octet-stream
+    console.log('📝 [ReviewService] Review Blob created:', {
+      size: reviewBlob.size,
+      type: reviewBlob.type
+    });
     
     // ✅ Append images nếu có
     if (reviewData.imageFiles && reviewData.imageFiles.length > 0) {
       console.log('📷 [ReviewService] Appending', reviewData.imageFiles.length, 'images');
       reviewData.imageFiles.forEach((file, index) => {
         formData.append('images', file);
-        console.log(`📷 [ReviewService] Image ${index + 1}:`, file.name, file.type, file.size);
+        console.log(`📷 [ReviewService] Image ${index + 1}:`, {
+          name: file.name,
+          type: file.type,
+          size: file.size
+        });
       });
     }
     
     // ✅ Debug: Log FormData contents
     console.log('📦 [ReviewService] FormData entries:');
     for (let pair of formData.entries()) {
-      console.log('  -', pair[0], ':', pair[1] instanceof File ? `File(${pair[1].name})` : pair[1] instanceof Blob ? `Blob(${pair[1].type})` : pair[1]);
+      if (pair[1] instanceof File) {
+        console.log(`  - ${pair[0]}: File(${pair[1].name}, ${pair[1].type}, ${pair[1].size} bytes)`);
+      } else if (pair[1] instanceof Blob) {
+        console.log(`  - ${pair[0]}: Blob(${pair[1].type}, ${pair[1].size} bytes)`);
+      } else {
+        console.log(`  - ${pair[0]}: ${pair[1]}`);
+      }
     }
     
-    // ✅ Không cần set Content-Type, interceptor sẽ tự xử lý FormData
+    console.log('🚀 [ReviewService] Sending POST request to /api/v1/buyer/reviews');
+    console.log('🚀 [ReviewService] Request URL:', '/api/v1/buyer/reviews');
+    console.log('🚀 [ReviewService] FormData ready, sending...');
+    
+    // ✅ Không cần set Content-Type, interceptor sẽ tự xử lý FormData (xóa Content-Type để browser tự set với boundary)
     const response = await api.post('/api/v1/buyer/reviews', formData);
+    
+    console.log('✅ [ReviewService] Response received:', {
+      status: response.status,
+      statusText: response.statusText,
+      data: response.data
+    });
+    console.log('✅ [ReviewService] Response data:', JSON.stringify(response.data, null, 2));
     
     return {
       success: true,
@@ -156,17 +190,26 @@ export const createReview = async (reviewData) => {
       message: 'Đánh giá của bạn đã được gửi thành công!',
     };
   } catch (error) {
-    console.error('❌ Error creating review:', error);
-    console.error('❌ Error response:', error?.response?.data);
-    console.error('❌ Error status:', error?.response?.status);
-    console.error('❌ Error headers:', error?.response?.headers);
+    console.error('❌ [ReviewService] ===== CREATE REVIEW ERROR =====');
+    console.error('❌ [ReviewService] Error object:', error);
+    console.error('❌ [ReviewService] Error message:', error?.message);
+    console.error('❌ [ReviewService] Error response:', error?.response);
+    console.error('❌ [ReviewService] Error response data:', error?.response?.data);
+    console.error('❌ [ReviewService] Error response status:', error?.response?.status);
+    console.error('❌ [ReviewService] Error response statusText:', error?.response?.statusText);
+    console.error('❌ [ReviewService] Error response headers:', error?.response?.headers);
+    console.error('❌ [ReviewService] Full error response:', JSON.stringify(error?.response?.data, null, 2));
     
     // Extract error message from API response
     const errorMessage = error?.response?.data?.error || 
                          error?.response?.data?.message || 
                          error?.response?.data?.detail ||
+                         error?.response?.data?.title ||
                          error?.message || 
                          'Không thể gửi đánh giá. Vui lòng kiểm tra lại thông tin.';
+    
+    console.error('❌ [ReviewService] Extracted error message:', errorMessage);
+    
     return {
       success: false,
       error: errorMessage,

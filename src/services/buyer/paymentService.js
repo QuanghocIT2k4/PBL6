@@ -36,12 +36,19 @@ import api from '../common/api';
  */
 export const createPaymentUrl = async (paymentData) => {
   try {
-    const response = await api.post('/api/v1/buyer/payments/create_payment_url', {
+    const requestBody = {
       amount: paymentData.amount,
       orderInfo: paymentData.orderInfo || `Order #${Date.now()}`, // Order information
       bankCode: paymentData.bankCode || '', // Optional
       language: paymentData.language || 'vn', // Default Vietnamese
-    });
+    };
+    
+    // ✅ Nếu có orderIds (nhiều đơn hàng), có thể truyền vào để backend liên kết
+    if (paymentData.orderIds && Array.isArray(paymentData.orderIds) && paymentData.orderIds.length > 0) {
+      requestBody.orderIds = paymentData.orderIds;
+    }
+    
+    const response = await api.post('/api/v1/buyer/payments/create_payment_url', requestBody);
     
     // Parse response - backend có thể trả về nhiều format
     let paymentUrl = null;

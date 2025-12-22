@@ -35,6 +35,38 @@ const OrderList = () => {
   const orders = ordersData?.success ? (ordersData.data?.content || ordersData.data || []) : [];
   const totalPages = ordersData?.data?.page?.totalPages || ordersData?.data?.totalPages || 1;
   const totalOrders = ordersData?.data?.page?.totalElements || ordersData?.data?.totalElements || orders.length;
+  
+  // ✅ DEBUG: Log đơn hàng gần nhất (đơn hàng đầu tiên)
+  if (orders.length > 0) {
+    const latestOrder = orders[0];
+    console.log('🔍 [OrderList] ===== ĐƠN HÀNG GẦN NHẤT =====');
+    console.log('🔍 [OrderList] Order ID:', latestOrder.id || latestOrder._id);
+    console.log('🔍 [OrderList] Full Order Object:', latestOrder);
+    console.log('🔍 [OrderList] Order Keys:', Object.keys(latestOrder));
+    console.log('🔍 [OrderList] platformDiscountAmount:', latestOrder.platformDiscountAmount);
+    console.log('🔍 [OrderList] storeDiscountAmount:', latestOrder.storeDiscountAmount);
+    console.log('🔍 [OrderList] totalDiscountAmount:', latestOrder.totalDiscountAmount);
+    console.log('🔍 [OrderList] promotions:', latestOrder.promotions);
+    console.log('🔍 [OrderList] promotions type:', typeof latestOrder.promotions);
+    console.log('🔍 [OrderList] promotions isArray:', Array.isArray(latestOrder.promotions));
+    if (latestOrder.promotions && Array.isArray(latestOrder.promotions)) {
+      latestOrder.promotions.forEach((promo, index) => {
+        console.log(`🔍 [OrderList] Promotion ${index}:`, promo);
+        console.log(`🔍 [OrderList] Promotion ${index} type:`, typeof promo);
+        if (promo && typeof promo === 'object') {
+          console.log(`🔍 [OrderList] Promotion ${index} keys:`, Object.keys(promo));
+          console.log(`🔍 [OrderList] Promotion ${index} $id:`, promo.$id);
+          console.log(`🔍 [OrderList] Promotion ${index} _id:`, promo._id);
+          console.log(`🔍 [OrderList] Promotion ${index} issuer:`, promo.issuer);
+          console.log(`🔍 [OrderList] Promotion ${index} code:`, promo.code);
+        }
+      });
+    }
+    console.log('🔍 [OrderList] platformPromotions:', latestOrder.platformPromotions);
+    console.log('🔍 [OrderList] promotionCode:', latestOrder.promotionCode);
+    console.log('🔍 [OrderList] appliedPromotion:', latestOrder.appliedPromotion);
+    console.log('🔍 [OrderList] ====================================');
+  }
 
   // Handle cancel order
   const handleCancel = async (order) => {

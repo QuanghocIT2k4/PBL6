@@ -64,6 +64,11 @@ const StoreProductVariants = () => {
     if (status) {
       const statusUpper = String(status).toUpperCase().trim();
       
+      // INACTIVE / DELETED - Variant đã bị xóa (soft delete)
+      if (statusUpper === 'INACTIVE' || statusUpper === 'DELETED' || statusUpper === 'DELETE') {
+        return 'DELETED';
+      }
+      
       // APPROVED
       if (statusUpper === 'APPROVED' || statusUpper === 'APPROVE') {
         return 'APPROVED';
@@ -88,6 +93,16 @@ const StoreProductVariants = () => {
     }
     
     return 'PENDING'; // Variant mới tạo
+  };
+  
+  // ✅ Kiểm tra variant có bị xóa (soft delete) không
+  const isVariantDeleted = (variant) => {
+    const status = variant?.status || variant?.approvalStatus || null;
+    if (status) {
+      const statusUpper = String(status).toUpperCase().trim();
+      return statusUpper === 'INACTIVE' || statusUpper === 'DELETED' || statusUpper === 'DELETE';
+    }
+    return false;
   };
 
   const formatNumber = (value) => {
@@ -155,7 +170,7 @@ const StoreProductVariants = () => {
   const getApprovalBadge = (status) => {
     switch (status) {
       case 'APPROVED':
-        return { label: 'Đã duyệt', className: 'bg-green-100 text-green-800 border-green-200', icon: '✅' };
+        return { label: '', className: 'bg-transparent text-gray-400 border-transparent', icon: '' };
       case 'PENDING':
         return { label: 'Chờ duyệt', className: 'bg-yellow-100 text-yellow-800 border-yellow-200', icon: '⏳' };
       case 'REJECTED':
@@ -165,9 +180,14 @@ const StoreProductVariants = () => {
     }
   };
 
-  // ✅ Filter by search + status
+  // ✅ Filter by search + status (LOẠI BỎ các variant đã bị xóa)
   const filteredVariants = useMemo(() => {
     return variants.filter(variant => {
+      // ✅ LOẠI BỎ variant đã bị soft delete (inactive/deleted)
+      if (isVariantDeleted(variant)) {
+        return false;
+      }
+      
       const searchLower = searchTerm.trim().toLowerCase();
       const matchesSearch = searchLower === '' ||
         variant.productName?.toLowerCase().includes(searchLower) ||
@@ -293,7 +313,8 @@ const StoreProductVariants = () => {
 
       const primaryIdx = Math.min(primaryImageIndex, filesToUpload.length - 1);
 
-      const result = await updateVariantImages(imageModal.variant.id, filesToUpload, primaryIdx);
+      const variantId = imageModal.variant?.id || imageModal.variant?._id;
+      const result = await updateVariantImages(variantId, filesToUpload, primaryIdx);
       if (result.success) {
         toast?.success?.('Cập nhật ảnh thành công');
         closeImageModal();
@@ -334,9 +355,11 @@ const StoreProductVariants = () => {
           stock: selectedColor?.stock ?? selectedColor?.quantity ?? 0,
           imageFile: modal.imageFile || undefined,
         };
-        res = await updateVariantColor(modal.variant.id, colorId, payload);
+        const variantId = modal.variant?.id || modal.variant?._id;
+        res = await updateVariantColor(variantId, colorId, payload);
       } else {
-        res = await updateVariantPrice(modal.variant.id, newPrice);
+        const variantId = modal.variant?.id || modal.variant?._id;
+        res = await updateVariantPrice(variantId, newPrice);
       }
       if (res.success) {
         toast?.success?.('Cập nhật giá thành công');
@@ -363,9 +386,11 @@ const StoreProductVariants = () => {
           stock: newStock,
           imageFile: modal.imageFile || undefined,
         };
-        res = await updateVariantColor(modal.variant.id, colorId, payload);
+        const variantId = modal.variant?.id || modal.variant?._id;
+        res = await updateVariantColor(variantId, colorId, payload);
       } else {
-        res = await updateVariantStock(modal.variant.id, newStock);
+        const variantId = modal.variant?.id || modal.variant?._id;
+        res = await updateVariantStock(variantId, newStock);
       }
       if (res.success) {
         toast?.success?.('Cập nhật tồn kho thành công');
@@ -375,12 +400,31 @@ const StoreProductVariants = () => {
         toast?.error?.(res.error || 'Không thể cập nhật tồn kho');
       }
     } else if (modal.type === 'delete') {
-      const res = await deleteProductVariant(modal.variant.id);
+      // ✅ Lấy variantId từ nhiều nguồn (id, _id)
+      const variantId = modal.variant?.id || modal.variant?._id;
+      
+      if (!variantId) {
+        toast?.error?.('Không tìm thấy ID biến thể để xóa');
+        console.error('❌ [ERROR] Cannot find variant ID:', modal.variant);
+        return;
+      }
+      
+      console.log('🗑️ [DELETE] Deleting variant with ID:', variantId);
+      const res = await deleteProductVariant(variantId);
+      
       if (res.success) {
-        toast?.success?.('Đã xóa biến thể');
+        toast?.success?.('Đã xóa biến thể thành công');
         closeModal();
-        mutate();
+        
+        // ✅ Force refresh cả variants list và variant counts
+        await Promise.all([
+          mutate(), // Refresh variants list
+          mutate(['variant-counts-by-status', currentStore?.id], undefined, { revalidate: true }), // Refresh counts
+        ]);
+        
+        console.log('✅ [DELETE] Variant deleted and list refreshed');
       } else {
+        console.error('❌ [ERROR] Delete failed:', res.error);
         toast?.error?.(res.error || 'Không thể xóa biến thể');
       }
     }
@@ -424,7 +468,7 @@ const StoreProductVariants = () => {
                       <span className="text-lg">✅</span>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Đã duyệt</p>
+                      <p className="text-sm font-medium text-gray-600">Đã phê duyệt</p>
                       <p className="text-xl font-bold text-gray-900">{approvedCount}</p>
                     </div>
                   </div>
@@ -489,7 +533,7 @@ const StoreProductVariants = () => {
                 }`}
               >
                 <span className={`w-2 h-2 rounded-full ${statusFilter === 'APPROVED' ? 'bg-white' : 'bg-green-500'}`}></span>
-                Đã duyệt
+                Đã phê duyệt
               </button>
               <button
                 onClick={() => setStatusFilter('PENDING')}
@@ -548,7 +592,10 @@ const StoreProductVariants = () => {
                   {filteredVariants.map((variant) => (
                     <div
                       key={variant.id}
-                      onClick={() => setDetailModal({ open: true, variant })}
+                      onClick={() => {
+                        // ✅ Navigate đến trang chi tiết biến thể thay vì mở modal
+                        navigate(`/store-dashboard/product-variants/${variant.id}`);
+                      }}
                       className="group relative bg-white rounded-2xl overflow-hidden hover:shadow-2xl transition-all duration-300 flex flex-col border-2 border-gray-100 hover:border-blue-400 cursor-pointer"
                     >
                       {/* Status Badge */}
@@ -642,8 +689,8 @@ const StoreProductVariants = () => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              // Mở modal chi tiết thay vì navigate
-                              setDetailModal({ open: true, variant });
+                              // ✅ Navigate đến trang chi tiết biến thể thay vì mở modal
+                              navigate(`/store-dashboard/product-variants/${variant.id}`);
                             }}
                             className="flex-1 px-2 py-1.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-[10px] font-semibold rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-1"
                             title="Xem chi tiết biến thể"

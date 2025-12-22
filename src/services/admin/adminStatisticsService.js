@@ -327,6 +327,20 @@ export const getRevenueTypeBadge = (revenueType) => {
       textColor: 'text-green-800',
       icon: '💰',
     },
+    PLATFORM_COMMISSION: {
+      text: 'Hoa hồng nền tảng',
+      color: 'green',
+      bgColor: 'bg-green-100',
+      textColor: 'text-green-800',
+      icon: '💰',
+    },
+    SHIPPING_FEE: {
+      text: 'Phí vận chuyển',
+      color: 'purple',
+      bgColor: 'bg-purple-100',
+      textColor: 'text-purple-800',
+      icon: '🚚',
+    },
     PLATFORM_DISCOUNT_LOSS: {
       text: 'Tiền lỗ giảm giá',
       color: 'red',

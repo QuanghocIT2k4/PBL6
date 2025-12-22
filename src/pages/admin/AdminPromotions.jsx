@@ -83,6 +83,22 @@ const AdminPromotions = () => {
     return { label: 'INACTIVE', color: 'from-gray-400 to-gray-500', isExpired: false };
   };
 
+  // ✅ Helper: Format số với dấu chấm (100000 -> 100.000)
+  const formatNumberWithDots = (value) => {
+    if (!value) return '';
+    // Loại bỏ tất cả ký tự không phải số
+    const numericValue = value.toString().replace(/[^\d]/g, '');
+    if (!numericValue) return '';
+    // Format với dấu chấm
+    return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+
+  // ✅ Helper: Parse số từ format có dấu chấm (100.000 -> 100000)
+  const parseFormattedNumber = (value) => {
+    if (!value) return '';
+    return value.toString().replace(/\./g, '');
+  };
+
   // Filter by activeTab (client-side)
   let promotions = allPromotions;
   
@@ -160,25 +176,66 @@ const AdminPromotions = () => {
     }
 
     // Prepare data
+    // ✅ Parse các số tiền từ format có dấu chấm
+    // ✅ API yêu cầu tất cả field đều có giá trị (không undefined)
+    // ⚠️ minOrderValue: Parse giá trị từ input (có thể đã được parse khi onChange)
+    let minOrderValueNum = 0; // ✅ Mặc định là 0
+    
+    // 🔍 DEBUG: Log giá trị trước khi parse
+    console.log('🔍 [AdminPromotions] formData.minOrderValue raw:', formData.minOrderValue);
+    console.log('🔍 [AdminPromotions] formData.minOrderValue type:', typeof formData.minOrderValue);
+    
+    if (formData.minOrderValue) {
+      // formData.minOrderValue có thể đã là số (từ parseFormattedNumber khi onChange)
+      // hoặc vẫn là string có dấu chấm
+      let minOrderValueStr = formData.minOrderValue;
+      
+      // Nếu là string, parse lại để loại bỏ dấu chấm
+      if (typeof minOrderValueStr === 'string') {
+        minOrderValueStr = parseFormattedNumber(minOrderValueStr);
+      }
+      
+      // Convert sang number
+      const parsed = parseInt(minOrderValueStr);
+      if (!isNaN(parsed) && parsed > 0) {
+        minOrderValueNum = parsed;
+      }
+    }
+    
+    // 🔍 DEBUG: Log giá trị sau khi parse
+    console.log('🔍 [AdminPromotions] minOrderValueNum parsed:', minOrderValueNum);
+    
     const payload = {
-      title: formData.title,
-      description: formData.description,
+      title: formData.title || '',
+      description: formData.description || '',
       code: formData.code.toUpperCase(),
       type: formData.type,
       applicableFor: formData.applicableFor,
       discountType: formData.discountType,
-      discountValue: parseInt(formData.discountValue),
+      discountValue: parseInt(parseFormattedNumber(formData.discountValue)) || 0,
       startDate: new Date(formData.startDate).toISOString(),
       endDate: new Date(formData.endDate).toISOString(),
-      minOrderValue: formData.minOrderValue ? parseInt(formData.minOrderValue) : undefined,
-      maxDiscountValue: formData.maxDiscountValue ? parseInt(formData.maxDiscountValue) : undefined,
-      usageLimit: formData.usageLimit ? parseInt(formData.usageLimit) : undefined,
-      usageLimitPerUser: formData.usageLimitPerUser ? parseInt(formData.usageLimitPerUser) : undefined,
-      isNewUserOnly: formData.isNewUserOnly,
-      categoryId: formData.discountType === 'CATEGORY' && formData.categoryId ? formData.categoryId : undefined,
+      minOrderValue: minOrderValueNum, // ✅ LUÔN gửi giá trị (0 hoặc số nhập), KHÔNG BAO GIỜ null
+      minOrderAmount: minOrderValueNum, // ✅ Gửi cả minOrderAmount để đảm bảo backend nhận được (nếu backend dùng tên này)
+      maxDiscountValue: formData.maxDiscountValue ? parseInt(parseFormattedNumber(formData.maxDiscountValue)) : 0,
+      usageLimit: formData.usageLimit ? parseInt(formData.usageLimit) : 0,
+      usageLimitPerUser: formData.usageLimitPerUser ? parseInt(formData.usageLimitPerUser) : 0,
+      isNewUserOnly: formData.isNewUserOnly || false,
+      categoryId: formData.discountType === 'CATEGORY' && formData.categoryId ? formData.categoryId : '',
     };
 
+    // 🔍 DEBUG: Log payload để kiểm tra minOrderValue có được gửi không
+    console.log('🔍 [AdminPromotions] Creating promotion payload:', payload);
+    console.log('🔍 [AdminPromotions] minOrderValue value:', payload.minOrderValue);
+    console.log('🔍 [AdminPromotions] minOrderValue type:', typeof payload.minOrderValue);
+
     const result = await createPlatformPromotion(payload);
+    
+    // 🔍 DEBUG: Log response để kiểm tra backend có trả về minOrderValue không
+    console.log('🔍 [AdminPromotions] Create promotion result:', result);
+    if (result.success && result.data) {
+      console.log('🔍 [AdminPromotions] Created promotion minOrderValue:', result.data.minOrderValue);
+    }
 
     if (result.success) {
       showToast('Tạo khuyến mãi nền tảng thành công! Nhấn "Kích hoạt" để bắt đầu sử dụng.', 'success');
@@ -654,13 +711,18 @@ const AdminPromotions = () => {
                     {formData.type === 'PERCENTAGE' ? 'Phần trăm giảm (%)' : 'Số tiền giảm (₫)'} <span className="text-red-600">*</span>
                   </label>
                   <input
-                    type="number"
-                    value={formData.discountValue}
-                    onChange={(e) => setFormData({...formData, discountValue: e.target.value})}
+                    type={formData.type === 'PERCENTAGE' ? 'number' : 'text'}
+                    value={formData.type === 'PERCENTAGE' ? formData.discountValue : formatNumberWithDots(formData.discountValue)}
+                    onChange={(e) => {
+                      const value = formData.type === 'PERCENTAGE' 
+                        ? e.target.value 
+                        : parseFormattedNumber(e.target.value);
+                      setFormData({...formData, discountValue: value});
+                    }}
                     required
-                    min="1"
+                    min={formData.type === 'PERCENTAGE' ? "1" : undefined}
                     max={formData.type === 'PERCENTAGE' ? 100 : undefined}
-                    placeholder={formData.type === 'PERCENTAGE' ? "VD: 10" : "VD: 50000"}
+                    placeholder={formData.type === 'PERCENTAGE' ? "VD: 10" : "VD: 50.000"}
                     className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -706,11 +768,13 @@ const AdminPromotions = () => {
                     Giảm tối đa (₫)
                   </label>
                   <input
-                    type="number"
-                    value={formData.maxDiscountValue}
-                    onChange={(e) => setFormData({...formData, maxDiscountValue: e.target.value})}
-                    min="0"
-                    placeholder="VD: 200000"
+                    type="text"
+                    value={formatNumberWithDots(formData.maxDiscountValue)}
+                    onChange={(e) => {
+                      const value = parseFormattedNumber(e.target.value);
+                      setFormData({...formData, maxDiscountValue: value});
+                    }}
+                    placeholder="VD: 200.000"
                     className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -723,11 +787,13 @@ const AdminPromotions = () => {
                     Đơn tối thiểu (₫)
                   </label>
                   <input
-                    type="number"
-                    value={formData.minOrderValue}
-                    onChange={(e) => setFormData({...formData, minOrderValue: e.target.value})}
-                    min="0"
-                    placeholder="VD: 100000"
+                    type="text"
+                    value={formatNumberWithDots(formData.minOrderValue)}
+                    onChange={(e) => {
+                      const value = parseFormattedNumber(e.target.value);
+                      setFormData({...formData, minOrderValue: value});
+                    }}
+                    placeholder="VD: 100.000"
                     className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
                   />
                 </div>

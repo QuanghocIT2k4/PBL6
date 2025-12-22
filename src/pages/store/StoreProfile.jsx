@@ -329,19 +329,16 @@ const StoreProfile = () => {
                     <p className="text-gray-600 text-lg">Quản lý thông tin và cài đặt cửa hàng của bạn</p>
                   </div>
                 </div>
-                {currentStore?.status && (
+                {currentStore?.status && currentStore.status !== 'APPROVED' && (
                   <div className={`px-6 py-3 rounded-xl font-semibold text-sm flex items-center gap-2 ${
-                    currentStore.status === 'APPROVED' ? 'bg-green-100 text-green-800 border-2 border-green-300' :
                     currentStore.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800 border-2 border-yellow-300' :
                     'bg-red-100 text-red-800 border-2 border-red-300'
                   }`}>
                     <span className="text-lg">
-                      {currentStore.status === 'APPROVED' ? '✅' :
-                       currentStore.status === 'PENDING' ? '⏳' : '❌'}
+                      {currentStore.status === 'PENDING' ? '⏳' : '❌'}
                     </span>
                     <span>
-                      {currentStore.status === 'APPROVED' ? 'Đã duyệt' :
-                       currentStore.status === 'PENDING' ? 'Chờ duyệt' : 'Đã từ chối'}
+                      {currentStore.status === 'PENDING' ? 'Chờ duyệt' : 'Đã từ chối'}
                     </span>
                   </div>
                 )}

@@ -1,9 +1,16 @@
-import { memo, useState } from 'react';
+import { memo, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import useSWR from 'swr';
+import { getProductVariantById } from '../../services/common/productService';
+import { getOrderById } from '../../services/buyer/orderService';
 
 /**
  * Format time ago without external library
+ * Hiển thị format tương đối: "X phút trước", "X giờ trước", etc.
  */
 const formatTimeAgo = (dateString) => {
+  if (!dateString) return '';
+  
   const now = new Date();
   const past = new Date(dateString);
   const diffMs = now - past;
@@ -11,13 +18,15 @@ const formatTimeAgo = (dateString) => {
   const diffMin = Math.floor(diffSec / 60);
   const diffHour = Math.floor(diffMin / 60);
   const diffDay = Math.floor(diffHour / 24);
+  const diffWeek = Math.floor(diffDay / 7);
   const diffMonth = Math.floor(diffDay / 30);
   const diffYear = Math.floor(diffDay / 365);
 
   if (diffSec < 60) return 'Vừa xong';
   if (diffMin < 60) return `${diffMin} phút trước`;
   if (diffHour < 24) return `${diffHour} giờ trước`;
-  if (diffDay < 30) return `${diffDay} ngày trước`;
+  if (diffDay < 7) return `${diffDay} ngày trước`;
+  if (diffWeek < 4) return `${diffWeek} tuần trước`;
   if (diffMonth < 12) return `${diffMonth} tháng trước`;
   return `${diffYear} năm trước`;
 };
@@ -26,7 +35,8 @@ const formatTimeAgo = (dateString) => {
  * ReviewCard Component
  * Displays a single review with rating, comment, images, and user info
  */
-const ReviewCard = ({ review, onEdit, onDelete, isOwner = false }) => {
+const ReviewCard = ({ review, onEdit, onDelete, isOwner = false, isStoreView = false }) => {
+  const navigate = useNavigate();
   const [showFullComment, setShowFullComment] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
 
@@ -39,7 +49,110 @@ const ReviewCard = ({ review, onEdit, onDelete, isOwner = false }) => {
     updatedAt,
     user = {},
     product = {},
+    productVariant = {},
+    order = {},
   } = review;
+
+  // Lấy ID từ DBRef hoặc object
+  // DBRef format: { $ref: 'collection', $id: 'id' } hoặc string ID
+  const productVariantId = 
+    (typeof productVariant === 'string') ? productVariant :
+    productVariant?.$id || 
+    productVariant?.id || 
+    productVariant?.oid ||
+    review.productVariantId ||
+    review.productVariant;
+  
+  const orderId = 
+    (typeof order === 'string') ? order :
+    order?.$id || 
+    order?.id || 
+    order?.oid ||
+    review.orderId ||
+    review.order;
+
+  // Kiểm tra xem có phải DBRef không (chỉ có ID, không có name/image)
+  const isProductVariantDBRef = productVariantId && !productVariant?.name && !productVariant?.variantName && !productVariant?.images;
+  const isOrderDBRef = orderId && !order?.items && !order?.storeName && !order?.totalAmount;
+
+  // Fetch thông tin chi tiết nếu là DBRef
+  const { data: variantData } = useSWR(
+    isProductVariantDBRef ? ['product-variant', productVariantId] : null,
+    () => getProductVariantById(productVariantId),
+    { revalidateOnFocus: false }
+  );
+
+  // ✅ Store owner không cần và không thể truy cập order details của buyer
+  const { data: orderData } = useSWR(
+    !isStoreView && isOrderDBRef ? ['order-detail', orderId] : null,
+    () => getOrderById(orderId),
+    { 
+      revalidateOnFocus: false,
+      onError: (error) => {
+        // ✅ Chỉ log error nếu không phải 400/404 (order not found)
+        if (error?.response?.status !== 400 && error?.response?.status !== 404) {
+          console.error('Error fetching order:', error);
+        }
+      },
+    }
+  );
+
+  // Merge data từ API với data từ review
+  const finalProductVariant = variantData?.success ? variantData.data : productVariant;
+  const finalOrder = orderData?.success ? orderData.data : order;
+
+  // Lấy ID variant để navigate (ưu tiên từ finalProductVariant, sau đó từ review)
+  const variantIdForNavigation = 
+    finalProductVariant?.id ||
+    finalProductVariant?._id ||
+    productVariantId ||
+    review.productVariantId ||
+    null;
+
+  // Handler để navigate đến trang chi tiết sản phẩm
+  const handleProductClick = () => {
+    if (variantIdForNavigation) {
+      navigate(`/product/${variantIdForNavigation}`);
+    }
+  };
+
+  // Lấy ảnh sản phẩm (ưu tiên variant, sau đó product, sau đó order item)
+  const productImage =
+    finalProductVariant?.images?.[0] ||
+    finalProductVariant?.image ||
+    product?.images?.[0] ||
+    product?.image ||
+    finalProductVariant?.product?.images?.[0] ||
+    finalOrder?.items?.[0]?.image ||
+    finalOrder?.items?.[0]?.productImage ||
+    review.productImage ||
+    null;
+
+  // Lấy tên sản phẩm (ưu tiên variant, sau đó product, sau đó order item)
+  const productName =
+    finalProductVariant?.name ||
+    finalProductVariant?.variantName ||
+    finalProductVariant?.product?.name ||
+    product?.name ||
+    finalOrder?.items?.[0]?.variantName ||
+    finalOrder?.items?.[0]?.productName ||
+    finalOrder?.items?.[0]?.name ||
+    review.productName ||
+    review.productVariantName ||
+    'Sản phẩm';
+
+  // Lấy tên shop (ưu tiên từ review, sau đó product/store, sau đó order)
+  const shopName =
+    review.storeName ||
+    review.shopName ||
+    product?.storeName ||
+    finalProductVariant?.storeName ||
+    finalProductVariant?.store?.name ||
+    product?.store?.name ||
+    finalOrder?.storeName ||
+    finalOrder?.shop?.name ||
+    finalOrder?.store?.name ||
+    'Cửa hàng';
 
   // Chuẩn hóa mảng ảnh từ nhiều định dạng trả về khác nhau
   const normalizedImages =
@@ -82,9 +195,17 @@ const ReviewCard = ({ review, onEdit, onDelete, isOwner = false }) => {
             </div>
 
             <div>
-              <p className="font-semibold text-gray-900">
-                {user.fullName || user.name || user.username || 'Người dùng'}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="font-semibold text-gray-900">
+                  {user.fullName || user.name || user.username || 'Người dùng'}
+                </p>
+                {timeAgo && (
+                  <span className="text-xs text-gray-500">
+                    {timeAgo}
+                    {isEdited && ' (đã chỉnh sửa)'}
+                  </span>
+                )}
+              </div>
               <div className="flex items-center space-x-2">
                 {/* Stars */}
                 <div className="flex items-center">
@@ -102,11 +223,6 @@ const ReviewCard = ({ review, onEdit, onDelete, isOwner = false }) => {
                   ))}
                 </div>
                 
-                <span className="text-sm text-gray-500">•</span>
-                <span className="text-sm text-gray-500">
-                  {timeAgo}
-                  {isEdited && ' (đã chỉnh sửa)'}
-                </span>
               </div>
             </div>
           </div>
@@ -134,16 +250,6 @@ const ReviewCard = ({ review, onEdit, onDelete, isOwner = false }) => {
             </div>
           )}
         </div>
-
-        {/* Product Info (if shown in My Reviews page) */}
-        {product.name && (
-          <div className="mb-3 flex items-center space-x-2 text-sm text-gray-600">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-            </svg>
-            <span>Sản phẩm: <span className="font-medium text-gray-900">{product.name}</span></span>
-          </div>
-        )}
 
         {/* Comment */}
         {comment && (

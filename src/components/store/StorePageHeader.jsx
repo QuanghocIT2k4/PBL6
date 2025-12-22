@@ -7,7 +7,7 @@ const StorePageHeader = ({ title, subtitle, children, showStatus = true, icon = 
   const getStatusColor = (status) => {
     const colors = {
       PENDING: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-      APPROVED: 'bg-green-100 text-green-800 border-green-300',
+      APPROVED: 'bg-transparent text-gray-400 border-transparent',
       REJECTED: 'bg-red-100 text-red-800 border-red-300'
     };
     return colors[status] || 'bg-gray-100 text-gray-800 border-gray-300';
@@ -16,7 +16,7 @@ const StorePageHeader = ({ title, subtitle, children, showStatus = true, icon = 
   const getStatusText = (status) => {
     const texts = {
       PENDING: 'Chờ duyệt',
-      APPROVED: 'Đã duyệt',
+      APPROVED: '',
       REJECTED: 'Đã từ chối'
     };
     return texts[status] || status;

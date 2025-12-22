@@ -14,16 +14,30 @@ import api from '../common/api';
  */
 export const createConversation = async (data) => {
   try {
+    // ✅ Validate required fields
+    if (!data.storeId) {
+      return {
+        success: false,
+        error: 'storeId is required'
+      };
+    }
+
     const response = await api.post('/api/v1/chat/conversations', data);
+    
     return {
       success: true,
-      data: response.data
+      data: response.data?.data || response.data
     };
   } catch (error) {
-    console.error('❌ Error creating conversation:', error);
+    const errorMessage = error.response?.data?.message 
+      || error.response?.data?.error 
+      || error.response?.data?.detail
+      || error.message 
+      || 'Không thể tạo cuộc trò chuyện';
+    
     return {
       success: false,
-      error: error.response?.data?.message || error.message
+      error: errorMessage
     };
   }
 };

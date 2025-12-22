@@ -9,6 +9,7 @@ import {
   getOverviewStatistics,
   getRevenueStatistics,
   getServiceFees,
+  getShippingFees,
   getPlatformDiscountLosses,
   getRevenueByDateRange,
   getRevenueChartData,
@@ -27,9 +28,9 @@ const AdminRevenue = () => {
   const [error, setError] = useState(null);
   
   // Filter states
-  const [activeTab, setActiveTab] = useState('serviceFee'); // 'serviceFee' (platformCommission), 'platformLoss', 'dateRange'
+  const [activeTab, setActiveTab] = useState('serviceFee'); // 'serviceFee' (platformCommission), 'shippingFee', 'platformLoss', 'dateRange'
   const [currentPage, setCurrentPage] = useState(0);
-  const [pageSize] = useState(10);
+  const [pageSize] = useState(50); // ✅ Tăng từ 10 lên 50 để hiển thị nhiều đơn hơn
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   
@@ -66,11 +67,30 @@ const AdminRevenue = () => {
   }, [activeTab, currentPage, sortBy, sortDir]);
 
   const loadStatistics = async () => {
-    const result = await getRevenueStatistics();
-    if (result.success) {
-      setStatistics(result.data);
-    } else {
-      console.error('Error loading statistics:', result.error);
+    try {
+      // ✅ Thử dùng getOverviewStatistics() trước
+      const overviewResult = await getOverviewStatistics();
+      if (overviewResult.success && overviewResult.data) {
+        console.log('📊 Overview Statistics:', overviewResult.data);
+        // Kiểm tra xem có đủ field không
+        const hasAllFields = overviewResult.data.totalPlatformCommission !== undefined ||
+                            overviewResult.data.totalServiceFee !== undefined;
+        if (hasAllFields) {
+          setStatistics(overviewResult.data);
+          return;
+        }
+      }
+      
+      // ✅ Nếu overview không đủ, dùng getRevenueStatistics()
+      const revenueResult = await getRevenueStatistics();
+      if (revenueResult.success && revenueResult.data) {
+        console.log('📊 Revenue Statistics:', revenueResult.data);
+        setStatistics(revenueResult.data);
+      } else {
+        console.error('❌ Error loading statistics:', revenueResult.error);
+      }
+    } catch (error) {
+      console.error('❌ Error in loadStatistics:', error);
     }
   };
 
@@ -87,8 +107,18 @@ const AdminRevenue = () => {
           // Tab "Phí Hoa Hồng Nền Tảng" - lấy theo platformCommission
           result = await getServiceFees(params);
           break;
+        case 'shippingFee':
+          // Tab "Phí Vận Chuyển" - lấy shipping fees
+          result = await getShippingFees(params);
+          break;
         case 'platformLoss':
+          console.log('🔍 [AdminRevenue] Loading platform discount losses with params:', params);
           result = await getPlatformDiscountLosses(params);
+          console.log('🔍 [AdminRevenue] Platform discount losses result:', result);
+          if (result.success) {
+            console.log('🔍 [AdminRevenue] Platform discount losses data:', result.data);
+            console.log('🔍 [AdminRevenue] Revenues list:', result.data?.revenues || result.data?.content || []);
+          }
           break;
         case 'dateRange':
           if (startDate && endDate) {
@@ -110,12 +140,28 @@ const AdminRevenue = () => {
 
       if (result.success) {
         const data = result.data;
-        const revenueList = data.revenues || data.content || [];
+        
+        // ✅ Parse data - thử nhiều format
+        let revenueList = [];
+        if (Array.isArray(data)) {
+          revenueList = data;
+        } else if (data.revenues && Array.isArray(data.revenues)) {
+          revenueList = data.revenues;
+        } else if (data.content && Array.isArray(data.content)) {
+          revenueList = data.content;
+        } else if (data.data && Array.isArray(data.data)) {
+          revenueList = data.data;
+        }
+        
+        // ⚠️ LƯU Ý: Backend nên filter ở API để chỉ trả về revenue của đơn hợp lệ
+        // Không nên tạo revenue cho đơn đã hủy (CANCELLED), hoàn tiền (REFUNDED, RETURNED, PARTIAL_REFUND)
+        // Xem chi tiết trong FE/BACKEND_ISSUES.md
         
         setRevenues(revenueList);
-        setTotalPages(data.totalPages || Math.ceil((data.total || 0) / pageSize));
-        setTotalElements(data.total || data.totalElements || 0);
+        setTotalPages(data.totalPages || data.page?.totalPages || Math.ceil((data.total || data.totalElements || 0) / pageSize));
+        setTotalElements(data.total || data.totalElements || data.page?.totalElements || revenueList.length);
       } else {
+        console.error('❌ [AdminRevenue] Error loading revenues:', result.error);
         setError(result.error);
       }
     } catch (err) {
@@ -426,7 +472,7 @@ const AdminRevenue = () => {
                 <span className="text-sm font-medium opacity-90">Tiền Lỗ Giảm Giá</span>
               </div>
               <div className="text-3xl font-bold mb-2">
-                {formatCurrency(statistics.totalPlatformDiscountLoss || 0)}
+                {formatCurrency(Math.abs(statistics.totalPlatformDiscountLoss || 0))}
               </div>
               <div className="text-sm opacity-90">
                 Sàn chịu
@@ -487,6 +533,16 @@ const AdminRevenue = () => {
               }`}
             >
               💰 Phí Dịch Vụ
+            </button>
+            <button
+              onClick={() => { setActiveTab('shippingFee'); setCurrentPage(0); }}
+              className={`px-6 py-3 rounded-xl font-semibold transition-all ${
+                activeTab === 'shippingFee'
+                  ? 'bg-purple-500 text-white shadow-lg'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              🚚 Phí Vận Chuyển
             </button>
             <button
               onClick={() => { setActiveTab('platformLoss'); setCurrentPage(0); }}
@@ -576,7 +632,10 @@ const AdminRevenue = () => {
           <div className="p-6 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold text-gray-800">
-                Danh Sách Phí Dịch Vụ
+                {activeTab === 'serviceFee' && 'Danh Sách Phí Dịch Vụ'}
+                {activeTab === 'shippingFee' && 'Danh Sách Phí Vận Chuyển'}
+                {activeTab === 'platformLoss' && 'Danh Sách Tiền Lỗ Giảm Giá'}
+                {activeTab === 'dateRange' && 'Danh Sách Doanh Thu Theo Ngày'}
               </h2>
               <div className="text-sm text-gray-600">
                 Tổng: <span className="font-bold text-purple-600">{totalElements}</span> bản ghi
@@ -632,21 +691,12 @@ const AdminRevenue = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {revenues.map((revenue) => {
-                      // 🔍 DEBUG: Log revenue structure để tìm field tên cửa hàng
-                      if (revenue.revenueType === 'SERVICE_FEE') {
-                        console.log('🔍 [Revenue] SERVICE_FEE structure:', {
-                          id: revenue.id,
-                          shop: revenue.shop,
-                          store: revenue.store,
-                          storeName: revenue.storeName,
-                          shopName: revenue.shopName,
-                          order: revenue.order,
-                          fullRevenue: revenue
-                        });
-                      }
+                      // ✅ Xử lý shipping fee (có thể không có revenueType)
+                      const isShippingFee = activeTab === 'shippingFee';
+                      const revenueType = isShippingFee ? 'SHIPPING_FEE' : revenue.revenueType;
+                      const typeBadge = getRevenueTypeBadge(revenueType);
                       
-                      const typeBadge = getRevenueTypeBadge(revenue.revenueType);
-                      const orderTotal = revenue.order?.totalPrice || 0;
+                      const orderTotal = revenue.order?.totalPrice || revenue.totalPrice || 0;
                       const shopName = revenue.shop?.name || 
                                        revenue.store?.name || 
                                        revenue.storeName || 
@@ -655,11 +705,16 @@ const AdminRevenue = () => {
                                        revenue.order?.storeName ||
                                        '-';
                       
+                      // ✅ Xác định số tiền: shipping fee hoặc revenue amount
+                      const amount = isShippingFee 
+                        ? (revenue.shippingFee || revenue.amount || 0)
+                        : (revenue.amount || 0);
+                      
                       return (
                         <tr key={revenue.id} className="hover:bg-gray-50 transition-colors">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-mono text-purple-600 font-medium">
-                              {getOrderCode(revenue.order?.id)}
+                              {getOrderCode(revenue.order?.id || revenue.id)}
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -673,9 +728,30 @@ const AdminRevenue = () => {
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className={`text-sm font-bold ${revenue.revenueType === 'SERVICE_FEE' ? 'text-green-600' : 'text-red-600'}`}>
-                              {revenue.revenueType === 'SERVICE_FEE' ? '+' : '-'}{formatCurrency(revenue.amount || 0)}
-                            </div>
+                            {(() => {
+                              // ✅ PLATFORM_COMMISSION, SERVICE_FEE, và SHIPPING_FEE đều là tiền thu vào (số dương)
+                              const isPositive = revenueType === 'SERVICE_FEE' || 
+                                                revenueType === 'PLATFORM_COMMISSION' || 
+                                                revenueType === 'SHIPPING_FEE';
+                              // ✅ PLATFORM_DISCOUNT_LOSS: hiển thị số dương không có dấu + hoặc -
+                              const isDiscountLoss = revenueType === 'PLATFORM_DISCOUNT_LOSS';
+                              const displayAmount = Math.abs(amount); // Đảm bảo số dương
+                              
+                              if (isDiscountLoss) {
+                                // Tiền lỗ giảm giá: hiển thị số dương không có dấu
+                                return (
+                                  <div className="text-sm font-bold text-red-600">
+                                    {formatCurrency(displayAmount)}
+                                  </div>
+                                );
+                              }
+                              
+                              return (
+                                <div className={`text-sm font-bold ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                                  {isPositive ? '+' : '-'}{formatCurrency(displayAmount)}
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-semibold text-gray-900">
@@ -694,13 +770,16 @@ const AdminRevenue = () => {
                 </table>
               </div>
 
-              {/* Pagination */}
+              {/* Pagination với số trang */}
               {totalPages > 1 && (
-                <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-                  <div className="text-sm text-gray-600">
-                    Trang {currentPage + 1} / {totalPages}
+                <div className="px-6 py-4 border-t border-gray-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm text-gray-600">
+                      Trang {currentPage + 1} / {totalPages} (Tổng: {totalElements} bản ghi)
+                    </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    {/* Nút Trước */}
                     <button
                       onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
                       disabled={currentPage === 0}
@@ -708,6 +787,80 @@ const AdminRevenue = () => {
                     >
                       ← Trước
                     </button>
+                    
+                    {/* Hiển thị các số trang */}
+                    {(() => {
+                      const pages = [];
+                      const maxVisiblePages = 10; // Hiển thị tối đa 10 số trang
+                      let startPage = Math.max(0, currentPage - Math.floor(maxVisiblePages / 2));
+                      let endPage = Math.min(totalPages - 1, startPage + maxVisiblePages - 1);
+                      
+                      // Điều chỉnh nếu gần cuối
+                      if (endPage - startPage < maxVisiblePages - 1) {
+                        startPage = Math.max(0, endPage - maxVisiblePages + 1);
+                      }
+                      
+                      // Trang đầu tiên
+                      if (startPage > 0) {
+                        pages.push(
+                          <button
+                            key={0}
+                            onClick={() => setCurrentPage(0)}
+                            className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium transition-colors"
+                          >
+                            1
+                          </button>
+                        );
+                        if (startPage > 1) {
+                          pages.push(
+                            <span key="ellipsis-start" className="px-2 text-gray-500">
+                              ...
+                            </span>
+                          );
+                        }
+                      }
+                      
+                      // Các trang ở giữa
+                      for (let i = startPage; i <= endPage; i++) {
+                        pages.push(
+                          <button
+                            key={i}
+                            onClick={() => setCurrentPage(i)}
+                            className={`px-3 py-2 rounded-lg font-medium transition-colors ${
+                              currentPage === i
+                                ? 'bg-blue-600 text-white shadow-md'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            {i + 1}
+                          </button>
+                        );
+                      }
+                      
+                      // Trang cuối cùng
+                      if (endPage < totalPages - 1) {
+                        if (endPage < totalPages - 2) {
+                          pages.push(
+                            <span key="ellipsis-end" className="px-2 text-gray-500">
+                              ...
+                            </span>
+                          );
+                        }
+                        pages.push(
+                          <button
+                            key={totalPages - 1}
+                            onClick={() => setCurrentPage(totalPages - 1)}
+                            className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium transition-colors"
+                          >
+                            {totalPages}
+                          </button>
+                        );
+                      }
+                      
+                      return pages;
+                    })()}
+                    
+                    {/* Nút Sau */}
                     <button
                       onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
                       disabled={currentPage >= totalPages - 1}

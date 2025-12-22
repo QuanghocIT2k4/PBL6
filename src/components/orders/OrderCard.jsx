@@ -1,6 +1,6 @@
 import { memo, useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import useSWR from 'swr';
+import useSWR, { mutate as swrMutate } from 'swr';
 import ReviewForm from '../reviews/ReviewForm';
 import ChatButton from '../chat/ChatButton';
 import { getOrderById, getOrderStatusBadge, getPaymentMethodLabel, canCancelOrder, canReviewOrder, completeOrder } from '../../services/buyer/orderService';
@@ -45,20 +45,27 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
   const [cachedDiscount, setCachedDiscount] = useState(null);
 
   // Fetch order details to get items
-  const { data: detailData } = useSWR(
-    expanded ? ['order-detail', order.id] : null,
+  const { data: detailData, mutate: mutateDetail } = useSWR(
+    expanded && order?.id ? ['order-detail', order.id] : null,
     () => getOrderById(order.id),
     {
       revalidateOnFocus: false,
+      onError: (error) => {
+        // ✅ Chỉ log error nếu không phải 404/400 (order not found)
+        if (error?.response?.status !== 400 && error?.response?.status !== 404) {
+          console.error('Error fetching order:', error);
+        }
+      },
     }
   );
 
   const orderDetail = detailData?.success ? detailData.data : null;
   
+  // ✅ Extract orderStatus từ order trước
   const {
     id,
     orderNumber,
-    status,
+    status: orderStatus, // Rename để tránh conflict với currentStatus
     totalAmount,
     totalPrice,
     finalTotal,
@@ -71,6 +78,10 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
     refundStatus,
     refundTransactionId,
   } = order;
+  
+  // ✅ Use orderDetail status if available (more up-to-date), otherwise use order.status
+  // Phải khai báo sau khi đã extract orderStatus từ order
+  const currentStatus = orderDetail?.status || orderStatus;
 
   // Handle different store name formats from backend
   const getStoreName = () => {
@@ -105,37 +116,43 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
     0
   );
   
-  // ✅ Helper function để extract promotion code từ nhiều nguồn
-  const getPromotionCode = (order, orderDetail) => {
-    // 1. Kiểm tra promotions array (DBRef hoặc populated)
-    if (order.promotions && Array.isArray(order.promotions) && order.promotions.length > 0) {
-      const firstPromo = order.promotions[0];
-      // Nếu là DBRef, có thể có $id hoặc id
-      if (firstPromo.code) return firstPromo.code;
-      if (firstPromo.$id) {
-        // DBRef chưa populate, có thể cần gọi API để lấy code
-        // Tạm thời return null, sẽ check các nguồn khác
-      }
-    }
-    if (orderDetail?.promotions && Array.isArray(orderDetail.promotions) && orderDetail.promotions.length > 0) {
-      const firstPromo = orderDetail.promotions[0];
-      if (firstPromo.code) return firstPromo.code;
+  // ✅ Helper function để extract promotion codes từ nhiều nguồn - PHÂN BIỆT STORE VÀ PLATFORM
+  const getPromotionCodes = (order, orderDetail) => {
+    let storePromotionCode = order.promotionCode || orderDetail?.promotionCode || 
+                            order.promotion?.code || orderDetail?.promotion?.code || 
+                            order.appliedPromotion?.code || orderDetail?.appliedPromotion?.code;
+    
+    let platformPromotionCode = order.platformPromotions?.orderPromotionCode ||
+                               order.platformPromotions?.shippingPromotionCode ||
+                               orderDetail?.platformPromotions?.orderPromotionCode ||
+                               orderDetail?.platformPromotions?.shippingPromotionCode;
+    
+    // ✅ Kiểm tra promotions array để lấy mã store và mã sàn riêng biệt
+    const promotions = order.promotions || orderDetail?.promotions || [];
+    if (Array.isArray(promotions) && promotions.length > 0) {
+      promotions.forEach(promo => {
+        // Nếu là DBRef chưa populate, bỏ qua
+        if ((promo.$id || promo._id || promo.id) && !promo.code && !promo.issuer) {
+          return;
+        }
+        
+        // Nếu đã populate, kiểm tra issuer
+        if (promo.issuer === 'PLATFORM' || promo.issuer === 'platform') {
+          if (promo.code) {
+            platformPromotionCode = promo.code;
+          }
+        } else if (promo.issuer === 'STORE' || promo.issuer === 'store') {
+          if (promo.code) {
+            storePromotionCode = promo.code;
+          }
+        } else if (!storePromotionCode && promo.code) {
+          // Fallback: nếu chưa có store code và có code, có thể là store promotion
+          storePromotionCode = promo.code;
+        }
+      });
     }
     
-    // 2. Kiểm tra các field promotion khác
-    return (
-      order.promotion?.code || 
-      orderDetail?.promotion?.code || 
-      order.promotionCode || 
-      orderDetail?.promotionCode || 
-      order.appliedPromotion?.code || 
-      orderDetail?.appliedPromotion?.code ||
-      order.platformPromotions?.orderPromotionCode ||
-      order.platformPromotions?.shippingPromotionCode ||
-      orderDetail?.platformPromotions?.orderPromotionCode ||
-      orderDetail?.platformPromotions?.shippingPromotionCode ||
-      null
-    );
+    return { storePromotionCode, platformPromotionCode };
   };
 
   // ✅ Tính discount - ƯU TIÊN dùng discount từ backend, KHÔNG tính ngược (tránh sai số)
@@ -214,23 +231,33 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
   const calculatedTotal = !Number.isNaN(baseTotal) && baseTotal > 0 ? baseTotal : fallbackTotal;
 
   // Map trạng thái hiển thị cho badge: RETURNED + refundStatus COMPLETED => REFUNDED
-  let displayStatus = status;
-  if (status === 'RETURNED') {
+  // ✅ Sử dụng currentStatus (từ orderDetail nếu có) thay vì orderStatus để hiển thị đúng sau khi complete
+  let displayStatus = currentStatus;
+  if (currentStatus === 'RETURNED') {
     displayStatus = refundStatus === 'COMPLETED' ? 'REFUNDED' : 'RETURNED';
   }
 
   const statusBadge = getOrderStatusBadge(displayStatus);
-  const canCancel = canCancelOrder(status);
-  const canReview = canReviewOrder(status);
-  const canComplete = status === 'DELIVERED';
-  const canReturn = status === 'DELIVERED' || status === 'COMPLETED';
-  // Đơn đang có yêu cầu trả hàng/khiếu nại trả hàng
-  const hasActiveReturnRequest =
-    !!order.returnRequestId || // Swagger mới: dùng returnRequestId là chính
-    !!order.returnRequest || // Backward-compat: BE có thể embed cả object
-    order.returnStatus === 'REQUESTED' ||
-    order.returnRequestStatus === 'PENDING' ||
-    order.returnRequestStatus === 'REQUESTED';
+  const canCancel = canCancelOrder(currentStatus);
+  const canReview = canReviewOrder(currentStatus);
+  const canComplete = currentStatus === 'DELIVERED';
+  // Chỉ cho phép trả hàng khi đơn đang ở trạng thái DELIVERED (chưa Hoàn tất)
+  const canReturn = currentStatus === 'DELIVERED';
+  // ✅ Đơn đang có yêu cầu trả hàng/khiếu nại trả hàng (chỉ hiển thị khi status là PENDING hoặc APPROVED)
+  // Không hiển thị khi REJECTED, CLOSED, hoặc đã có dispute được giải quyết
+  const getReturnRequestStatus = () => {
+    if (order.returnRequest?.status) return order.returnRequest.status;
+    if (order.returnRequestStatus) return order.returnRequestStatus;
+    if (order.returnStatus) return order.returnStatus;
+    return null;
+  };
+  
+  const returnRequestStatus = getReturnRequestStatus();
+  const hasActiveReturnRequest = 
+    (order.returnRequestId || order.returnRequest) && // Có return request
+    returnRequestStatus && // Có status
+    ['PENDING', 'APPROVED', 'READY_TO_RETURN', 'RETURNING'].includes(returnRequestStatus) && // Status đang active
+    !['REJECTED', 'CLOSED', 'REFUNDED', 'RETURNED'].includes(returnRequestStatus); // Không phải status đã đóng
 
   // Auto expand on mount to load items
   useEffect(() => {
@@ -361,7 +388,30 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
       const result = await completeOrder(order.id);
       if (result.success) {
         success('Đơn hàng đã được xác nhận hoàn tất');
-        if (onRefresh) onRefresh();
+        
+        // ✅ Mutate order detail cache để cập nhật status ngay lập tức
+        if (mutateDetail) {
+          // Nếu đã expanded (đã fetch detail), mutate detail cache
+          await mutateDetail(async () => {
+            const updatedOrder = await getOrderById(order.id);
+            return updatedOrder;
+          }, false); // false = không revalidate ngay, chỉ update cache
+        } else {
+          // Nếu chưa expanded, vẫn mutate để khi expand sẽ có data mới
+          await swrMutate(['order-detail', order.id], async () => {
+            const updatedOrder = await getOrderById(order.id);
+            return updatedOrder;
+          }, false);
+        }
+        
+        // ✅ Mutate order list để refresh danh sách (quan trọng nhất)
+        if (onRefresh) {
+          // onRefresh là mutate từ OrderList, sẽ fetch lại danh sách orders
+          await onRefresh();
+        } else {
+          // Fallback: mutate tất cả order list cache
+          await swrMutate(key => Array.isArray(key) && key[0] === 'my-orders');
+        }
       } else {
         throw new Error(result.error || 'Không thể xác nhận hoàn tất đơn hàng');
       }
@@ -373,6 +423,23 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
   const handleReturnClick = () => {
     // Điều hướng tới trang tạo yêu cầu trả hàng (có orderId)
     navigate(`/orders/returns/new?orderId=${order.id}`);
+  };
+
+  const handleProductNavigate = (item) => {
+    const variantId =
+      item.productVariantId ||
+      item.id ||
+      item.variantId ||
+      item.productVariant?.id;
+    const productId =
+      item.productId ||
+      item.product?.id ||
+      item.product?._id ||
+      item.product?.$id?.$oid;
+    const targetId = variantId || productId;
+    if (targetId) {
+      navigate(`/product/${targetId}`);
+    }
   };
 
   return (
@@ -435,7 +502,10 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
               {items.map((item, index) => (
                 <div key={index} className="flex items-start gap-3 pb-3 border-b border-gray-100 last:border-b-0 last:pb-0">
                   {/* Product Image - Smaller */}
-                  <div className="w-20 h-20 bg-white rounded-lg overflow-hidden flex-shrink-0 border border-gray-200">
+                  <div
+                    className="w-20 h-20 bg-white rounded-lg overflow-hidden flex-shrink-0 border border-gray-200 cursor-pointer hover:border-blue-500 transition-colors"
+                    onClick={() => handleProductNavigate(item)}
+                  >
                     {item.image || item.productImage ? (
                       <img
                         src={item.image || item.productImage}
@@ -453,7 +523,10 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
 
                   {/* Product Info - Compact */}
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-gray-900 text-sm mb-1 line-clamp-2">
+                    <h3
+                      className="font-medium text-gray-900 text-sm mb-1 line-clamp-2 cursor-pointer hover:text-blue-600"
+                      onClick={() => handleProductNavigate(item)}
+                    >
                       {item.variantName || item.productName || item.name || 'Sản phẩm'}
                     </h3>
                     {item.variantName && item.productName && item.variantName !== item.productName && (
@@ -508,7 +581,7 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
             <div className="w-8 h-0.5 bg-blue-300"></div>
             
             {/* Step 2: Xác nhận */}
-            {(displayStatus === 'CONFIRMED' || displayStatus === 'SHIPPING' || displayStatus === 'DELIVERED' || displayStatus === 'RETURNED' || displayStatus === 'REFUNDED' || orderDetail?.confirmedAt) ? (
+            {(displayStatus === 'CONFIRMED' || displayStatus === 'SHIPPING' || displayStatus === 'DELIVERED' || displayStatus === 'COMPLETED' || displayStatus === 'RETURNED' || displayStatus === 'REFUNDED' || orderDetail?.confirmedAt) ? (
               <>
                 <div className="flex items-center gap-1.5">
                   <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
@@ -534,16 +607,22 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
               </>
             )}
             
-            {/* Step 3: Đang giao */}
-            {(displayStatus === 'SHIPPING' || displayStatus === 'DELIVERED' || displayStatus === 'RETURNED' || displayStatus === 'REFUNDED' || orderDetail?.shippedAt) ? (
+            {/* Step 3: Đang giao / Đã giao */}
+            {(displayStatus === 'SHIPPING' || displayStatus === 'DELIVERED' || displayStatus === 'COMPLETED' || displayStatus === 'RETURNED' || displayStatus === 'REFUNDED' || orderDetail?.shippedAt) ? (
               <>
                 <div className="flex items-center gap-1.5">
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
                     displayStatus === 'SHIPPING' ? 'bg-purple-500 animate-pulse' : 'bg-purple-500'
                   }`}>
-                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
-                    </svg>
+                    {displayStatus === 'SHIPPING' ? (
+                      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                      </svg>
+                    ) : (
+                      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                      </svg>
+                    )}
                   </div>
                   <span className={`text-xs font-medium ${
                     displayStatus === 'SHIPPING' ? 'text-purple-700' : 'text-purple-700'
@@ -551,8 +630,9 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
                     {displayStatus === 'SHIPPING' ? 'Đang giao' : 'Đã giao'}
                   </span>
                 </div>
-                {(displayStatus === 'DELIVERED' || displayStatus === 'RETURNED' || displayStatus === 'REFUNDED' || orderDetail?.deliveredAt) && (
-                  <div className="w-8 h-0.5 bg-emerald-300"></div>
+                {/* Connector chỉ hiển thị khi có Step 4 (Hoàn tất) */}
+                {(displayStatus === 'DELIVERED' || displayStatus === 'COMPLETED' || displayStatus === 'RETURNED' || displayStatus === 'REFUNDED' || orderDetail?.deliveredAt) && (
+                  <div className="w-8 h-0.5 bg-green-300"></div>
                 )}
               </>
             ) : displayStatus !== 'CANCELLED' ? (
@@ -568,22 +648,22 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
               </>
             ) : null}
             
-            {/* Step 4: Đã giao / Đã trả hàng */}
-            {(displayStatus === 'DELIVERED' || displayStatus === 'RETURNED' || displayStatus === 'REFUNDED' || orderDetail?.deliveredAt) && (
+            {/* Step 4: Hoàn tất - Hiển thị khi DELIVERED hoặc COMPLETED */}
+            {(displayStatus === 'DELIVERED' || displayStatus === 'COMPLETED' || displayStatus === 'RETURNED' || displayStatus === 'REFUNDED' || orderDetail?.deliveredAt) && (
               <>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                  <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
                     <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/>
                     </svg>
                   </div>
-                  <span className="text-xs font-medium text-emerald-700">
-                    {status === 'RETURNED' ? 'Đã trả hàng' : 'Hoàn tất'}
+                  <span className="text-xs font-medium text-green-700">
+                    {currentStatus === 'RETURNED' ? 'Đã trả hàng' : 'Hoàn tất'}
                   </span>
                 </div>
 
                 {/* Step 5 (extra cho đơn đã trả hàng & đã hoàn tiền): Đã hoàn tiền */}
-                {status === 'RETURNED' && refundStatus === 'COMPLETED' && (
+                {currentStatus === 'RETURNED' && refundStatus === 'COMPLETED' && (
                   <>
                     <div className="w-8 h-0.5 bg-gray-300"></div>
                     <div className="flex items-center gap-1.5">
@@ -600,7 +680,7 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
             )}
             
             {/* Step 5: Đã hủy */}
-            {status === 'CANCELLED' && (
+            {currentStatus === 'CANCELLED' && (
               <div className="flex items-center gap-1.5">
                 <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0">
                   <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -671,7 +751,7 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
 
             {/* Right: Action Buttons */}
             <div className="flex items-center gap-2 flex-wrap">
-              {hasActiveReturnRequest && status !== 'RETURNED' && displayStatus !== 'REFUNDED' && refundStatus !== 'COMPLETED' ? (
+              {hasActiveReturnRequest && currentStatus !== 'RETURNED' && displayStatus !== 'REFUNDED' && refundStatus !== 'COMPLETED' ? (
                 <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-sm font-medium">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -776,32 +856,46 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
               );
               const shippingFee = parseFloat(order.shippingFee ?? orderDetail?.shippingFee ?? order.shippingCost ?? 0);
               
-              // Tính discount giống logic ở trên
+              // ✅ Tính discount - ƯU TIÊN totalDiscountAmount, sau đó tính tổng từ storeDiscountAmount + platformDiscountAmount
               let displayDiscount = 0;
-              const discountFields = [
-                'discount',
-                'discountAmount',
-                'promotionDiscount',
-                'appliedDiscount',
-                'promotionAmount',
-                'promotionValue',
-                'discountValue',
-                'storeDiscountAmount',
-                'platformDiscountAmount',
-                'totalDiscountAmount',
-              ];
               
-              for (const field of discountFields) {
-                if (order[field] !== undefined && order[field] !== null) {
-                  displayDiscount = parseFloat(order[field]);
-                  if (displayDiscount > 0) break;
-                }
-                if (orderDetail && orderDetail[field] !== undefined && orderDetail[field] !== null) {
-                  displayDiscount = parseFloat(orderDetail[field]);
-                  if (displayDiscount > 0) break;
+              // 1. Ưu tiên: totalDiscountAmount (tổng discount)
+              if (order.totalDiscountAmount !== undefined && order.totalDiscountAmount !== null) {
+                displayDiscount = parseFloat(order.totalDiscountAmount);
+              } else if (orderDetail?.totalDiscountAmount !== undefined && orderDetail?.totalDiscountAmount !== null) {
+                displayDiscount = parseFloat(orderDetail.totalDiscountAmount);
+              } else {
+                // 2. Tính tổng từ storeDiscountAmount + platformDiscountAmount
+                const storeDiscount = parseFloat(order.storeDiscountAmount || orderDetail?.storeDiscountAmount || 0);
+                const platformDiscount = parseFloat(order.platformDiscountAmount || orderDetail?.platformDiscountAmount || 0);
+                displayDiscount = storeDiscount + platformDiscount;
+              }
+              
+              // 3. Nếu vẫn = 0, thử các field discount khác
+              if (displayDiscount === 0) {
+                const discountFields = [
+                  'discount',
+                  'discountAmount',
+                  'promotionDiscount',
+                  'appliedDiscount',
+                  'promotionAmount',
+                  'promotionValue',
+                  'discountValue',
+                ];
+                
+                for (const field of discountFields) {
+                  if (order[field] !== undefined && order[field] !== null) {
+                    displayDiscount = parseFloat(order[field]);
+                    if (displayDiscount > 0) break;
+                  }
+                  if (orderDetail && orderDetail[field] !== undefined && orderDetail[field] !== null) {
+                    displayDiscount = parseFloat(orderDetail[field]);
+                    if (displayDiscount > 0) break;
+                  }
                 }
               }
               
+              // 4. Nếu vẫn = 0, thử từ appliedPromotion
               if (displayDiscount === 0) {
                 const promo = orderDetail?.appliedPromotion || order.appliedPromotion;
                 if (promo) {
@@ -809,6 +903,7 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
                 }
               }
               
+              // 5. Nếu vẫn = 0, tính ngược từ totalPrice
               if (displayDiscount === 0 && (order.appliedPromotion || orderDetail?.appliedPromotion || order.promotionCode)) {
                 const actualTotal = parseFloat(
                   order.finalTotal ?? 
@@ -825,6 +920,7 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
                 }
               }
               
+              // ✅ Tính total: subtotal + shippingFee - tổng discount
               const total = Math.max(0, subtotal + shippingFee - displayDiscount);
 
               return (
@@ -839,39 +935,66 @@ const OrderCard = ({ order, onCancel, onRefresh }) => {
                     <span className="font-medium text-gray-900">{formatCurrency(shippingFee)}</span>
                   </div>
                   
-                  {/* Hiển thị giảm giá/khuyến mãi nếu có */}
-                  {displayDiscount > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 flex items-center gap-1">
-                        <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
-                        </svg>
-                        Giảm giá:
-                      </span>
-                      <span className="font-medium text-green-600">
-                        -{formatCurrency(displayDiscount)}
-                      </span>
-                    </div>
-                  )}
-                  
-                  {/* Hiển thị mã khuyến mãi nếu có */}
+                  {/* Hiển thị mã khuyến mãi và giảm giá riêng biệt */}
                   {(() => {
-                    const promotionCode = getPromotionCode(order, orderDetail);
+                    const { storePromotionCode, platformPromotionCode } = getPromotionCodes(order, orderDetail);
+                    const storeDiscount = parseFloat(order.storeDiscountAmount || orderDetail?.storeDiscountAmount || 0);
+                    const platformDiscount = parseFloat(order.platformDiscountAmount || orderDetail?.platformDiscountAmount || 0);
                     
                     // Hiển thị nếu có mã hoặc có discount
-                    if (promotionCode || displayDiscount > 0) {
+                    if (storePromotionCode || platformPromotionCode || storeDiscount > 0 || platformDiscount > 0) {
                       return (
-                        <div className="flex justify-between items-center text-sm bg-blue-50 border border-blue-200 rounded-lg p-2 mt-2">
-                          <span className="text-gray-700 flex items-center gap-1.5">
-                            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/>
-                            </svg>
-                            <span className="font-medium">Mã khuyến mãi đã áp dụng:</span>
-                          </span>
-                          <span className="font-bold text-blue-700 bg-white px-2 py-1 rounded border border-blue-300">
-                            {promotionCode || 'Đã áp dụng'}
-                          </span>
-                        </div>
+                        <>
+                          {/* Mã khuyến mãi store */}
+                          {(storePromotionCode || storeDiscount > 0) && (
+                            <div className="flex justify-between items-center text-sm bg-blue-50 border border-blue-200 rounded-lg p-2 mt-2">
+                              <span className="text-gray-700 flex items-center gap-1.5">
+                                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/>
+                                </svg>
+                                <span className="font-medium">Mã khuyến mãi cửa hàng:</span>
+                              </span>
+                              <span className="font-bold text-blue-700 bg-white px-2 py-1 rounded border border-blue-300">
+                                {storePromotionCode || 'Đã áp dụng mã cửa hàng'}
+                              </span>
+                            </div>
+                          )}
+                          {/* Giảm giá từ mã cửa hàng */}
+                          {storeDiscount > 0 && (
+                            <div className="flex justify-between text-sm text-green-600">
+                              <span>Giảm giá từ mã cửa hàng:</span>
+                              <span className="font-medium">-{formatCurrency(storeDiscount)}</span>
+                            </div>
+                          )}
+                          {/* Mã khuyến mãi sàn */}
+                          {(platformPromotionCode || platformDiscount > 0) && (
+                            <div className="flex justify-between items-center text-sm bg-purple-50 border border-purple-200 rounded-lg p-2 mt-2">
+                              <span className="text-gray-700 flex items-center gap-1.5">
+                                <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/>
+                                </svg>
+                                <span className="font-medium">Mã khuyến mãi sàn:</span>
+                              </span>
+                              <span className="font-bold text-purple-700 bg-white px-2 py-1 rounded border border-purple-300">
+                                {platformPromotionCode || 'Đã áp dụng mã sàn'}
+                              </span>
+                            </div>
+                          )}
+                          {/* Giảm giá từ mã sàn */}
+                          {platformDiscount > 0 && (
+                            <div className="flex justify-between text-sm text-green-600">
+                              <span>Giảm giá từ mã sàn:</span>
+                              <span className="font-medium">-{formatCurrency(platformDiscount)}</span>
+                            </div>
+                          )}
+                          {/* Tổng giảm giá (nếu có cả 2) */}
+                          {storeDiscount > 0 && platformDiscount > 0 && (
+                            <div className="flex justify-between text-sm text-green-600 font-semibold pt-1 border-t border-green-200">
+                              <span>Tổng giảm giá:</span>
+                              <span>-{formatCurrency(storeDiscount + platformDiscount)}</span>
+                            </div>
+                          )}
+                        </>
                       );
                     }
                     return null;

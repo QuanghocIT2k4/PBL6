@@ -278,7 +278,7 @@ const StoreShipments = () => {
                     </div>
                     <div>
                       <div className="text-xs text-gray-600 font-medium">Đang giao</div>
-                      <div className="text-xs text-gray-500">Đã duyệt</div>
+                      <div className="text-xs text-gray-500">Đang xử lý</div>
                     </div>
                   </div>
                   <div className="text-3xl font-bold text-gray-900 mt-3">{stats.shipping}</div>

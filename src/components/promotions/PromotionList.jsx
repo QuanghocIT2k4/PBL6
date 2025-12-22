@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import useSWR from 'swr';
 import { 
@@ -20,74 +20,226 @@ const PromotionList = ({
   onSelectPromotion,
   selectedCode = null,
 }) => {
-  const [showList, setShowList] = useState(false);
-  // 🔥 FIX: Force store tab when storeId exists
-  const [activeTab, setActiveTab] = useState('store'); // Always start with store tab
+  // ✅ Tự động mở showList nếu có storeId (store promotions) hoặc để false cho platform (người dùng tự mở)
+  const [showList, setShowList] = useState(storeId ? true : false); // ✅ Tự động mở cho store promotions
+  // ✅ Mặc định tab platform nếu không có storeId, tab store nếu có storeId
+  const [activeTab, setActiveTab] = useState(storeId ? 'store' : 'platform');
   
+  // ✅ Đảm bảo activeTab đúng khi storeId thay đổi
+  // ✅ Khi có storeId: chỉ hiển thị store promotions (không có tab platform)
+  // ✅ Khi không có storeId: chỉ hiển thị platform promotions
+  useEffect(() => {
+    if (!storeId && activeTab === 'store') {
+      console.log('🔧 [PromotionList] Fixing activeTab: storeId is null but activeTab is store, switching to platform');
+      setActiveTab('platform');
+    } else if (storeId && activeTab === 'platform') {
+      // Khi có storeId, luôn dùng tab store (không có tab platform)
+      console.log('🔧 [PromotionList] Fixing activeTab: storeId exists but activeTab is platform, switching to store');
+      setActiveTab('store');
+    }
+  }, [storeId, activeTab]);
+  
+  // ✅ Tự động mở showList khi có storeId (để fetch ngay)
+  useEffect(() => {
+    if (storeId && !showList) {
+      console.log('🔧 [PromotionList] Auto-opening showList for store promotions');
+      setShowList(true);
+    }
+  }, [storeId]);
 
-  // ✅ Fetch platform promotions
-  const { data: platformData, isLoading: loadingPlatform } = useSWR(
-    showList && orderTotal ? ['platform-promotions', orderTotal] : null,
+  // ✅ Fetch platform promotions - CHỈ KHI KHÔNG CÓ storeId (vì khi có storeId thì chỉ hiển thị store promotions)
+  const { data: platformData, isLoading: loadingPlatform, error: platformError } = useSWR(
+    !storeId && showList && orderTotal ? ['platform-promotions', orderTotal] : null,
     async () => {
+      console.log('🔍 [PromotionList] ===== FETCHING PLATFORM PROMOTIONS =====');
+      console.log('🔍 [PromotionList] showList:', showList);
+      console.log('🔍 [PromotionList] orderTotal:', orderTotal);
+      console.log('🔍 [PromotionList] Calling getPlatformAvailablePromotions with:', {
+        orderValue: orderTotal,
+        page: 0,
+        size: 100
+      });
+      
       const result = await getPlatformAvailablePromotions({
         orderValue: orderTotal,
         page: 0,
-        size: 20,
+        size: 100, // ✅ Tăng size lên 100 để lấy tất cả promotions
       });
       
+      console.log('🔍 [PromotionList] ===== PLATFORM PROMOTIONS RESULT =====');
+      console.log('🔍 [PromotionList] Full result:', result);
+      console.log('🔍 [PromotionList] result.success:', result?.success);
+      console.log('🔍 [PromotionList] result.error:', result?.error);
+      console.log('🔍 [PromotionList] result.data:', result?.data);
+      console.log('🔍 [PromotionList] result.data type:', typeof result?.data);
+      console.log('🔍 [PromotionList] result.data isArray:', Array.isArray(result?.data));
+      console.log('🔍 [PromotionList] result.data.content:', result?.data?.content);
+      console.log('🔍 [PromotionList] result.data.content type:', typeof result?.data?.content);
+      console.log('🔍 [PromotionList] result.data.content isArray:', Array.isArray(result?.data?.content));
+      console.log('🔍 [PromotionList] result.data.content length:', result?.data?.content?.length);
+      if (result?.data?.content && result.data.content.length > 0) {
+        console.log('🔍 [PromotionList] First promotion:', result.data.content[0]);
+      }
+      console.log('🔍 [PromotionList] =========================================');
       
       return result;
     },
     { revalidateOnFocus: false }
   );
+  
+  console.log('🔍 [PromotionList] useSWR platformData:', platformData);
+  console.log('🔍 [PromotionList] useSWR loadingPlatform:', loadingPlatform);
+  console.log('🔍 [PromotionList] useSWR platformError:', platformError);
 
 
-  // ✅ Fetch store promotions - BỎ CHECK showList để fetch ngay khi có storeId
+  // ✅ Fetch store promotions - TỰ ĐỘNG FETCH KHI CÓ storeId VÀ orderTotal > 0 (không cần showList)
+  const swrKey = storeId && orderTotal > 0 ? ['store-promotions', storeId, orderTotal, productIds?.join(',')] : null;
+  console.log('🔍 [PromotionList] ===== STORE PROMOTIONS SWR KEY =====');
+  console.log('🔍 [PromotionList] showList:', showList);
+  console.log('🔍 [PromotionList] storeId:', storeId);
+  console.log('🔍 [PromotionList] orderTotal:', orderTotal);
+  console.log('🔍 [PromotionList] orderTotal > 0:', orderTotal > 0);
+  console.log('🔍 [PromotionList] productIds:', productIds);
+  console.log('🔍 [PromotionList] swrKey:', swrKey);
+  console.log('🔍 [PromotionList] =====================================');
+  
   const { data: storeData, isLoading: loadingStore, error: storeError } = useSWR(
-    storeId && orderTotal > 0 ? ['store-promotions', storeId, orderTotal] : null,  // 🔥 FIX: Check orderTotal > 0
+    swrKey, // ✅ Tự động fetch khi có storeId và orderTotal > 0
     async () => {
+      console.log('🔍 [PromotionList] ===== FETCHING STORE PROMOTIONS =====');
+      console.log('🔍 [PromotionList] storeId:', storeId);
+      console.log('🔍 [PromotionList] orderTotal:', orderTotal);
+      console.log('🔍 [PromotionList] Calling getStoreAvailablePromotions with:', {
+        storeId,
+        orderValue: orderTotal,
+        page: 0,
+        size: 20
+      });
+      
       const result = await getStoreAvailablePromotions(storeId, {
         orderValue: orderTotal, // 🔥 Back to real orderValue
         page: 0,
         size: 20,
       });
       
+      console.log('🔍 [PromotionList] ===== STORE PROMOTIONS RESULT =====');
+      console.log('🔍 [PromotionList] Full result:', result);
+      console.log('🔍 [PromotionList] result.success:', result?.success);
+      console.log('🔍 [PromotionList] result.error:', result?.error);
+      console.log('🔍 [PromotionList] result.data:', result?.data);
+      console.log('🔍 [PromotionList] result.data type:', typeof result?.data);
+      console.log('🔍 [PromotionList] result.data isArray:', Array.isArray(result?.data));
+      console.log('🔍 [PromotionList] result.data.content:', result?.data?.content);
+      console.log('🔍 [PromotionList] result.data.content type:', typeof result?.data?.content);
+      console.log('🔍 [PromotionList] result.data.content isArray:', Array.isArray(result?.data?.content));
+      console.log('🔍 [PromotionList] result.data.content length:', result?.data?.content?.length);
+      if (result?.data?.content && result.data.content.length > 0) {
+        console.log('🔍 [PromotionList] First store promotion:', result.data.content[0]);
+      }
+      console.log('🔍 [PromotionList] =====================================');
       
       return result;
     },
     { revalidateOnFocus: false }
   );
+  
+  console.log('🔍 [PromotionList] useSWR storeData:', storeData);
+  console.log('🔍 [PromotionList] useSWR loadingStore:', loadingStore);
+  console.log('🔍 [PromotionList] useSWR storeError:', storeError);
 
   // Get promotions based on active tab
   const getPromotions = () => {
+    console.log('🔍 [PromotionList] ===== getPromotions CALLED =====');
+    console.log('🔍 [PromotionList] activeTab:', activeTab);
+    console.log('🔍 [PromotionList] platformData:', platformData);
+    console.log('🔍 [PromotionList] storeData:', storeData);
+    
     if (activeTab === 'platform') {
+      console.log('🔍 [PromotionList] Processing PLATFORM promotions...');
+      if (!platformData) {
+        console.log('⚠️ [PromotionList] platformData is null/undefined');
+        return [];
+      }
       if (!platformData?.success) {
+        console.log('⚠️ [PromotionList] Platform data not success:', platformData);
+        console.log('⚠️ [PromotionList] Platform error:', platformData?.error);
         return [];
       }
       const data = platformData.data;
+      console.log('🔍 [PromotionList] Platform data object:', data);
+      console.log('🔍 [PromotionList] Platform data type:', typeof data);
+      console.log('🔍 [PromotionList] Platform data isArray:', Array.isArray(data));
+      console.log('🔍 [PromotionList] Platform data keys:', data ? Object.keys(data) : 'null');
+      
       // Handle different response structures
+      let promotions = [];
       if (Array.isArray(data)) {
-        return data;
+        console.log('✅ [PromotionList] Data is array, using directly');
+        promotions = data;
       } else if (data?.content && Array.isArray(data.content)) {
-        return data.content;
+        console.log('✅ [PromotionList] Data has content array');
+        promotions = data.content;
       } else if (data && typeof data === 'object') {
-        return data.content || data.promotions || data.items || [];
+        console.log('✅ [PromotionList] Data is object, extracting from content/promotions/items');
+        promotions = data.content || data.promotions || data.items || [];
+        console.log('🔍 [PromotionList] Extracted from:', {
+          'data.content': data.content,
+          'data.promotions': data.promotions,
+          'data.items': data.items,
+          'final promotions': promotions
+        });
       }
-      return [];
+      
+      console.log('✅ [PromotionList] Final platform promotions:', promotions);
+      console.log('✅ [PromotionList] Platform promotions count:', promotions.length);
+      if (promotions.length > 0) {
+        console.log('✅ [PromotionList] First platform promotion:', promotions[0]);
+      }
+      console.log('🔍 [PromotionList] ================================');
+      
+      return promotions;
     } else {
+      console.log('🔍 [PromotionList] Processing STORE promotions...');
+      if (!storeData) {
+        console.log('⚠️ [PromotionList] storeData is null/undefined');
+        return [];
+      }
       if (!storeData?.success) {
+        console.log('⚠️ [PromotionList] Store data not success:', storeData);
+        console.log('⚠️ [PromotionList] Store error:', storeData?.error);
         return [];
       }
       
       const data = storeData.data;
+      console.log('🔍 [PromotionList] Store data object:', data);
+      console.log('🔍 [PromotionList] Store data type:', typeof data);
+      console.log('🔍 [PromotionList] Store data isArray:', Array.isArray(data));
+      console.log('🔍 [PromotionList] Store data keys:', data ? Object.keys(data) : 'null');
+      
       let promotions = [];
       
       if (Array.isArray(data)) {
+        console.log('✅ [PromotionList] Store data is array, using directly');
         promotions = data;
       } else if (data && typeof data === 'object') {
+        console.log('✅ [PromotionList] Store data is object, extracting from content/promotions/items');
         // 🔥 FIX: Paginated response structure
         promotions = data.content || data.data?.content || data.promotions || data.items || [];
+        console.log('🔍 [PromotionList] Extracted from:', {
+          'data.content': data.content,
+          'data.data?.content': data.data?.content,
+          'data.promotions': data.promotions,
+          'data.items': data.items,
+          'final promotions': promotions
+        });
       }
+      
+      console.log('✅ [PromotionList] Final store promotions:', promotions);
+      console.log('✅ [PromotionList] Store promotions count:', promotions.length);
+      if (promotions.length > 0) {
+        console.log('✅ [PromotionList] First store promotion:', promotions[0]);
+      }
+      console.log('🔍 [PromotionList] ================================');
       
       return promotions;
     }
@@ -95,6 +247,16 @@ const PromotionList = ({
 
   const promotions = getPromotions() || []; // ✅ Ensure always array
   const isLoading = activeTab === 'platform' ? loadingPlatform : loadingStore;
+  
+  // ✅ Debug log để kiểm tra
+  console.log('🔍 [PromotionList] ===== RENDER DEBUG =====');
+  console.log('🔍 [PromotionList] activeTab:', activeTab);
+  console.log('🔍 [PromotionList] storeId:', storeId);
+  console.log('🔍 [PromotionList] promotions:', promotions);
+  console.log('🔍 [PromotionList] promotions.length:', promotions.length);
+  console.log('🔍 [PromotionList] isLoading:', isLoading);
+  console.log('🔍 [PromotionList] showList:', showList);
+  console.log('🔍 [PromotionList] =========================');
 
 
   const handleSelectPromotion = (promotion) => {
@@ -136,30 +298,27 @@ const PromotionList = ({
             </p>
             
             {/* Tabs */}
-            <div className="flex space-x-2">
-              <button
-                onClick={() => setActiveTab('platform')}
-                className={`flex-1 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-                  activeTab === 'platform'
-                    ? 'bg-white text-purple-600 shadow-lg transform scale-105'
-                    : 'bg-white/20 text-white hover:bg-white/30'
-                }`}
-              >
-                🏪 Khuyến mãi sàn
-              </button>
-              {storeId && (
+            {/* ✅ Khi có storeId: chỉ hiển thị tab "Khuyến mãi cửa hàng" (đã có khuyến mãi sàn ở trên) */}
+            {/* ✅ Khi không có storeId: chỉ hiển thị tab "Khuyến mãi sàn" */}
+            {storeId ? (
+              <div className="flex space-x-2">
                 <button
-                  onClick={() => setActiveTab('store')}
-                  className={`flex-1 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-                    activeTab === 'store'
-                      ? 'bg-white text-purple-600 shadow-lg transform scale-105'
-                      : 'bg-white/20 text-white hover:bg-white/30'
-                  }`}
+                  className="flex-1 px-4 py-2 rounded-lg font-medium text-sm bg-white text-purple-600 shadow-lg"
+                  disabled
                 >
                   🏬 Khuyến mãi cửa hàng
                 </button>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="flex space-x-2">
+                <button
+                  className="flex-1 px-4 py-2 rounded-lg font-medium text-sm bg-white text-purple-600 shadow-lg"
+                  disabled
+                >
+                  🏪 Khuyến mãi sàn
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Content */}

@@ -9,9 +9,12 @@ import {
   getWithdrawalRequests,
   createWithdrawalRequest,
   getWithdrawalRequestDetail,
+  getWalletTransactions,
   formatCurrency,
   getWithdrawalStatusBadge,
+  getTransactionTypeBadge,
 } from '../../services/b2c/walletService';
+import { getOrderCode } from '../../utils/displayCodeUtils';
 
 const StoreWallet = () => {
   const { storeId } = useParams();
@@ -21,20 +24,23 @@ const StoreWallet = () => {
   
   const [wallet, setWallet] = useState(null);
   const [withdrawals, setWithdrawals] = useState([]);
+  const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('overview'); // overview, withdrawals
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview'); // overview, withdrawals, transactions
+  const pendingHold = wallet?.pendingAmount || 0; // tiền tạm giữ từ đơn chưa hoàn tất
   
   // ✅ Tính available balance (số dư khả dụng)
   const getAvailableBalance = () => {
     if (!wallet || !withdrawals) return 0;
     
     // Tính tổng số tiền đang chờ rút (PENDING)
-    const pendingAmount = withdrawals
+    const pendingWithdrawals = withdrawals
       .filter(w => w.status === 'PENDING')
       .reduce((sum, w) => sum + (parseFloat(w.amount) || 0), 0);
     
-    // Available = Total - Pending
-    return (wallet.balance || 0) - pendingAmount;
+    // Available = Balance - pending withdraw
+    return (wallet.balance || 0) - pendingWithdrawals;
   };
   
   // Withdrawal form
@@ -94,6 +100,39 @@ const StoreWallet = () => {
       setLoading(false);
     }
   };
+
+  const loadTransactions = async () => {
+    if (!storeId) return;
+    
+    setLoadingTransactions(true);
+    try {
+      const result = await getWalletTransactions(storeId, { 
+        page: 0, 
+        size: 50,
+        sortBy: 'createdAt',
+        sortDir: 'desc'
+      });
+      
+      if (result.success) {
+        const txData = result.data?.content || result.data?.data || result.data;
+        setTransactions(Array.isArray(txData) ? txData : []);
+      } else {
+        setTransactions([]);
+      }
+    } catch (err) {
+      console.error('Error loading transactions:', err);
+      showError('Không thể tải lịch sử giao dịch');
+    } finally {
+      setLoadingTransactions(false);
+    }
+  };
+
+  // Load transactions when transactions tab is active
+  useEffect(() => {
+    if (activeTab === 'transactions' && storeId) {
+      loadTransactions();
+    }
+  }, [activeTab, storeId]);
 
   const handleWithdrawalSubmit = async (e) => {
     e.preventDefault();
@@ -231,19 +270,18 @@ const StoreWallet = () => {
           </div>
 
           {/* Right: Stats */}
-          <div className="flex gap-4">
+          <div className="flex gap-4 flex-wrap">
             <div className="bg-white rounded-xl p-4 text-center shadow-sm min-w-[140px]">
               <p className="text-xs text-gray-600 mb-1">Tổng thu nhập</p>
               <p className="text-xl font-bold text-blue-600">{formatCurrency(wallet?.totalEarned || 0)}</p>
             </div>
             <div className="bg-white rounded-xl p-4 text-center shadow-sm min-w-[140px]">
-              <p className="text-xs text-gray-600 mb-1">Tiền đang chờ xử lý</p>
-              <p className="text-xl font-bold text-yellow-600">{formatCurrency(wallet?.pendingAmount || 0)}</p>
-              <p className="text-xs text-gray-500 mt-1">(Đơn chưa hoàn thành)</p>
-            </div>
-            <div className="bg-white rounded-xl p-4 text-center shadow-sm min-w-[140px]">
               <p className="text-xs text-gray-600 mb-1">Đang chờ rút</p>
               <p className="text-xl font-bold text-orange-600">{formatCurrency((wallet?.balance || 0) - getAvailableBalance())}</p>
+            </div>
+            <div className="bg-white rounded-xl p-4 text-center shadow-sm min-w-[140px]">
+              <p className="text-xs text-gray-600 mb-1">Đang chờ nhận</p>
+              <p className="text-xl font-bold text-amber-600">{formatCurrency(pendingHold || 0)}</p>
             </div>
             <div className="bg-white rounded-xl p-4 text-center shadow-sm min-w-[140px]">
               <p className="text-xs text-gray-600 mb-1">Đã rút</p>
@@ -276,6 +314,16 @@ const StoreWallet = () => {
           >
             💸 Yêu cầu rút tiền
           </button>
+          <button
+            onClick={() => setActiveTab('transactions')}
+            className={`pb-4 px-2 font-medium transition-colors ${
+              activeTab === 'transactions'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            📋 Lịch sử giao dịch
+          </button>
         </div>
       </div>
 
@@ -298,14 +346,14 @@ const StoreWallet = () => {
             </p>
           </div>
           
-          {/* Đã duyệt */}
+          {/* Đã hoàn tất - giữ số liệu, đổi nhãn */}
           <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6 border-2 border-green-200 hover:shadow-lg transition-all">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-emerald-400 rounded-xl flex items-center justify-center shadow-md">
                 <span className="text-2xl">✅</span>
               </div>
               <div>
-                <h3 className="text-sm font-medium text-gray-600">Đã duyệt</h3>
+                <h3 className="text-sm font-medium text-gray-600">Hoàn tất</h3>
                 <p className="text-xs text-gray-500">Đã hoàn tất</p>
               </div>
             </div>
@@ -408,6 +456,144 @@ const StoreWallet = () => {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {activeTab === 'transactions' && (
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          {loadingTransactions ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+              <p className="ml-4 text-gray-600">Đang tải lịch sử giao dịch...</p>
+            </div>
+          ) : transactions.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <p className="text-lg">Chưa có giao dịch nào</p>
+            </div>
+          ) : (
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Loại</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mã đơn hàng</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mô tả</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Số tiền</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Thời gian</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hành động</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {transactions
+                  // ✅ CHỈ HIỂN THỊ transaction có cộng tiền vào ví (balanceAfter > balanceBefore)
+                  .filter((tx) => {
+                    const balanceBefore = parseFloat(tx.balanceBefore || 0);
+                    const balanceAfter = parseFloat(tx.balanceAfter || 0);
+                    // Chỉ hiển thị khi balance thay đổi và tăng (cộng tiền)
+                    return balanceAfter !== balanceBefore && balanceAfter > balanceBefore;
+                  })
+                  .map((tx) => {
+                  const badge = getTransactionTypeBadge(tx.type || 'PAYMENT');
+                  const rawAmount = parseFloat(tx.amount || 0);
+                  
+                  // ✅ Xác định loại giao dịch: cộng tiền hay trừ tiền
+                  // Nếu type là PAYMENT, ORDER_COMPLETED → đây là tiền CỘNG vào ví (dù amount có thể âm)
+                  // Nếu type là WITHDRAWAL, REFUND → đây là tiền TRỪ khỏi ví
+                  // ⚠️ LƯU Ý: "Tiền chờ từ đơn hàng" chỉ nên xuất hiện khi đơn COMPLETED, không phải DELIVERED
+                  // Backend cần sửa: Khi DELIVERED chỉ cộng vào pendingAmount, KHÔNG tạo transaction
+                  
+                  // ✅ Transaction cộng tiền (Credit):
+                  const isCredit = tx.type === 'PAYMENT' || 
+                                  tx.type === 'ORDER_COMPLETED' || 
+                                  (tx.description && tx.description.includes('Thanh toán đơn hàng')) ||
+                                  (tx.description && tx.description.includes('Tiền từ đơn hàng')) ||
+                                  (tx.description && tx.description.includes('Tiền chờ từ đơn hàng')) || // ⚠️ Tạm thời giữ để tương thích, backend cần sửa
+                                  // ✅ Transaction dispute: Store thắng kiện (giữ lại tiền) → CỘNG tiền
+                                  (tx.description && (tx.description.includes('Store thắng kiện') || tx.description.includes('giữ lại'))) ||
+                                  (tx.description && tx.description.includes('Tiền từ tranh chấp') && !tx.description.includes('Trừ tiền'));
+                  
+                  // ✅ Transaction trừ tiền (Debit):
+                  // - "Trừ tiền hoàn cho buyer" → Trừ tiền
+                  // - "Hoàn tiền" (không phải store thắng) → Trừ tiền
+                  const isDebit = tx.type === 'WITHDRAWAL' || 
+                                 tx.type === 'REFUND' ||
+                                 (tx.description && tx.description.includes('Trừ tiền hoàn cho buyer')) ||
+                                 (tx.description && tx.description.includes('Hoàn tiền') && !tx.description.includes('giữ lại'));
+                  
+                  // ✅ Ưu tiên kiểm tra isDebit trước (rõ ràng hơn), nếu không phải debit thì là credit
+                  const finalIsCredit = isDebit ? false : (isCredit || !tx.description || !tx.description.includes('Trừ'));
+                  
+                  // ✅ Nếu là giao dịch cộng tiền, luôn hiển thị số dương
+                  // Nếu là giao dịch trừ tiền, hiển thị số âm
+                  const displayAmount = finalIsCredit ? Math.abs(rawAmount) : -Math.abs(rawAmount);
+                  const isPositive = displayAmount > 0;
+                  
+                  // ✅ Extract orderId từ description nếu không có trong tx.orderId
+                  let orderId = tx.orderId;
+                  if (!orderId && tx.description) {
+                    const match = tx.description.match(/#([a-f0-9]{24})/i);
+                    if (match) {
+                      orderId = match[1];
+                    }
+                  }
+                  
+                  // ✅ Format description: thay thế ObjectId bằng mã đơn hàng dạng "DH..."
+                  const formatDescription = (description) => {
+                    if (!description) return 'Giao dịch';
+                    // Tìm tất cả ObjectId trong description (dạng #24 ký tự hex)
+                    return description.replace(/#([a-f0-9]{24})/gi, (match, id) => {
+                      return `#${getOrderCode(id)}`;
+                    });
+                  };
+                  
+                  return (
+                    <tr key={tx.id || tx._id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${badge.color}`}>
+                          <span>{badge.icon}</span>
+                          {badge.text}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="text-sm font-medium text-gray-900">
+                          {orderId ? (
+                            <button
+                              onClick={() => navigate(`/store-dashboard/orders/${orderId}`)}
+                              className="text-blue-600 hover:text-blue-800 underline"
+                            >
+                              {getOrderCode(orderId)}
+                            </button>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="text-sm text-gray-900">{formatDescription(tx.description || tx.note)}</p>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`text-sm font-semibold ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                          {isPositive ? '+' : ''}{formatCurrency(displayAmount)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {tx.createdAt ? new Date(tx.createdAt).toLocaleString('vi-VN') : '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        {orderId && (
+                          <button
+                            onClick={() => navigate(`/store-dashboard/orders/${orderId}`)}
+                            className="text-blue-600 hover:text-blue-800 font-medium"
+                          >
+                            👁️ Xem đơn
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 

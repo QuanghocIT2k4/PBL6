@@ -87,7 +87,29 @@ const StoreDisputeDetailPage = () => {
     return labels[type] || type;
   };
 
-  const getDecisionLabel = (decision) => {
+  const getDecisionLabel = (decision, disputeType = null, dispute = null) => {
+    // ✅ Xử lý PARTIAL_REFUND: Hiển thị số tiền
+    if (decision === 'PARTIAL_REFUND') {
+      let amount = null;
+      if (dispute) {
+        // Ưu tiên lấy từ dispute.partialRefundAmount
+        amount = dispute.partialRefundAmount;
+        // Nếu không có, lấy từ returnRequest.partialRefundToBuyer
+        if (!amount && dispute.returnRequest?.partialRefundToBuyer) {
+          amount = dispute.returnRequest.partialRefundToBuyer;
+        }
+      }
+      
+      if (amount && typeof amount === 'number' && amount > 0) {
+        const formattedAmount = new Intl.NumberFormat('vi-VN', {
+          style: 'currency',
+          currency: 'VND'
+        }).format(amount);
+        return `Hoàn trả 1 phần (${formattedAmount})`;
+      }
+      return 'Hoàn trả 1 phần';
+    }
+    
     // Store nhìn thấy rõ: chấp nhận / từ chối khiếu nại + ý nghĩa
     if (decision === 'APPROVE_RETURN') {
       return 'Chấp nhận khiếu nại của người mua (cho phép trả hàng)';

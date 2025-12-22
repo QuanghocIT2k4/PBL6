@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 import MainLayout from '../../layouts/MainLayout';
+import { getOrderCode } from '../../utils/displayCodeUtils';
 import { getMyReturnRequests } from '../../services/buyer/returnService';
 import { useToast } from '../../context/ToastContext';
 import SEO from '../../components/seo/SEO';
@@ -33,6 +34,7 @@ const BuyerReturnRequestsPage = () => {
       RETURN_DISPUTED: 'bg-pink-100 text-pink-800',
       REFUNDED: 'bg-green-100 text-green-800',
       REFUND_TO_STORE: 'bg-teal-100 text-teal-800',
+      PARTIAL_REFUND: 'bg-cyan-100 text-cyan-800',
       CLOSED: 'bg-gray-100 text-gray-800',
     };
     return badges[status] || 'bg-gray-100 text-gray-800';
@@ -50,6 +52,7 @@ const BuyerReturnRequestsPage = () => {
       RETURN_DISPUTED: 'Tranh chấp chất lượng',
       REFUNDED: 'Đã hoàn tiền',
       REFUND_TO_STORE: 'Hoàn tiền cho shop',
+      PARTIAL_REFUND: 'Hoàn tiền một phần',
       CLOSED: 'Đã đóng',
     };
     return labels[status] || status;
@@ -72,6 +75,13 @@ const BuyerReturnRequestsPage = () => {
     });
   };
 
+  // Helper lấy ID từ DBRef / object
+  const getIdFromRef = (ref) => {
+    if (!ref) return null;
+    if (typeof ref === 'string' || typeof ref === 'number') return String(ref);
+    return String(ref.$id || ref._id || ref.id || ref.$oid || ref);
+  };
+
   if (error) {
     showError('Không thể tải danh sách yêu cầu trả hàng');
   }
@@ -84,19 +94,19 @@ const BuyerReturnRequestsPage = () => {
         keywords="trả hàng, hoàn tiền, yêu cầu trả hàng"
         url="https://pbl-6-eight.vercel.app/orders/returns"
       />
-      <div className="bg-gray-50 min-h-screen py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="bg-gray-50 min-h-screen py-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Header */}
-          <div className="mb-6 flex items-center justify-between">
+          <div className="mb-8 flex items-center justify-between border-b border-gray-200 pb-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              <h1 className="text-3xl font-semibold text-gray-900 mb-1">
                 Yêu cầu trả hàng
               </h1>
-              <p className="text-gray-600">Quản lý các yêu cầu trả hàng của bạn</p>
+              <p className="text-sm text-gray-500">Quản lý các yêu cầu trả hàng của bạn</p>
             </div>
             <Link
               to="/orders"
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+              className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
             >
               ← Quay lại đơn hàng
             </Link>
@@ -106,10 +116,10 @@ const BuyerReturnRequestsPage = () => {
           <div className="mb-6 flex gap-2 flex-wrap">
             <button
               onClick={() => setStatusFilter(null)}
-              className={`px-4 py-2 rounded-lg transition ${
+              className={`px-4 py-2 text-sm rounded-md border transition-colors ${
                 statusFilter === null
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-100'
+                  ? 'bg-gray-900 text-white border-gray-900'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
               }`}
             >
               Tất cả
@@ -118,10 +128,10 @@ const BuyerReturnRequestsPage = () => {
               <button
                 key={status}
                 onClick={() => setStatusFilter(status)}
-                className={`px-4 py-2 rounded-lg transition ${
+                className={`px-4 py-2 text-sm rounded-md border transition-colors ${
                   statusFilter === status
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                    ? 'bg-gray-900 text-white border-gray-900'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                 }`}
               >
                 {getStatusLabel(status)}
@@ -156,40 +166,53 @@ const BuyerReturnRequestsPage = () => {
               </p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {returnRequests.map((request) => (
-                <div
-                  key={request.id || request._id}
-                  className="bg-white rounded-lg shadow p-6 hover:shadow-md transition"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-3">
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadge(
-                            request.status
-                          )}`}
-                        >
-                          {getStatusLabel(request.status)}
-                        </span>
-                        <span className="text-sm text-gray-500">
-                          {formatDate(request.createdAt)}
-                        </span>
-                      </div>
+            <div className="space-y-3">
+              {returnRequests.map((request) => {
+                const orderId = getIdFromRef(request.order || request.orderId || request.orderRef);
+                const orderCode = orderId ? getOrderCode(orderId) : null;
 
-                      <div className="mb-3">
-                        <p className="text-sm text-gray-600 mb-1">
-                          <span className="font-medium">Lý do:</span> {request.reason}
+                return (
+                  <div
+                    key={request.id || request._id}
+                    className="bg-white border border-gray-200 rounded-lg p-5 hover:border-gray-300 transition-colors"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex flex-wrap items-center gap-3 mb-2">
+                          <span
+                            className={`px-2.5 py-1 rounded text-xs font-medium ${getStatusBadge(
+                              request.status
+                            )}`}
+                          >
+                            {getStatusLabel(request.status)}
+                          </span>
+                          {orderCode && (
+                            <Link
+                              to={`/orders/${orderId}`}
+                              className="text-xs font-semibold text-blue-600 hover:text-blue-700"
+                            >
+                              Đơn hàng #{orderCode}
+                            </Link>
+                          )}
+                        </div>
+                        <span className="text-xs text-gray-500">
+                          Tạo lúc: {formatDate(request.createdAt)}
+                        </span>
+
+                      <div className="mb-4 space-y-1">
+                        <p className="text-sm text-gray-700">
+                          <span className="font-medium text-gray-900">Lý do:</span> {request.reason}
                         </p>
                         {request.description && (
-                          <p className="text-sm text-gray-600">
-                            <span className="font-medium">Mô tả:</span> {request.description}
+                          <p className="text-sm text-gray-700">
+                            <span className="font-medium text-gray-900">Mô tả:</span> {request.description}
                           </p>
                         )}
                       </div>
 
-                      <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4 text-sm">
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                        <div className="space-y-3">
+                        {/* Thông tin tiền hoàn */}
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-sm">
                           <span className="text-gray-600">
                             <span className="font-medium">Số tiền hoàn dự kiến:</span>{' '}
                             <span className="text-gray-900 font-semibold">
@@ -205,65 +228,92 @@ const BuyerReturnRequestsPage = () => {
                             </span>
                           )}
                         </div>
-                        <div className="flex flex-col sm:items-end gap-1 sm:ml-auto">
-                          {request.order && (
-                            <Link
-                              to={`/orders/${request.order.id || request.order._id || request.order}`}
-                              className="text-blue-600 hover:underline"
-                            >
-                              Xem đơn hàng →
-                            </Link>
-                          )}
 
-                          {/* Khiếu nại liên quan (nếu BE trả về) */}
-                          {Array.isArray(request.relatedDisputes) && request.relatedDisputes.length > 0 && (
-                            <div className="mt-1 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded px-2 py-1">
-                              <span className="font-medium">Khiếu nại liên quan:</span>{' '}
-                              <span>{request.relatedDisputes.length} khiếu nại</span>
-                              <div className="mt-1 space-y-0.5">
-                                {request.relatedDisputes.slice(0, 2).map((d) => (
-                                  <Link
-                                    key={d.disputeId || d.id}
-                                    to={`/orders/disputes/${d.disputeId || d.id || d}`}
-                                    className="block text-blue-600 hover:underline"
-                                  >
-                                    #{String(d.disputeId || d.id || d).slice(-6)} – {d.disputeType || d.type || 'N/A'}
-                                  </Link>
-                                ))}
-                                {request.relatedDisputes.length > 2 && (
-                                  <span className="block text-[11px] text-gray-500">
-                                    … và {request.relatedDisputes.length - 2} khiếu nại khác
-                                  </span>
-                                )}
-                              </div>
+                        {/* Khiếu nại liên quan */}
+                        {Array.isArray(request.relatedDisputes) && request.relatedDisputes.length > 0 && (
+                          <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-sm font-medium text-gray-900">
+                                Khiếu nại liên quan:
+                              </span>
+                              <span className="text-sm text-gray-600">
+                                {request.relatedDisputes.length} {request.relatedDisputes.length === 1 ? 'khiếu nại' : 'khiếu nại'}
+                              </span>
                             </div>
-                          )}
-                        </div>
+                            <div className="space-y-1">
+                              {request.relatedDisputes.slice(0, 3).map((d) => {
+                                const disputeId = d.disputeId || d.id || d;
+                                const disputeType = d.disputeType || d.type || '';
+                                
+                                // ✅ Chuyển đổi disputeType sang tiếng Việt
+                                const getDisputeTypeLabel = (type) => {
+                                  const typeMap = {
+                                    'RETURN_QUALITY': 'Tranh chấp chất lượng',
+                                    'RETURN_REJECTION': 'Khiếu nại từ chối trả hàng',
+                                    'RETURN_QUALITY_DISPUTE': 'Tranh chấp chất lượng',
+                                    'RETURN_REJECTION_DISPUTE': 'Khiếu nại từ chối trả hàng',
+                                  };
+                                  return typeMap[type] || 'Khiếu nại';
+                                };
+                                
+                                const disputeTypeLabel = getDisputeTypeLabel(disputeType);
+                                
+                                return (
+                                  <Link
+                                    key={disputeId}
+                                    to={`/orders/disputes/${disputeId}`}
+                                    className="block text-sm text-gray-700 hover:text-gray-900 hover:underline"
+                                  >
+                                    #{String(disputeId).slice(-8)} - {disputeTypeLabel}
+                                  </Link>
+                                );
+                              })}
+                              {request.relatedDisputes.length > 3 && (
+                                <span className="block text-xs text-gray-500 mt-1">
+                                  … và {request.relatedDisputes.length - 3} khiếu nại khác
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Button xem chi tiết đơn hàng */}
+                        {orderId && (
+                          <div className="pt-2">
+                            <Link
+                              to={`/orders/${orderId}`}
+                              className="inline-flex items-center px-4 py-2 text-sm font-semibold bg-gray-900 text-white rounded-md hover:bg-gray-800 transition-colors"
+                            >
+                              Xem chi tiết đơn hàng #{orderCode}
+                            </Link>
+                          </div>
+                        )}
                       </div>
 
                       {request.storeResponse && (
-                        <div className="mt-3 p-3 bg-gray-50 rounded">
+                        <div className="mt-4 pt-4 border-t border-gray-100">
                           <p className="text-sm text-gray-700">
-                            <span className="font-medium">Phản hồi từ shop:</span>{' '}
+                            <span className="font-medium text-gray-900">Phản hồi từ shop:</span>{' '}
                             {request.storeResponse}
                           </p>
                         </div>
                       )}
 
                       {request.status === 'REJECTED' && (
-                        <div className="mt-3">
+                        <div className="mt-4 pt-4 border-t border-gray-100">
                           <Link
                             to={`/orders/returns/${request.id || request._id}/dispute`}
-                            className="inline-block px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition"
+                            className="inline-block px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-800 transition-colors"
                           >
                             Khiếu nại
                           </Link>
                         </div>
                       )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               {/* Pagination */}
               {totalPages > 1 && (
