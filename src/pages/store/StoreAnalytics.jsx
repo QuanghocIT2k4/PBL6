@@ -392,7 +392,6 @@ const StoreAnalytics = () => {
                       <div>
                         <p className="text-sm font-medium text-gray-600">Tổng doanh thu</p>
                         <p className="text-xl font-bold text-gray-900">{formatPrice(displayData?.revenue?.total || 0)}</p>
-                        <p className="text-xs text-green-600">+{displayData?.revenue?.growth || 0}% so với tháng trước</p>
                       </div>
                     </div>
                   </div>
@@ -407,7 +406,6 @@ const StoreAnalytics = () => {
                       <div>
                         <p className="text-sm font-medium text-gray-600">Tổng đơn hàng</p>
                         <p className="text-xl font-bold text-gray-900">{formatNumber(displayData?.orders?.total || 0)}</p>
-                        <p className="text-xs text-blue-600">+{displayData?.orders?.growth || 0}% so với tháng trước</p>
                       </div>
                     </div>
                   </div>
@@ -423,9 +421,6 @@ const StoreAnalytics = () => {
                         <p className="text-sm font-medium text-gray-600">Biến thể (kho)</p>
                         <p className="text-xl font-bold text-gray-900">
                           {formatNumber(displayData?.inventory?.total || displayData?.products?.total || 0)}
-                        </p>
-                        <p className="text-xs text-purple-600">
-                          {formatNumber(displayData?.inventory?.inStock || displayData?.products?.active || 0)} đang bán
                         </p>
                       </div>
                     </div>
@@ -532,13 +527,20 @@ const StoreAnalytics = () => {
 
                 // Tính toán tọa độ cho biểu đồ đường
                 const chartHeight = 200;
-                const chartWidth = data.length > 1 ? (data.length - 1) * 100 : 300;
+                // ✅ Khi có 2 điểm, dùng width cố định để đường thẳng kéo dài đến cạnh phải
+                const chartWidth = data.length === 2 ? 300 : (data.length > 1 ? (data.length - 1) * 100 : 300);
                 const points = data.map((item, index) => {
                   const value =
                     chartModeMonth === 'revenue'
                       ? item.totalRevenue ?? item.revenue ?? item.total ?? 0
                       : item.orderCounts ?? item.orders ?? item.count ?? item.total ?? 0;
-                  const x = data.length > 1 ? (index / (data.length - 1)) * chartWidth : chartWidth / 2;
+                  // ✅ Khi có 2 điểm, điểm đầu ở x=0, điểm cuối ở x=chartWidth (cạnh phải)
+                  let x;
+                  if (data.length === 2) {
+                    x = index === 0 ? 0 : chartWidth;
+                  } else {
+                    x = data.length > 1 ? (index / (data.length - 1)) * chartWidth : chartWidth / 2;
+                  }
                   const y = chartHeight - (value / maxVal) * chartHeight;
                   return { x, y, value, label: item.label || item.month || item.period || item.date || `P${index + 1}` };
                 });
@@ -722,14 +724,31 @@ const StoreAnalytics = () => {
                     }).join(' ')
                   : '';
 
+                // ✅ Tính toán lại vị trí x để thẳng hàng với labels (dùng cùng logic với flex justify-between)
+                // Với flex justify-between, các item được phân bố đều: item đầu ở 0%, item cuối ở 100%, các item giữa chia đều
+                const adjustedPoints = points.map((point, index) => {
+                  let adjustedX;
+                  if (points.length === 1) {
+                    adjustedX = chartWidth / 2;
+                  } else if (points.length === 2) {
+                    adjustedX = index === 0 ? 0 : chartWidth;
+                  } else {
+                    // Với 3+ điểm: điểm đầu ở 0, điểm cuối ở chartWidth, các điểm giữa chia đều
+                    adjustedX = index === 0 ? 0 : (index === points.length - 1 ? chartWidth : (index / (points.length - 1)) * chartWidth);
+                  }
+                  return { ...point, x: adjustedX };
+                });
+
                 return (
                   <div>
                     <div className="relative">
                       <svg width="100%" height="256" viewBox={`0 0 ${Math.max(chartWidth, 300)} 256`} className="overflow-visible">
-                        {/* Đường nối các điểm (chỉ hiển thị khi có ít nhất 2 điểm) */}
-                        {pathData && (
+                        {/* Đường nối các điểm (chỉ khi có ít nhất 2 điểm) */}
+                        {adjustedPoints.length > 1 && (
                           <path
-                            d={pathData}
+                            d={adjustedPoints.map((point, index) => {
+                              return `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`;
+                            }).join(' ')}
                             fill="none"
                             stroke={chartModeWeek === 'revenue' ? '#10b981' : '#3b82f6'}
                             strokeWidth="3"
@@ -738,7 +757,7 @@ const StoreAnalytics = () => {
                           />
                         )}
                         {/* Các điểm trên đường */}
-                        {points.map((point, index) => (
+                        {adjustedPoints.map((point, index) => (
                           <g key={index}>
                             <circle
                               cx={point.x}
@@ -756,7 +775,7 @@ const StoreAnalytics = () => {
                       </svg>
                       {/* Labels bên dưới */}
                       <div className="flex justify-between mt-2">
-                        {points.map((point, index) => (
+                        {adjustedPoints.map((point, index) => (
                           <div key={index} className="flex flex-col items-center flex-1">
                             <span className="text-xs text-gray-500 truncate w-full text-center" title={point.label}>
                               {point.label}

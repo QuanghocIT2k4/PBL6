@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import useSWR from 'swr';
+import useSWR, { mutate } from 'swr';
 import StoreLayout from '../../layouts/StoreLayout';
 import { useStoreContext } from '../../context/StoreContext';
 import StoreStatusGuard from '../../components/store/StoreStatusGuard';
@@ -594,30 +594,128 @@ const AddProductVariant = () => {
         if (validColors.length > 0) {
           showToast(`Đang thêm ${validColors.length} màu sắc...`, 'info');
           
-          // ✅ Thêm delay nhỏ để đảm bảo variant đã được tạo xong trong DB
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // ✅ Thêm delay để đảm bảo variant đã được tạo xong trong DB
+          console.log('⏳ [COLORS] Waiting 1 second for variant to be saved in DB...');
+          await new Promise(resolve => setTimeout(resolve, 1000));
           
-          for (const color of validColors) {
-            console.log(`🎨 [COLORS] Đang thêm màu: ${color.colorName} với variantId: ${variantId}`);
-            
-            const colorResult = await addColorToVariant(variantId, {
+          let successCount = 0;
+          let errorCount = 0;
+          
+          for (let i = 0; i < validColors.length; i++) {
+            const color = validColors[i];
+            console.log(`🎨 [COLORS] [${i + 1}/${validColors.length}] Đang thêm màu: ${color.colorName} với variantId: ${variantId}`);
+            console.log(`🎨 [COLORS] Color data:`, {
               colorName: color.colorName.trim(),
               price: parseInt(parseFormattedNumber(color.price)),
-              stock: parseInt(color.stock)
-            }, color.image);
+              stock: parseInt(color.stock),
+              image: color.image?.name || 'N/A'
+            });
+            
+            try {
+              const colorResult = await addColorToVariant(variantId, {
+                colorName: color.colorName.trim(),
+                price: parseInt(parseFormattedNumber(color.price)),
+                stock: parseInt(color.stock)
+              }, color.image);
 
-            if (!colorResult.success) {
-              console.error(`❌ [ERROR] Lỗi khi thêm màu ${color.colorName}:`, colorResult.error);
-              console.error(`❌ [ERROR] variantId đã dùng:`, variantId);
-              showToast(`Lỗi khi thêm màu ${color.colorName}: ${colorResult.error}`, 'error');
-            } else {
-              console.log(`✅ [SUCCESS] Đã thêm màu ${color.colorName} thành công`);
+              if (!colorResult.success) {
+                errorCount++;
+                console.error(`❌ [ERROR] [${i + 1}/${validColors.length}] Lỗi khi thêm màu ${color.colorName}:`, colorResult.error);
+                console.error(`❌ [ERROR] variantId đã dùng:`, variantId);
+                console.error(`❌ [ERROR] Full error response:`, colorResult);
+                showToast(`Lỗi khi thêm màu ${color.colorName}: ${colorResult.error}`, 'error');
+              } else {
+                successCount++;
+                console.log(`✅ [SUCCESS] [${i + 1}/${validColors.length}] Đã thêm màu ${color.colorName} thành công`);
+                console.log(`✅ [SUCCESS] Response data:`, colorResult.data);
+                
+                // ✅ Kiểm tra lại variant sau khi thêm màu để xác nhận đã lưu vào DB
+                console.log(`🔍 [VERIFY] Đang kiểm tra variant sau khi thêm màu...`);
+                await new Promise(resolve => setTimeout(resolve, 500)); // Delay để DB update
+                
+                try {
+                  const verifyResult = await getProductVariantsByStore(currentStore.id, {
+                    page: 0,
+                    size: 100,
+                    sortBy: 'createdAt',
+                    sortDir: 'desc'
+                  });
+                  
+                  if (verifyResult.success) {
+                    const variants = Array.isArray(verifyResult.data) 
+                      ? verifyResult.data 
+                      : (verifyResult.data?.content || []);
+                    
+                    const currentVariant = variants.find(v => 
+                      (v.id === variantId || v._id === variantId)
+                    );
+                    
+                    if (currentVariant) {
+                      console.log(`🔍 [VERIFY] Variant found:`, currentVariant);
+                      console.log(`🔍 [VERIFY] Variant colors:`, currentVariant.colors);
+                      console.log(`🔍 [VERIFY] Colors count:`, currentVariant.colors?.length || 0);
+                      
+                      if (currentVariant.colors && currentVariant.colors.length > 0) {
+                        const addedColor = currentVariant.colors.find(c => 
+                          c.colorName === color.colorName || c.name === color.colorName
+                        );
+                        if (addedColor) {
+                          console.log(`✅ [VERIFY] Màu ${color.colorName} đã được lưu vào DB:`, addedColor);
+                        } else {
+                          console.warn(`⚠️ [VERIFY] Màu ${color.colorName} chưa thấy trong DB, có thể cần refresh`);
+                        }
+                      } else {
+                        console.warn(`⚠️ [VERIFY] Variant không có colors trong DB, có thể backend chưa lưu`);
+                      }
+                    } else {
+                      console.warn(`⚠️ [VERIFY] Không tìm thấy variant với ID: ${variantId}`);
+                    }
+                  }
+                } catch (verifyErr) {
+                  console.error(`❌ [VERIFY] Lỗi khi kiểm tra variant:`, verifyErr);
+                }
+              }
+            } catch (err) {
+              errorCount++;
+              console.error(`❌ [ERROR] [${i + 1}/${validColors.length}] Exception khi thêm màu ${color.colorName}:`, err);
+              showToast(`Lỗi khi thêm màu ${color.colorName}: ${err.message}`, 'error');
             }
+            
+            // ✅ Delay giữa các màu để tránh quá tải
+            if (i < validColors.length - 1) {
+              await new Promise(resolve => setTimeout(resolve, 300));
+            }
+          }
+          
+          // ✅ Tổng kết
+          console.log(`📊 [COLORS] Tổng kết: ${successCount} thành công, ${errorCount} lỗi`);
+          if (errorCount > 0) {
+            showToast(`Đã thêm ${successCount}/${validColors.length} màu sắc. ${errorCount} màu bị lỗi.`, 'warning');
+          } else {
+            showToast(`Đã thêm ${successCount} màu sắc thành công!`, 'success');
           }
         }
       }
 
       showToast('Thêm biến thể thành công!', 'success');
+      
+      // ✅ Force refresh danh sách variant trước khi navigate
+      // Invalidate SWR cache để đảm bảo danh sách được refresh
+      if (currentStore?.id) {
+        // Invalidate tất cả cache liên quan đến variants
+        await mutate(
+          (key) => Array.isArray(key) && key[0] === 'store-product-variants' && key[1] === currentStore.id,
+          undefined,
+          { revalidate: true }
+        );
+        // Invalidate variant counts
+        await mutate(
+          (key) => Array.isArray(key) && key[0] === 'variant-counts-by-status' && key[1] === currentStore.id,
+          undefined,
+          { revalidate: true }
+        );
+        console.log('✅ [REFRESH] Invalidated variant cache before navigate');
+      }
       
       // ✅ Delay nhỏ để đảm bảo state đã update trước khi navigate
       setTimeout(() => {

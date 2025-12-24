@@ -8,12 +8,124 @@ import addressService from '../../services/buyer/addressService';
 import PromoCodeInput from '../../components/promotions/PromoCodeInput';
 import PromotionList from '../../components/promotions/PromotionList';
 import { calculateDiscount, formatCurrency } from '../../services/admin/promotionService';
-import { createPaymentUrl } from '../../services/buyer/paymentService';
 import { createMoMoPayment } from '../../services/buyer/momoPaymentService';
 import { getProductVariantById } from '../../services/common/productService';
 import { getStoreById } from '../../services/common/storeService';
 import { calculateShippingFee, calculateExpectedDeliveryDate } from '../../services/common/provinceService';
 import SEO from '../../components/seo/SEO';
+
+// ✅ Component để hiển thị sản phẩm trong checkout với ảnh và màu
+const CheckoutProductItem = ({ item }) => {
+  const [variantDetail, setVariantDetail] = useState(null);
+  const { formatPrice } = useCart(); // ✅ Lấy formatPrice từ useCart
+  
+  // ✅ Fetch variant detail để lấy đầy đủ thông tin bao gồm ảnh và màu
+  useEffect(() => {
+    const fetchVariantImage = async () => {
+      const variantId = item?.productVariantId || item?.product?.id;
+      if (!variantId) return;
+      
+      // ✅ Nếu đã có variantDetail rồi thì không fetch lại
+      if (variantDetail) return;
+      
+      // ✅ Nếu đã có ảnh từ item.product thì không cần fetch
+      const variant = item.product || item.variant || item;
+      if (variant?.imageUrl || variant?.image || variant?.primaryImage || (Array.isArray(variant?.images) && variant.images.length > 0)) {
+        return;
+      }
+      
+      try {
+        const result = await getProductVariantById(variantId);
+        if (result?.success && result.data) {
+          setVariantDetail(result.data);
+        }
+      } catch (error) {
+        console.error('Error fetching variant detail:', error);
+      }
+    };
+    
+    fetchVariantImage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item?.productVariantId, item?.product?.id]);
+  
+  const variant = variantDetail || item.product || item.variant || item;
+  
+  // ✅ Lấy màu đã chọn
+  const selectedColor = useMemo(() => {
+    if (!variant?.colors || !Array.isArray(variant.colors)) return null;
+    const colorKey = item.options?.colorId || item.options?.color_id || item.options?.color || item.options?.colorName;
+    if (!colorKey) return null;
+    
+    return variant.colors.find(
+      (c) =>
+        c?._id === colorKey ||
+        c?.id === colorKey ||
+        c?.colorId === colorKey ||
+        c?.colorName === colorKey ||
+        c?.name === colorKey
+    ) || null;
+  }, [variant?.colors, item.options]);
+  
+  // ✅ Lấy hình ảnh (ưu tiên từ màu đã chọn)
+  const imageUrl = useMemo(() => {
+    // ✅ Ưu tiên hình ảnh từ màu đã chọn
+    if (selectedColor) {
+      const colorImg = selectedColor.image || selectedColor.colorImage || selectedColor.imageUrl;
+      if (colorImg) return colorImg;
+    }
+    
+    // ✅ Nếu không có từ màu, lấy từ variant
+    return variant?.imageUrl || 
+           variant?.image || 
+           variant?.primaryImage || 
+           (Array.isArray(variant?.images) && variant.images.length > 0 && variant.images[0]) ||
+           variant?.variantImage ||
+           null;
+  }, [selectedColor, variant]);
+  
+  return (
+    <div className="py-3 px-4 flex items-center justify-between">
+      <div className="flex items-center space-x-3 min-w-0 flex-1">
+        <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center overflow-hidden flex-shrink-0">
+          {imageUrl && (imageUrl.startsWith('http') || imageUrl.startsWith('/') || imageUrl.startsWith('data:')) ? (
+            <img
+              src={imageUrl}
+              alt={variant.name || item.product?.name || 'Sản phẩm'}
+              className="w-full h-full object-cover rounded"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.style.display = 'none';
+                const parent = e.target.parentElement;
+                if (parent) {
+                  parent.innerHTML = '<span class="text-xl">📦</span>';
+                }
+              }}
+            />
+          ) : (
+            <span className="text-xl">📦</span>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-medium truncate">{variant.name || item.product?.name}</div>
+          <div className="text-sm text-gray-500">x{item.quantity}</div>
+          {/* ✅ Hiển thị màu đã chọn */}
+          {selectedColor && (
+            <div className="text-xs text-gray-600 mt-1">
+              Màu: <span className="font-medium">{selectedColor.colorName || selectedColor.name}</span>
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="font-semibold text-red-600 flex-shrink-0 ml-4">
+        {formatPrice(
+          (typeof item.product?.price === 'string'
+            ? parseInt(item.product.price.replace(/\./g, '') || 0)
+            : parseInt(item.product?.price || 0)) * item.quantity
+        )}đ
+      </div>
+    </div>
+  );
+};
 
 const CheckoutPage = () => {
   const { getSelectedItems, getSelectedTotalItems, getSelectedTotalPrice, formatPrice, removeSelectedItems } = useCart();
@@ -46,6 +158,95 @@ const CheckoutPage = () => {
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [storeAddresses, setStoreAddresses] = useState({}); // { storeId: { province } }
   const { profile, createOrder } = useProfile();
+
+  // ✅ Hàm polling để check MoMo payment status sau khi thanh toán
+  // ⚠️ QUAN TRỌNG: MoMo có callback IPN (/api/v1/buyer/payments/momo/ipn) nhưng có thể bị timeout (504)
+  // Nên cần polling để verify payment status và cập nhật nếu backend chưa xử lý callback
+  const startMoMoPaymentPolling = (momoOrderId, orderId, storeName) => {
+    if (!momoOrderId) {
+      console.warn('⚠️ [Checkout] Cannot start polling: missing momoOrderId');
+      return;
+    }
+
+    console.log(`🔄 [Checkout] Starting payment status polling for order ${orderId} (MoMo OrderId: ${momoOrderId})`);
+    console.log(`⚠️ [Checkout] Note: MoMo callback IPN có thể bị timeout, polling sẽ verify và cập nhật status`);
+    
+    let pollCount = 0;
+    const maxPolls = 60; // ✅ Tăng lên 60 lần (60 giây) để đợi backend xử lý callback
+    const pollInterval = 1000; // Mỗi 1 giây check 1 lần
+
+    const pollIntervalId = setInterval(async () => {
+      pollCount++;
+      console.log(`🔄 [Checkout] Polling payment status (${pollCount}/${maxPolls}) for order ${orderId}...`);
+
+      try {
+        const statusResult = await checkMoMoPaymentStatus(momoOrderId);
+        
+        if (statusResult.success && statusResult.data) {
+          const resultCode = statusResult.data.resultCode;
+          const message = statusResult.data.message || '';
+          
+          console.log(`📊 [Checkout] Payment status for order ${orderId}:`, {
+            resultCode,
+            message,
+            data: statusResult.data,
+          });
+
+          // ✅ Nếu thanh toán thành công (resultCode = 0)
+          if (resultCode === 0 || resultCode === '0') {
+            console.log(`✅ [Checkout] Payment SUCCESS for order ${orderId}!`);
+            clearInterval(pollIntervalId);
+            
+            // ✅ Thông báo thành công
+            success(`✅ Thanh toán thành công cho đơn hàng ${orderId} (${storeName})! Đang cập nhật trạng thái...`);
+            
+            // ✅ Refresh trang orders sau 2 giây để cập nhật status
+            setTimeout(() => {
+              navigate('/orders');
+            }, 2000);
+          } else if (resultCode && resultCode !== 0 && resultCode !== '0') {
+            // ⚠️ Payment failed hoặc pending
+            console.log(`⚠️ [Checkout] Payment status for order ${orderId}:`, {
+              resultCode,
+              message,
+            });
+            
+            // Nếu đã check quá nhiều lần mà vẫn chưa thành công, dừng polling
+            if (pollCount >= maxPolls) {
+              clearInterval(pollIntervalId);
+              console.warn(`⚠️ [Checkout] Stopped polling after ${maxPolls} attempts for order ${orderId}`);
+              warning(`Đã kiểm tra thanh toán cho đơn ${orderId} ${pollCount} lần nhưng chưa xác nhận thành công. Vui lòng click "Kiểm tra lại thanh toán" trong trang đơn hàng hoặc liên hệ hỗ trợ nếu đã thanh toán thành công.`);
+            }
+          }
+        } else {
+          console.warn(`⚠️ [Checkout] Failed to check payment status for order ${orderId}:`, statusResult.error);
+          
+          // Nếu đã check quá nhiều lần, dừng polling
+          if (pollCount >= maxPolls) {
+            clearInterval(pollIntervalId);
+            console.warn(`⚠️ [Checkout] Stopped polling after ${maxPolls} attempts (error)`);
+            warning(`Không thể kiểm tra trạng thái thanh toán cho đơn ${orderId}. Vui lòng kiểm tra lại trong trang đơn hàng.`);
+          }
+        }
+      } catch (err) {
+        console.error(`❌ [Checkout] Error checking payment status for order ${orderId}:`, err);
+        
+        // Nếu đã check quá nhiều lần, dừng polling
+        if (pollCount >= maxPolls) {
+          clearInterval(pollIntervalId);
+          console.warn(`⚠️ [Checkout] Stopped polling after ${maxPolls} attempts (exception)`);
+        }
+      }
+    }, pollInterval);
+
+    // ✅ Tự động dừng polling sau maxPolls lần
+    setTimeout(() => {
+      if (pollIntervalId) {
+        clearInterval(pollIntervalId);
+        console.log(`⏰ [Checkout] Auto-stopped polling after ${maxPolls} seconds for order ${orderId}`);
+      }
+    }, maxPolls * pollInterval);
+  };
 
   // Format address object to string
   const formatAddress = (address) => {
@@ -562,14 +763,20 @@ const CheckoutPage = () => {
           if (!storeGroup || !storeGroup.items || storeGroup.items.length === 0) continue;
           
           // ✅ Lấy items của store này
-          const storeItems = storeGroup.items.map(it => ({
-            ...(it.id && { id: it.id }),
-            productVariantId: it.productVariantId || it.product?.id,
-            quantity: it.quantity || 1,
-            ...(it.options?.colorId || it.options?.color ? { 
-              colorId: it.options?.colorId || it.options?.color 
-            } : {}),
-          }));
+          // ✅ QUAN TRỌNG: Gửi đúng colorId để backend trừ stock đúng màu
+          const storeItems = storeGroup.items.map(it => {
+            const colorId = it.options?.colorId || 
+                           it.options?.color_id || 
+                           it.options?.color ||
+                           null;
+            
+            return {
+              ...(it.id && { id: it.id }),
+              productVariantId: it.productVariantId || it.product?.id,
+              quantity: it.quantity || 1,
+              ...(colorId ? { colorId: colorId } : {}), // ✅ Chỉ thêm colorId nếu có giá trị
+            };
+          });
           
           // ✅ Tính shipping fee riêng cho store này
           let storeShippingFee = 30000; // Default
@@ -688,44 +895,52 @@ const CheckoutPage = () => {
         return;
       }
       
-      // ✅ Lấy tất cả order IDs
-      const allOrderIds = [];
+      // ✅ Chuẩn hóa danh sách đơn hàng đã tạo (gắn với từng store)
+      const createdOrders = [];
       successResults.forEach(result => {
         if (Array.isArray(result.data)) {
           result.data.forEach(order => {
-            allOrderIds.push(order.id || order.orderId);
+            if (order) {
+              createdOrders.push({
+                order,
+                storeId: result.storeId,
+                storeName: result.storeName,
+              });
+            }
           });
         } else if (result.data) {
-          allOrderIds.push(result.data.id || result.data.orderId);
+          createdOrders.push({
+            order: result.data,
+            storeId: result.storeId,
+            storeName: result.storeName,
+          });
         }
       });
       
+      // ✅ Lấy tất cả order IDs
+      const allOrderIds = createdOrders.map(o => o.order.id || o.order.orderId);
+      
       const result = {
-        success: successResults.length > 0,
-        data: successResults.map(r => r.data).flat(),
+        success: createdOrders.length > 0,
+        data: createdOrders.map(o => o.order),
         orderIds: allOrderIds,
-        ordersCount: successResults.length,
+        ordersCount: createdOrders.length,
+        createdOrders,
       };
       
       // 🔍 DEBUG RESPONSE
       console.log('🛒 [CHECKOUT DEBUG] ===== CHECKOUT RESPONSE =====');
       console.log('🛒 [CHECKOUT DEBUG] Result Success:', result.success);
-      console.log('🛒 [CHECKOUT DEBUG] Orders Created:', result.ordersCount);
+        console.log('🛒 [CHECKOUT DEBUG] Orders Created:', result.ordersCount);
       console.log('🛒 [CHECKOUT DEBUG] Order IDs:', result.orderIds);
-      console.log('🛒 [CHECKOUT DEBUG] Result Data:', result.data);
+        console.log('🛒 [CHECKOUT DEBUG] Result Data:', result.data);
+        console.log('🛒 [CHECKOUT DEBUG] CreatedOrders (per store):', result.createdOrders);
       console.log('🛒 [CHECKOUT DEBUG] =================================');
       
       if (result.success) {
         console.log('✅ [Checkout] Orders created:', result.data);
         
-        // ✅ Lấy orderId đầu tiên để xử lý payment (hoặc có thể xử lý tất cả)
-        const orderId = result.orderIds[0] || null;
-        const totalAmount = finalTotal; // Tổng tiền của tất cả đơn hàng
-        
-        console.log('✅ [Checkout] First Order ID:', orderId);
         console.log('✅ [Checkout] Total Orders:', result.ordersCount);
-        console.log('✅ [Checkout] Total Amount:', totalAmount);
-        
         removeSelectedItems();
         
         // ✅ Hiển thị thông báo thành công
@@ -735,19 +950,19 @@ const CheckoutPage = () => {
           success('🎉 Đặt hàng thành công! Cảm ơn bạn đã mua hàng.');
         }
         
-        // ✅ Nếu chọn VNPay → Tạo payment URL và redirect
+        // ✅ Nếu chọn VNPay → Tạo payment URL và redirect (có thể gộp nhiều đơn)
         if (paymentMethod === 'VNPAY') {
           console.log('💳 [Checkout] VNPay selected, creating payment URL...');
           console.log('💳 [Checkout] Order IDs:', result.orderIds);
-          console.log('💳 [Checkout] Total amount:', totalAmount);
+          console.log('💳 [Checkout] Total amount (finalTotal):', finalTotal);
           
           // ✅ Tạo orderInfo với tất cả orderIds để backend có thể liên kết
           const orderInfo = result.ordersCount > 1 
             ? `Thanh toán ${result.ordersCount} đơn hàng (${result.orderIds.join(', ')})`
-            : `Thanh toán đơn hàng ${orderId || 'chưa có ID'}`;
+            : `Thanh toán đơn hàng ${result.orderIds[0] || 'chưa có ID'}`;
           
           const paymentResult = await createPaymentUrl({
-            amount: totalAmount,
+            amount: finalTotal,
             language: 'vn',
             orderInfo: orderInfo, // ✅ Truyền orderInfo với tất cả orderIds
             orderIds: result.orderIds, // ✅ Truyền orderIds để backend liên kết payment với các đơn hàng
@@ -770,33 +985,170 @@ const CheckoutPage = () => {
           }
         }
         // ✅ Nếu chọn MoMo → Tạo payment request và redirect
+        // ⚠️ QUAN TRỌNG: Backend yêu cầu tách payment riêng cho từng đơn khi có nhiều store
+        // KHÔNG được gộp tổng tiền thành 1 payment
         else if (paymentMethod === 'MOMO') {
-          console.log('💳 [Checkout] MoMo selected, creating payment request...');
+          console.log('💳 [Checkout] MoMo selected');
           console.log('💳 [Checkout] Order IDs:', result.orderIds);
-          console.log('💳 [Checkout] Total amount:', totalAmount);
+          console.log('💳 [Checkout] CreatedOrders:', result.createdOrders);
+          console.log('💳 [Checkout] Orders Count:', result.createdOrders.length);
           
-          // ✅ Truyền orderId đầu tiên, orderInfo và orderIds để backend có thể liên kết với nhiều orders
-          const orderInfo = result.ordersCount > 1 
-            ? `Thanh toán ${result.ordersCount} đơn hàng (${result.orderIds.join(', ')})`
-            : `Thanh toán đơn hàng ${orderId || 'chưa có ID'}`;
-          const momoResult = await createMoMoPayment(totalAmount, orderId, orderInfo, result.orderIds);
+          // ⚠️ VALIDATION: Đảm bảo có đơn hàng để thanh toán
+          if (!result.createdOrders || result.createdOrders.length === 0) {
+            error('Không tìm thấy đơn hàng nào để tạo thanh toán MoMo.');
+            return;
+          }
           
-          if (momoResult.success && momoResult.data?.payUrl) {
-            console.log('✅ [Checkout] MoMo payment URL created:', momoResult.data.payUrl);
-            console.log('✅ [Checkout] MoMo order ID:', momoResult.data.orderId);
-            console.log('✅ [Checkout] MoMo trans ID:', momoResult.data.transId);
+          // ✅ LUÔN tạo payment riêng cho từng đơn (KHÔNG gộp tổng)
+          // Backend yêu cầu: mỗi đơn phải thanh toán riêng để cả 2 đều PAID
+          console.log('💳 [Checkout] MoMo: Creating SEPARATE payments for EACH order (DO NOT MERGE)');
+          console.log('💳 [Checkout] Number of orders to pay:', result.createdOrders.length);
+          console.log('💳 [Checkout] ⚠️ IMPORTANT: Each order will have its own payment URL');
+          
+          let successCount = 0;
+          let failedCount = 0;
+          const openedWindows = [];
+          
+          // ✅ Tạo payment MoMo cho TỪNG đơn hàng riêng biệt (KHÔNG gộp tổng)
+          // ⚠️ QUAN TRỌNG: Tạo tuần tự (sequential) với delay để tránh conflict và timeout
+          for (let i = 0; i < result.createdOrders.length; i++) {
+            // ✅ Thêm delay giữa các lần tạo payment để tránh backend bị quá tải
+            if (i > 0) {
+              console.log(`⏳ [Checkout] Waiting 1 second before creating payment ${i + 1}...`);
+              await new Promise(resolve => setTimeout(resolve, 1000)); // Delay 1 giây giữa mỗi payment
+            }
             
-            // Mở MoMo trong tab mới
-            const momoWindow = window.open(momoResult.data.payUrl, '_blank');
+            const { order, storeName } = result.createdOrders[i];
+            const orderIdPerStore = order.id || order.orderId;
             
-            if (momoWindow) {
-              success('🎉 Đơn hàng đã tạo! Vui lòng thanh toán qua MoMo trên tab mới.');
+            // ✅ Lấy số tiền RIÊNG của đơn này (KHÔNG dùng finalTotal tổng)
+            const amountPerStore = parseFloat(
+              order.finalTotal ||
+              order.totalAmount ||
+              order.totalPrice ||
+              0
+            );
+            
+            console.log(`💳 [Checkout] ===== Payment ${i + 1}/${result.createdOrders.length} =====`);
+            console.log(`💳 [Checkout] Order Details:`, {
+              orderId: orderIdPerStore,
+              storeName,
+              amount: amountPerStore,
+              orderData: order,
+            });
+            
+            // ✅ Validation: Kiểm tra orderId và amount hợp lệ
+            if (!orderIdPerStore) {
+              console.error(`❌ [Checkout] Order ${i + 1} missing orderId:`, order);
+              failedCount++;
+              continue;
+            }
+            
+            if (!amountPerStore || Number.isNaN(amountPerStore) || amountPerStore <= 0) {
+              console.error(`❌ [Checkout] Order ${i + 1} has invalid amount:`, {
+                orderId: orderIdPerStore,
+                storeName,
+                amountPerStore,
+                orderData: order,
+              });
+              failedCount++;
+              continue;
+            }
+            
+            // ✅ Tạo payment riêng cho đơn này (CHỈ gửi 1 orderId, KHÔNG gộp)
+            const orderInfo = `Thanh toán đơn hàng ${orderIdPerStore} (${storeName || 'Cửa hàng'})`;
+            
+            console.log(`💳 [Checkout] Creating MoMo payment request for order ${i + 1}:`, {
+              amount: amountPerStore,
+              orderId: orderIdPerStore,
+              orderInfo,
+              orderIds: [orderIdPerStore], // ⚠️ CHỈ gửi 1 orderId, KHÔNG gộp
+              requestBody: {
+                amount: amountPerStore,
+                orderId: orderIdPerStore,
+                orderInfo: orderInfo,
+                orderIds: [orderIdPerStore],
+              },
+            });
+            
+            // ⚠️ QUAN TRỌNG: Gọi createMoMoPayment với amount riêng và chỉ 1 orderId
+            // KHÔNG được gộp tổng tiền hoặc gửi nhiều orderIds
+            // ✅ Tạo tuần tự để tránh backend bị quá tải và timeout
+            const momoResult = await createMoMoPayment(
+              amountPerStore,           // Số tiền riêng của đơn này
+              orderIdPerStore,          // OrderId của đơn này
+              orderInfo,                // Mô tả đơn này
+              [orderIdPerStore]          // ⚠️ CHỈ gửi 1 orderId, KHÔNG gộp nhiều đơn
+            );
+            
+            if (momoResult.success && momoResult.data?.payUrl) {
+              console.log(`✅ [Checkout] MoMo payment ${i + 1} created successfully:`, {
+                orderId: orderIdPerStore,
+                storeName,
+                amount: amountPerStore,
+                payUrl: momoResult.data.payUrl,
+                momoOrderId: momoResult.data.orderId,
+                transId: momoResult.data.transId,
+              });
+              
+              // ✅ Mở tab MoMo cho từng đơn (delay nhỏ để không bị chặn popup)
+              setTimeout(() => {
+                const momoWindow = window.open(momoResult.data.payUrl, '_blank');
+                if (momoWindow) {
+                  openedWindows.push({ 
+                    orderId: orderIdPerStore, 
+                    storeName,
+                    amount: amountPerStore,
+                    payUrl: momoResult.data.payUrl,
+                    momoOrderId: momoResult.data.orderId, // Lưu momoOrderId để check status sau
+                  });
+                  console.log(`✅ [Checkout] Opened MoMo payment window ${i + 1} for order:`, orderIdPerStore);
+                  
+                  // ✅ Tự động check payment status sau khi thanh toán (polling)
+                  // MoMo có callback IPN nhưng có thể bị timeout, nên cần polling để verify
+                  if (momoResult.data.orderId) {
+                    console.log(`🔄 [Checkout] Starting payment status polling for order ${orderIdPerStore} (MoMo OrderId: ${momoResult.data.orderId})`);
+                    // ✅ Bắt đầu polling sau 5 giây (để user có thời gian thanh toán)
+                    setTimeout(() => {
+                      startMoMoPaymentPolling(momoResult.data.orderId, orderIdPerStore, storeName);
+                    }, 5000);
+                  } else {
+                    console.warn(`⚠️ [Checkout] Cannot start polling: missing momoOrderId for order ${orderIdPerStore}`);
+                  }
+                } else {
+                  console.warn(`⚠️ [Checkout] Browser blocked popup for MoMo payment ${i + 1} of order:`, orderIdPerStore);
+                }
+              }, i * 500); // Delay 500ms giữa mỗi tab để tránh bị chặn popup
+              
+              successCount++;
             } else {
-              error('Trình duyệt chặn popup! Vui lòng cho phép popup và thử lại.');
+              console.error(`❌ [Checkout] Failed to create MoMo payment ${i + 1} for order:`, {
+                orderId: orderIdPerStore,
+                storeName,
+                amount: amountPerStore,
+                error: momoResult.error,
+                rawResponse: momoResult,
+              });
+              failedCount++;
+            }
+          }
+          
+          // ✅ Hiển thị thông báo kết quả
+          console.log('💳 [Checkout] MoMo payment creation summary:', {
+            totalOrders: result.createdOrders.length,
+            successCount,
+            failedCount,
+            openedWindows: openedWindows.length,
+          });
+          
+          if (successCount > 0) {
+            if (successCount === result.createdOrders.length) {
+              success(`🎉 Đã tạo ${successCount} đơn hàng và mở ${successCount} trang thanh toán MoMo riêng biệt! Vui lòng thanh toán cho TỪNG đơn hàng. Mỗi đơn sẽ được thanh toán độc lập.`);
+            } else {
+              warning(`Đã tạo ${successCount}/${result.createdOrders.length} payment MoMo thành công. ${failedCount > 0 ? `Có ${failedCount} đơn không thể tạo payment.` : ''}`);
             }
           } else {
-            error(momoResult.error || 'Không thể tạo link thanh toán MoMo. Vui lòng thử lại.');
-            console.error('❌ [Checkout] Failed to create MoMo payment:', momoResult);
+            error('Không thể tạo payment MoMo cho bất kỳ đơn hàng nào. Vui lòng thử lại.');
           }
         }
         else {
@@ -938,47 +1290,7 @@ const CheckoutPage = () => {
                       </div>
                       <div className="divide-y">
                         {group.items.map((it) => (
-                          <div key={it.id} className="py-3 px-4 flex items-center justify-between">
-                            <div className="flex items-center space-x-3 min-w-0">
-                              <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center overflow-hidden">
-                                {(() => {
-                                  // Ưu tiên: image > primaryImage > images[0]
-                                  const imageUrl =
-                                    it.product?.image ||
-                                    it.product?.primaryImage ||
-                                    (Array.isArray(it.product?.images) && it.product.images[0]);
-
-                                  if (imageUrl && (imageUrl.startsWith('http') || imageUrl.startsWith('/'))) {
-                                    return (
-                                      <img
-                                        src={imageUrl}
-                                        alt={it.product?.name || 'Sản phẩm'}
-                                        className="w-full h-full object-cover rounded"
-                                        onError={(e) => {
-                                          e.target.onerror = null;
-                                          e.target.style.display = 'none';
-                                          e.target.parentElement.innerHTML = '<span class=\"text-xl\">📦</span>';
-                                        }}
-                                      />
-                                    );
-                                  }
-
-                                  return <span className="text-xl">📦</span>;
-                                })()}
-                              </div>
-                              <div className="truncate">
-                                <div className="font-medium truncate">{it.product.name}</div>
-                                <div className="text-sm text-gray-500">x{it.quantity}</div>
-                              </div>
-                            </div>
-                            <div className="font-semibold text-red-600">
-                              {formatPrice(
-                                (typeof it.product.price === 'string'
-                                  ? parseInt(it.product.price.replace(/\./g, '') || 0)
-                                  : parseInt(it.product.price || 0)) * it.quantity
-                              )}đ
-                            </div>
-                          </div>
+                          <CheckoutProductItem key={it.id} item={it} />
                         ))}
                       </div>
                     </div>
@@ -1007,19 +1319,6 @@ const CheckoutPage = () => {
                   />
                   <span className="flex items-center gap-2">
                     💵 Thanh toán khi nhận hàng (COD)
-                  </span>
-                </label>
-                <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
-                  <input 
-                    type="radio" 
-                    name="pm" 
-                    value="VNPAY" 
-                    checked={paymentMethod==='VNPAY'} 
-                    onChange={()=>setPaymentMethod('VNPAY')}
-                    className="cursor-pointer"
-                  />
-                  <span className="flex items-center gap-2">
-                    🏦 Thanh toán qua VNPay
                   </span>
                 </label>
                 <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded">

@@ -89,14 +89,15 @@ export const useProductVariants = (category, options = {}) => {
     sortDir = 'desc',
   } = options;
 
-  const { data, error, isLoading } = useSWR(
+  const { data, error, isLoading, mutate } = useSWR(
     ['product-variants', category, { page, size, sortBy, sortDir }],
     variantsFetcher,
     {
-      revalidateOnFocus: false,
-      revalidateOnReconnect: false,
-      dedupingInterval: 600000, // ✅ Tăng cache lên 10 phút (vì BE chậm, cache lâu hơn)
-      revalidateIfStale: false,
+      // ❗ Luôn làm mới khi user quay lại/refresh để tránh thấy sản phẩm đã xóa
+      revalidateOnFocus: true,
+      revalidateOnReconnect: true,
+      revalidateIfStale: true,
+      dedupingInterval: 0, // buộc fetch mới mỗi lần mount/focus cùng key
       shouldRetryOnError: false,
       errorRetryCount: 0, // ✅ Không retry (vì BE chậm, retry sẽ làm chậm hơn)
       keepPreviousData: true, // ✅ Giữ data cũ khi fetch mới → UX mượt hơn

@@ -19,6 +19,16 @@ export const getDashboardAnalytics = async (storeId) => {
       data: response.data.data || response.data,
     };
   } catch (error) {
+    // ✅ API này có thể không tồn tại hoặc store không có quyền
+    // Trả về success: false nhưng không log error để tránh spam console
+    if (error.response?.status === 500 || error.response?.status === 404) {
+      // API không tồn tại hoặc lỗi server - không hiển thị error
+      return {
+        success: false,
+        error: null, // Không hiển thị error
+        data: null,
+      };
+    }
     return {
       success: false,
       error: error.message || 'Không thể tải thống kê dashboard',
@@ -254,6 +264,16 @@ export const getInventoryAnalytics = async (storeId) => {
       data: response.data.data || response.data,
     };
   } catch (error) {
+    // ✅ API này có thể không tồn tại hoặc store không có quyền
+    // Trả về success: false nhưng không log error để tránh spam console
+    if (error.response?.status === 500 || error.response?.status === 404) {
+      // API không tồn tại hoặc lỗi server - không hiển thị error
+      return {
+        success: false,
+        error: null, // Không hiển thị error
+        data: null,
+      };
+    }
     return {
       success: false,
       error: error.message || 'Không thể tải thống kê tồn kho',

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 import AdminPageHeader from '../../components/admin/AdminPageHeader';
@@ -41,7 +41,46 @@ const AdminRefundsPage = () => {
     revalidateOnFocus: false,
   });
 
-  const stats = statsData?.data || statsData || {};
+  const rawStats = statsData?.data || statsData || {};
+
+  // ✅ Chuẩn hoá & fallback thống kê từ danh sách nếu BE chưa trả đúng
+  const stats = useMemo(() => {
+    const getVal = (obj, keys) => {
+      for (const key of keys) {
+        if (obj && obj[key] !== undefined && obj[key] !== null) {
+          const num = Number(obj[key]);
+          if (!Number.isNaN(num)) return num;
+        }
+      }
+      return 0;
+    };
+
+    // Ưu tiên dùng số liệu từ API nếu có ít nhất một giá trị > 0
+    const apiStats = {
+      TOTAL: getVal(rawStats, ['TOTAL', 'total', 'totalRequests', 'totalCount']),
+      PENDING: getVal(rawStats, ['PENDING', 'pending']),
+      COMPLETED: getVal(rawStats, ['COMPLETED', 'completed', 'done']),
+      REJECTED: getVal(rawStats, ['REJECTED', 'rejected', 'denied']),
+    };
+
+    const hasApiStats = Object.values(apiStats).some((v) => v > 0);
+    if (hasApiStats) {
+      return apiStats;
+    }
+
+    // Fallback: tự tính từ danh sách hiện có (ít nhất không hiển thị 0 khi đang có dữ liệu)
+    const total = refunds.length;
+    const pending = refunds.filter((r) => r.status === 'PENDING').length;
+    const completed = refunds.filter((r) => r.status === 'COMPLETED').length;
+    const rejected = refunds.filter((r) => r.status === 'REJECTED').length;
+
+    return {
+      TOTAL: total,
+      PENDING: pending,
+      COMPLETED: completed,
+      REJECTED: rejected,
+    };
+  }, [rawStats, refunds]);
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -301,7 +340,8 @@ const AdminRefundsPage = () => {
                       {/* Button xem chi tiết đơn hàng */}
                       {orderId && (
                         <Link
-                          to={`/orders/${orderId}`}
+                          to={`/admin-dashboard/orders/${orderId}`}
+                          state={{ from: 'refunds' }}
                           className="px-4 py-2 text-sm font-semibold bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors"
                         >
                           Xem chi tiết đơn hàng #{orderCode}

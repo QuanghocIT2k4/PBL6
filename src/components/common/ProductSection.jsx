@@ -17,19 +17,76 @@ const ProductSection = memo(({
 }) => {
   const [addingToCart] = useState(new Set());
 
+  const FALLBACK_IMG = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="%23f3f4f6"/><text x="100" y="100" text-anchor="middle" fill="%239ca3af" font-size="14" font-family="Arial">No Image</text></svg>';
+
   // ✅ Tính giá hiển thị: lấy giá thấp nhất trong màu (nếu có), fallback price
   const getDisplayPrice = (product) => {
     const prices = [];
     if (product?.price != null) prices.push(Number(product.price));
-    if (Array.isArray(product?.colors)) {
-      product.colors.forEach(c => {
-        if (c?.price != null) prices.push(Number(c.price));
-      });
-    }
+
+    const colors = Array.isArray(product?.colors)
+      ? product.colors
+      : Array.isArray(product?.attributes?.colors)
+        ? product.attributes.colors
+        : [];
+
+    colors.forEach(c => {
+      if (c?.price != null) prices.push(Number(c.price));
+    });
+
     // Bỏ giá không hợp lệ/âm
     const valid = prices.filter(p => Number.isFinite(p) && p > 0);
     if (valid.length === 0) return null;
     return Math.min(...valid);
+  };
+
+  // ✅ Ảnh bìa: ưu tiên ảnh màu (colors[0]) trước, rồi mới tới image fields khác
+  const getCoverImage = (product) => {
+    const colors = Array.isArray(product?.colors)
+      ? product.colors
+      : Array.isArray(product?.attributes?.colors)
+        ? product.attributes.colors
+        : [];
+
+    // Helper: lấy ảnh từ một biến thể
+    const pickFromVariant = (v) => (
+      (Array.isArray(v?.colors) &&
+        v.colors.length > 0 &&
+        (v.colors[0].image || v.colors[0].colorImage || v.colors[0].imageUrl)) ||
+      (Array.isArray(v?.attributes?.colors) &&
+        v.attributes.colors.length > 0 &&
+        (v.attributes.colors[0].image || v.attributes.colors[0].colorImage || v.attributes.colors[0].imageUrl)) ||
+      v?.primaryImage ||
+      (v?.images && v.images[0]) ||
+      v?.image ||
+      (v?.imageUrls && v.imageUrls[0]) ||
+      null
+    );
+
+    // Ưu tiên ảnh màu của product
+    const fromProductColor = (
+      colors.length > 0 &&
+      (colors[0].image || colors[0].colorImage || colors[0].imageUrl)
+    );
+
+    // Ảnh trực tiếp của product
+    const fromProductImage =
+      product?.primaryImageUrl ||
+      (product?.imageUrls && product.imageUrls[0]) ||
+      product?.primaryImage ||
+      product?.image ||
+      (product?.images && product.images[0]);
+
+    // Fallback: ảnh từ biến thể đầu tiên (nhiều field tên khác nhau)
+    const variantsArr =
+      (Array.isArray(product?.variants) && product.variants) ||
+      (Array.isArray(product?.productVariants) && product.productVariants) ||
+      (Array.isArray(product?.variantList) && product.variantList) ||
+      null;
+
+    const fromVariant = variantsArr && variantsArr.length > 0 ? pickFromVariant(variantsArr[0]) : null;
+
+    return fromProductColor || fromProductImage || fromVariant || null;
   };
 
   // Chỉ điều hướng tới trang chi tiết
@@ -104,10 +161,10 @@ const ProductSection = memo(({
                 {/* Ảnh sản phẩm */}
                 <div className="relative overflow-hidden">
                   <div className="h-32 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center group-hover:from-gray-200 group-hover:to-gray-300 transition-colors">
-                    {/* ✅ Hỗ trợ Product Variants: ưu tiên primaryImage, sau đó images[0], cuối cùng image */}
-                    {product.image || product.primaryImage ? (
+                    {/* ✅ Hỗ trợ Product Variants: ưu tiên primaryImageUrl/imageUrls/images/colors */}
+                    {getCoverImage(product) ? (
                       <img 
-                        src={product.image || product.primaryImage} 
+                        src={getCoverImage(product)} 
                         alt={product.name || 'Sản phẩm'}
                         loading="lazy"
                         width="200"
@@ -116,21 +173,7 @@ const ProductSection = memo(({
                         className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 ease-out"
                         onError={(e) => {
                           e.target.onerror = null;
-                          e.target.src = 'https://via.placeholder.com/200x200?text=No+Image';
-                        }}
-                      />
-                    ) : product.images && product.images.length > 0 ? (
-                      <img 
-                        src={product.images[0]} 
-                        alt={product.name || 'Sản phẩm'}
-                        loading="lazy"
-                        width="200"
-                        height="200"
-                        decoding="async"
-                        className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 ease-out"
-                        onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.src = 'https://via.placeholder.com/200x200?text=No+Image';
+                          e.target.src = FALLBACK_IMG;
                         }}
                       />
                     ) : (
@@ -229,28 +272,16 @@ const ProductSection = memo(({
                   {/* Ảnh sản phẩm */}
                   <div className="relative overflow-hidden">
                     <div className="h-32 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center group-hover:from-gray-200 group-hover:to-gray-300 transition-colors">
-                      {product.image || product.primaryImage ? (
+                      {getCoverImage(product) ? (
                         <img 
-                          src={product.image || product.primaryImage} 
+                          src={getCoverImage(product)} 
                           alt={product.name}
                           loading="lazy"
                           decoding="async"
                           className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 ease-out"
                           onError={(e) => {
                             e.target.onerror = null;
-                            e.target.src = 'https://via.placeholder.com/200x200?text=No+Image';
-                          }}
-                        />
-                      ) : product.images && product.images.length > 0 ? (
-                        <img 
-                          src={product.images[0]} 
-                          alt={product.name}
-                          loading="lazy"
-                          decoding="async"
-                          className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 ease-out"
-                          onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.src = 'https://via.placeholder.com/200x200?text=No+Image';
+                            e.target.src = FALLBACK_IMG;
                           }}
                         />
                       ) : (

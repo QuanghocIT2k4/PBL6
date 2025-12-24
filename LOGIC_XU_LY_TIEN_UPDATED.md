@@ -21,6 +21,22 @@ File này mô tả logic xử lý tiền **MỚI** cho các trường hợp đơ
 
 ---
 
+## 🆕 Trường hợp khách hủy trước khi shop xác nhận
+
+### Phạm vi:
+- Áp cho đơn **đã thu tiền online** (MoMo, v.v.).  
+- Đơn **COD** chưa thu tiền nên **không phát sinh hoàn tiền**.
+
+### Xử lý tiền (online):
+- **Khách:** Hoàn lại **100% số tiền đã thanh toán** (bao gồm phí ship nếu đã thu).
+- **Shop:** Giải phóng toàn bộ `pendingAmount` về 0, **không** chuyển sang `Balance`.
+- **Admin (Sàn):** **Không** tính hoa hồng, **không** tạo revenue, **không** cảnh báo shop.
+
+### Ghi chú (COD):
+- Đơn COD hủy trước khi shop xác nhận: chỉ cập nhật trạng thái, **không** đụng tới ví/pendingAmount/hoa hồng vì **chưa thu tiền**.
+
+---
+
 ## 1. ✅ Trường hợp đơn hàng thành công (Shop nhận tiền)
 
 ### Mô tả:

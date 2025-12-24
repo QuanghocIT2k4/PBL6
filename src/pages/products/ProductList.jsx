@@ -25,7 +25,7 @@ const ProductList = () => {
   const ITEMS_PER_PAGE = 15; // Mỗi trang hiển thị 15 sản phẩm
   
   // ✅ KHAI BÁO FILTERS TRƯỚC để dùng trong shouldLoadMoreForFilter
-  const [filters, setFilters] = useState({ category, brands: [], sortBy: 'relevance', minPrice: '', maxPrice: '' });
+  const [filters, setFilters] = useState({ category, brands: [], sortBy: 'newest', minPrice: '', maxPrice: '' });
   
   // ✅ SERVER-SIDE PAGINATION: Chỉ load số lượng sản phẩm cần thiết cho trang hiện tại
   // ✅ SỬA: Khi category = 'all' và có brand filter → Load nhiều items hơn để filter client-side
@@ -34,13 +34,30 @@ const ProductList = () => {
   const shouldLoadMoreForFilter = (category === 'all' || !category) && hasBrandFilter;
   const loadSize = shouldLoadMoreForFilter ? 50 : ITEMS_PER_PAGE; // Load 50 items khi filter brand ở 'all' (giảm từ 100 để nhanh hơn)
   
+  // ✅ Xác định sortBy và sortDir cho API
+  // Nếu sortBy là 'newest' hoặc 'relevance' → sort theo createdAt desc (mới nhất trước)
+  const getSortParams = () => {
+    if (filters.sortBy === 'newest' || filters.sortBy === 'relevance') {
+      return { sortBy: 'createdAt', sortDir: 'desc' };
+    } else if (filters.sortBy === 'price-asc') {
+      return { sortBy: 'price', sortDir: 'asc' };
+    } else if (filters.sortBy === 'price-desc') {
+      return { sortBy: 'price', sortDir: 'desc' };
+    } else {
+      return { sortBy: 'createdAt', sortDir: 'desc' }; // Default: mới nhất trước
+    }
+  };
+  
+  const sortParams = getSortParams();
+  
   // Chuyển đổi từ page 1-based (UI) sang page 0-based (API)
   const apiPage = currentPage - 1;
   const { variants: allVariants, loading, error, totalElements, pagination } = useProductVariants(
     category || 'all', 
     { 
       page: shouldLoadMoreForFilter ? 0 : apiPage, // Khi filter brand ở 'all' → luôn load từ trang 0
-      size: loadSize // Load nhiều hơn khi cần filter
+      size: loadSize, // Load nhiều hơn khi cần filter
+      ...sortParams // ✅ Thêm sort params
     }
   );
   
@@ -62,7 +79,7 @@ const ProductList = () => {
   // ✅ Reset về trang 1 CHỈ KHI category thay đổi
   useEffect(() => {
     setCurrentPage(1);
-    setFilters({ category, brands: [], sortBy: 'relevance', minPrice: '', maxPrice: '' });
+    setFilters({ category, brands: [], sortBy: 'newest', minPrice: '', maxPrice: '' });
     setCategoryBrandProducts(null); // Reset API results
     setCategoryBrandTotalElements(null); // Reset totalElements
     setActualTotalItems(null); // Reset actual total items
@@ -161,18 +178,37 @@ const ProductList = () => {
         // ✅ GỌI CẢ 2 APIs SONG SONG: Products + Product Variants
         // ✅ TỐI ƯU: Chỉ load số lượng cần thiết cho trang hiện tại
         const apiPage = currentPage - 1; // Chuyển từ 1-based sang 0-based
+        // ✅ Xác định sortBy và sortDir cho API
+        let apiSortBy = 'createdAt';
+        let apiSortDir = 'desc';
+        if (debouncedFilters.sortBy === 'price-asc') {
+          apiSortBy = 'price';
+          apiSortDir = 'asc';
+        } else if (debouncedFilters.sortBy === 'price-desc') {
+          apiSortBy = 'price';
+          apiSortDir = 'desc';
+        } else if (debouncedFilters.sortBy === 'newest' || debouncedFilters.sortBy === 'relevance') {
+          // ✅ Mới nhất hoặc liên quan nhất → sort theo createdAt desc
+          apiSortBy = 'createdAt';
+          apiSortDir = 'desc';
+        } else {
+          // Default: mới nhất trước
+          apiSortBy = 'createdAt';
+          apiSortDir = 'desc';
+        }
+        
         const [productsResult, variantsResult] = await Promise.all([
           getProductsByCategoryAndBrand(categoryName, selectedBrand, {
             page: apiPage,
             size: ITEMS_PER_PAGE, // Chỉ load số lượng cần thiết
-            sortBy: debouncedFilters.sortBy === 'price-asc' ? 'price' : debouncedFilters.sortBy === 'price-desc' ? 'price' : 'createdAt',
-            sortDir: debouncedFilters.sortBy === 'price-asc' ? 'asc' : debouncedFilters.sortBy === 'price-desc' ? 'desc' : 'desc'
+            sortBy: apiSortBy,
+            sortDir: apiSortDir
           }),
           getProductVariantsByCategoryAndBrand(categoryName, selectedBrand, {
             page: apiPage,
             size: ITEMS_PER_PAGE, // Chỉ load số lượng cần thiết
-            sortBy: debouncedFilters.sortBy === 'price-asc' ? 'price' : debouncedFilters.sortBy === 'price-desc' ? 'price' : 'createdAt',
-            sortDir: debouncedFilters.sortBy === 'price-asc' ? 'asc' : debouncedFilters.sortBy === 'price-desc' ? 'desc' : 'desc'
+            sortBy: apiSortBy,
+            sortDir: apiSortDir
           })
         ]);
         
@@ -282,9 +318,21 @@ const ProductList = () => {
     if (!isNaN(max)) result = result.filter(p => parsePrice(p.price) <= max);
     // Sort (chỉ khi không dùng API mới vì API đã sort rồi)
     if (categoryBrandProducts === null) {
-      if (debouncedFilters.sortBy === 'price-asc') result.sort((a,b)=>parsePrice(a.price)-parsePrice(b.price));
-      if (debouncedFilters.sortBy === 'price-desc') result.sort((a,b)=>parsePrice(b.price)-parsePrice(a.price));
-      if (debouncedFilters.sortBy === 'name') result.sort((a,b)=> (a.name||'').localeCompare(b.name||''));
+      if (debouncedFilters.sortBy === 'price-asc') {
+        result.sort((a,b)=>parsePrice(a.price)-parsePrice(b.price));
+      } else if (debouncedFilters.sortBy === 'price-desc') {
+        result.sort((a,b)=>parsePrice(b.price)-parsePrice(a.price));
+      } else if (debouncedFilters.sortBy === 'name') {
+        result.sort((a,b)=> (a.name||'').localeCompare(b.name||''));
+      } else if (debouncedFilters.sortBy === 'newest' || debouncedFilters.sortBy === 'relevance') {
+        // ✅ Sort theo thời gian mới nhất (createdAt desc)
+        // Nếu có createdAt, sort theo đó, nếu không thì giữ nguyên thứ tự (đã sort từ API)
+        result.sort((a, b) => {
+          const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return dateB - dateA; // Desc: mới nhất trước
+        });
+      }
     }
 
     return result;

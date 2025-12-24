@@ -53,6 +53,24 @@ const StoreProductVariants = () => {
     }).format(price || 0);
   };
 
+  // Ảnh bìa: ưu tiên ảnh màu nếu có
+  const getVariantCoverImage = (v) => {
+    const colorImg =
+      v?.colors?.[0]?.image ||
+      v?.colors?.[0]?.colorImage ||
+      v?.colors?.[0]?.imageUrl ||
+      null;
+
+    return (
+      v?.primaryImage ||
+      v?.images?.[0] ||
+      v?.imageUrls?.[0] ||
+      colorImg ||
+      v?.image ||
+      null
+    );
+  };
+
   // ✅ Lấy status trực tiếp từ variant object
   // ⚠️ LƯU Ý: API /api/v1/b2c/product-variants/{storeId} KHÔNG trả về field `status`
   // Backend cần fix để thêm field `status` vào response
@@ -612,9 +630,9 @@ const StoreProductVariants = () => {
 
                       {/* Image */}
                       <div className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 relative overflow-hidden">
-                        {variant.primaryImage || variant.images?.[0] ? (
+                        {getVariantCoverImage(variant) ? (
                           <img
-                            src={variant.primaryImage || variant.images[0]}
+                            src={getVariantCoverImage(variant)}
                             alt={variant.productName || variant.name}
                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                           />
@@ -1121,7 +1139,8 @@ const StoreProductVariants = () => {
                   <div className="space-y-4">
                     {(() => {
                       const images = detailModal.variant.images || detailModal.variant.imageUrls || [];
-                      const primaryImage = detailModal.variant.primaryImage || images[0];
+                      const primaryImage =
+                        getVariantCoverImage(detailModal.variant) || images[0];
                       
                       return (
                         <>

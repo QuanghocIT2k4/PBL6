@@ -464,6 +464,26 @@ export const deleteProductVariant = async (variantId) => {
  */
 export const addColorToVariant = async (variantId, colorData, imageFile) => {
   try {
+    // ✅ Validate inputs
+    if (!variantId) {
+      console.error('❌ [addColorToVariant] variantId is required');
+      return { success: false, error: 'variantId là bắt buộc' };
+    }
+    
+    if (!colorData?.colorName) {
+      console.error('❌ [addColorToVariant] colorName is required');
+      return { success: false, error: 'Tên màu là bắt buộc' };
+    }
+    
+    if (!imageFile) {
+      console.error('❌ [addColorToVariant] imageFile is required');
+      return { success: false, error: 'Ảnh màu là bắt buộc' };
+    }
+
+    console.log('🎨 [addColorToVariant] Starting...');
+    console.log('🎨 [addColorToVariant] variantId:', variantId);
+    console.log('🎨 [addColorToVariant] colorData:', colorData);
+    console.log('🎨 [addColorToVariant] imageFile:', imageFile?.name, imageFile?.size);
 
     const formData = new FormData();
 
@@ -474,15 +494,17 @@ export const addColorToVariant = async (variantId, colorData, imageFile) => {
       stock: colorData.stock,          // REQUIRED
     };
     
+    console.log('🎨 [addColorToVariant] DTO:', colorOptionDto);
+    
     const dtoBlob = new Blob([JSON.stringify(colorOptionDto)], { type: 'application/json' });
     formData.append('dto', dtoBlob);
 
     // Thêm image (REQUIRED)
-    if (imageFile) {
-      formData.append('image', imageFile);
-    } else {
-      throw new Error('Image is required for color option');
-    }
+    formData.append('image', imageFile);
+
+    // ✅ Log FormData contents để debug
+    console.log('🎨 [addColorToVariant] FormData prepared');
+    console.log('🎨 [addColorToVariant] API URL:', `/api/v1/b2c/product-variants/add-colors/${variantId}`);
 
     const response = await api.post(`/api/v1/b2c/product-variants/add-colors/${variantId}`, formData, {
       headers: {
@@ -490,16 +512,26 @@ export const addColorToVariant = async (variantId, colorData, imageFile) => {
       },
     });
 
+    console.log('🎨 [addColorToVariant] Response:', response);
+    console.log('🎨 [addColorToVariant] Response data:', response.data);
+    console.log('🎨 [addColorToVariant] Response status:', response.status);
 
-    if (response.data.success || response.data) {
-      return { success: true, data: response.data.data || response.data };
+    if (response.data?.success || response.status === 200 || response.status === 201) {
+      console.log('✅ [addColorToVariant] Success!');
+      return { success: true, data: response.data?.data || response.data };
     } else {
-      return { success: false, error: response.data.error || 'Không thể thêm màu sắc' };
+      console.error('❌ [addColorToVariant] API returned error:', response.data);
+      return { success: false, error: response.data?.error || response.data?.message || 'Không thể thêm màu sắc' };
     }
   } catch (error) {
+    console.error('❌ [addColorToVariant] Exception:', error);
+    console.error('❌ [addColorToVariant] Error response:', error.response);
+    console.error('❌ [addColorToVariant] Error data:', error.response?.data);
+    console.error('❌ [addColorToVariant] Error status:', error.response?.status);
+    
     return {
       success: false,
-      error: error.response?.data?.error || error.message || 'Lỗi khi thêm màu sắc',
+      error: error.response?.data?.error || error.response?.data?.message || error.message || 'Lỗi khi thêm màu sắc',
     };
   }
 };

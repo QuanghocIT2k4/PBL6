@@ -240,8 +240,8 @@ const AdminVariants = () => {
           </div>
         </div>
 
-        {/* Variants Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {/* Variants Grid (style giống store) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {(variants || []).map((variant) => {
             const variantStatus = variant.status || 'PENDING'; // Default to PENDING if undefined
             
@@ -249,8 +249,9 @@ const AdminVariants = () => {
             const imageUrl = 
               variant.primaryImageUrl || 
               (variant.imageUrls && variant.imageUrls[0]) ||
-              variant.imageUrl ||
               (variant.images && variant.images[0]) ||
+              variant.imageUrl ||
+              (variant.colors && variant.colors[0] && (variant.colors[0].image || variant.colors[0].colorImage || variant.colors[0].imageUrl)) ||
               variant.image ||
               variant.variantImageUrl;
             
@@ -260,14 +261,17 @@ const AdminVariants = () => {
             }
             
             return (
-              <div key={variant.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-200">
+              <div
+                key={variant.id}
+                className="group relative bg-white rounded-2xl overflow-hidden border-2 border-gray-100 hover:border-blue-400 hover:shadow-2xl transition-all duration-300"
+              >
                 {/* Image */}
-                <div className="relative h-48 bg-gradient-to-br from-gray-100 to-gray-200">
+                <div className="relative aspect-[3/4] bg-gradient-to-br from-gray-50 via-white to-gray-100 p-3">
                   {imageUrl ? (
                     <img
                       src={imageUrl}
                       alt={variant.name || variant.variantName}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain rounded-lg shadow-sm group-hover:scale-[1.02] transition-transform duration-500"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-400">
@@ -279,15 +283,15 @@ const AdminVariants = () => {
                   
                   {/* Status Badge */}
                   <div className="absolute top-2 right-2">
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(variantStatus)}`}>
+                    <span className={`px-2 py-1 text-xs font-bold rounded-lg shadow ${getStatusColor(variantStatus)}`}>
                       {getStatusText(variantStatus)}
                     </span>
                   </div>
                 </div>
 
                 {/* Info */}
-                <div className="p-4">
-                  <h3 className="font-bold text-gray-900 text-sm line-clamp-2 mb-2 min-h-[2.5rem]">
+                <div className="p-3 space-y-2">
+                  <h3 className="font-bold text-gray-900 text-sm line-clamp-2 min-h-[2.5rem]">
                     {variant.name || variant.variantName}
                   </h3>
                   
@@ -309,11 +313,11 @@ const AdminVariants = () => {
 
                   {/* Colors */}
                   {variant.colors && variant.colors.length > 0 && (
-                    <div className="mb-3">
+                    <div className="mb-1">
                       <p className="text-xs text-gray-500 mb-1">Màu sắc:</p>
                       <div className="flex gap-1 flex-wrap">
                         {variant.colors.map((color, idx) => (
-                          <span key={idx} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
+                          <span key={idx} className="px-2 py-1 bg-gradient-to-r from-blue-50 to-cyan-50 text-blue-700 border border-blue-200 rounded text-[11px] font-semibold">
                             {color.colorName}
                           </span>
                         ))}
@@ -325,7 +329,7 @@ const AdminVariants = () => {
                   <div className="space-y-2 mb-3 pb-3 border-b border-gray-100">
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-600">Giá:</span>
-                      <span className="text-sm font-bold text-purple-600">{formatCurrency(variant.price)}</span>
+                      <span className="text-sm font-bold text-red-600">{formatCurrency(variant.price)}</span>
                     </div>
                     {(variant.storeName || variant.storeId) && (
                       <div className="flex items-center justify-between">
@@ -353,7 +357,7 @@ const AdminVariants = () => {
                         setSelectedVariant(variant);
                         setShowDetailModal(true);
                       }}
-                      className="w-full bg-purple-50 text-purple-600 py-2 px-3 rounded-lg hover:bg-purple-100 transition-colors text-xs font-medium"
+                      className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-2 px-3 rounded-lg hover:from-blue-600 hover:to-blue-700 transition-colors text-xs font-semibold shadow-sm hover:shadow"
                     >
                       👁️ Xem chi tiết
                     </button>
@@ -362,13 +366,13 @@ const AdminVariants = () => {
                         <>
                           <button
                             onClick={() => handleApprove(variant.id)}
-                            className="flex-1 bg-green-50 text-green-600 py-2 px-3 rounded-lg hover:bg-green-100 transition-colors text-xs font-medium"
+                            className="flex-1 bg-green-50 text-green-600 py-2 px-3 rounded-lg hover:bg-green-100 transition-colors text-xs font-semibold"
                           >
                             ✓ Duyệt
                           </button>
                           <button
                             onClick={() => handleRejectClick(variant)}
-                            className="flex-1 bg-red-50 text-red-600 py-2 px-3 rounded-lg hover:bg-red-100 transition-colors text-xs font-medium"
+                            className="flex-1 bg-red-50 text-red-600 py-2 px-3 rounded-lg hover:bg-red-100 transition-colors text-xs font-semibold"
                           >
                             ✗ Từ chối
                           </button>
@@ -377,7 +381,7 @@ const AdminVariants = () => {
                       {variantStatus === 'APPROVED' && (
                         <button
                           onClick={() => handleRejectClick(variant)}
-                          className="w-full bg-red-50 text-red-600 py-2 px-3 rounded-lg hover:bg-red-100 transition-colors text-xs font-medium"
+                          className="w-full bg-red-50 text-red-600 py-2 px-3 rounded-lg hover:bg-red-100 transition-colors text-xs font-semibold"
                         >
                           ↩️ Thu hồi
                         </button>
@@ -385,7 +389,7 @@ const AdminVariants = () => {
                       {variantStatus === 'REJECTED' && (
                         <button
                           onClick={() => handleApprove(variant.id)}
-                          className="w-full bg-green-50 text-green-600 py-2 px-3 rounded-lg hover:bg-green-100 transition-colors text-xs font-medium"
+                          className="w-full bg-green-50 text-green-600 py-2 px-3 rounded-lg hover:bg-green-100 transition-colors text-xs font-semibold"
                         >
                           ✓ Duyệt lại
                         </button>

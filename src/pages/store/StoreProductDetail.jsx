@@ -106,6 +106,18 @@ const StoreProductDetail = () => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
   };
 
+  // Lấy ảnh màu (nếu có)
+  const getColorImage = (color) => {
+    if (!color) return null;
+    return (
+      color?.colorImage ||
+      color?.imageUrl ||
+      color?.image ||
+      color?.thumbnail ||
+      null
+    );
+  };
+
   const getBrandName = (brand) => {
     if (brand === null || brand === undefined) return 'Chưa có thương hiệu';
     
@@ -302,6 +314,55 @@ const StoreProductDetail = () => {
                 />
               </div>
             </div>
+
+            {/* PHẦN 1B: Màu sắc & tồn kho chi tiết */}
+            {Array.isArray(variantData?.colors) && variantData.colors.length > 0 && (
+              <div className="mb-12 bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-gray-900">Màu sắc & tồn kho</h3>
+                  <p className="text-sm text-gray-600">
+                    Tổng tồn kho:{' '}
+                    <span className="font-semibold text-gray-900">
+                      {variantData.colors.reduce((s, c) => s + (c.stock ?? c.quantity ?? 0), 0)}
+                    </span>
+                  </p>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {variantData.colors.map((color, idx) => (
+                    <div
+                      key={color._id || color.id || color.colorId || idx}
+                      className="border border-gray-200 rounded-lg p-3 flex gap-3"
+                    >
+                      {getColorImage(color) ? (
+                        <img
+                          src={getColorImage(color)}
+                          alt={color.colorName || color.name || 'color'}
+                          className="w-16 h-16 rounded-md object-cover border"
+                        />
+                      ) : (
+                        <div className="w-16 h-16 rounded-md border bg-gray-50 flex items-center justify-center text-sm text-gray-500">
+                          Màu
+                        </div>
+                      )}
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <p className="font-semibold text-gray-900">
+                            {color.colorName || color.name || `Màu ${idx + 1}`}
+                          </p>
+                          <span className="text-sm font-semibold text-blue-600">
+                            {formatPrice(color.price ?? variantData.price ?? 0)}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600">
+                          Tồn kho:{' '}
+                          <span className="font-semibold text-gray-900">{color.stock ?? color.quantity ?? 0}</span>
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* PHẦN 2: Specifications (100% width cho store owner) */}
             <div className="mb-12">

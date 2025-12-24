@@ -619,6 +619,15 @@ const StoreReturnRequestsPage = () => {
                                 >
                                   Xem chi tiết yêu cầu
                                 </button>
+                                {/* ✅ Button Khiếu nại liên quan - thẳng hàng với các button khác */}
+                                {Array.isArray(request.relatedDisputes) && request.relatedDisputes.length > 0 && (
+                                  <Link
+                                    to={`/store-dashboard/returns/disputes/${request.relatedDisputes[0].disputeId || request.relatedDisputes[0].id || request.relatedDisputes[0]}`}
+                                    className="px-4 py-2 text-sm font-semibold bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
+                                  >
+                                    Khiếu nại liên quan ({request.relatedDisputes.length})
+                                  </Link>
+                                )}
                               </div>
                             )}
                           </div>

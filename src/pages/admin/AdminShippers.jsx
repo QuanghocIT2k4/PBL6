@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import useSWR from 'swr';
 import AdminPageHeader from '../../components/admin/AdminPageHeader';
 import { 
@@ -50,7 +50,44 @@ const AdminShippers = () => {
   let shippers = shippersData?.success ? (shippersData.data?.content || shippersData.data || []) : [];
   const totalPages = shippersData?.data?.totalPages || 0;
   const totalElements = shippersData?.data?.totalElements || 0;
-  const stats = statsData?.success ? statsData.data : null;
+  const rawStats = statsData?.success ? statsData.data : null;
+
+  // ✅ Chuẩn hoá & fallback thống kê shipper nếu BE chưa trả đúng key
+  const stats = useMemo(() => {
+    const getVal = (obj, keys) => {
+      for (const key of keys) {
+        if (obj && obj[key] !== undefined && obj[key] !== null) {
+          const num = Number(obj[key]);
+          if (!Number.isNaN(num)) return num;
+        }
+      }
+      return 0;
+    };
+
+    // Đếm lại từ danh sách hiện tại (đảm bảo đúng với bảng)
+    const derivedTotal = totalElements || shippers.length;
+    const derivedActive = shippers.filter((s) => {
+      const status = typeof s.status === 'string' ? s.status.toUpperCase() : s.status;
+      return s.active === true || status === 'ACTIVE';
+    }).length;
+    const derivedBanned = shippers.filter((s) => {
+      const status = typeof s.status === 'string' ? s.status.toUpperCase() : s.status;
+      return s.active === false || status === 'BANNED';
+    }).length;
+
+    // Lấy thêm thông tin khác từ API nếu có (ví dụ tổng đơn giao hàng)
+    const apiTotal = rawStats ? getVal(rawStats, ['totalShippers', 'total', 'totalCount']) : 0;
+    const apiTotalShipments = rawStats ? getVal(rawStats, ['totalShipments', 'shipments', 'totalDeliveries']) : 0;
+
+    return {
+      // Tổng shipper: ưu tiên API nếu có, ngược lại dùng derived
+      totalShippers: apiTotal || derivedTotal,
+      // Số shipper hoạt động / bị ban: luôn lấy theo dữ liệu bảng để khớp với filter & badge
+      activeShippers: derivedActive,
+      bannedShippers: derivedBanned,
+      totalShipments: apiTotalShipments,
+    };
+  }, [rawStats, shippers, totalElements]);
 
   // Handle activate shipper
   const handleActivateShipper = async (shipperId) => {

@@ -462,14 +462,18 @@ export const getProductVariantsByCategoryAndBrand = async (category, brand, para
  */
 export const getProductVariantById = async (variantId) => {
   try {
+    console.log('🌐 API Call: GET /api/v1/product-variants/' + variantId);
     const response = await api.get(`/api/v1/product-variants/${variantId}`);
+    console.log('📥 API Response:', response.status, response.data);
 
     if (response.data.success) {
+      console.log('✅ Variant data:', response.data.data?.id || response.data.data?.variantId);
       return {
         success: true,
         data: response.data.data,
       };
     } else {
+      console.warn('⚠️ API returned success:false', response.data);
       return {
         success: false,
         error: response.data.error || 'Không tìm thấy variant',
@@ -477,9 +481,14 @@ export const getProductVariantById = async (variantId) => {
     }
   } catch (error) {
     console.error('❌ Error fetching variant detail:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+    });
     return {
       success: false,
-      error: error.message,
+      error: error.message || 'Lỗi khi tải variant',
     };
   }
 };

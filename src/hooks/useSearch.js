@@ -18,9 +18,11 @@ const searchFetcher = async ({ keyword, filters }) => {
       name: keyword || '', // ✅ Đảm bảo luôn có giá trị (ít nhất là empty string)
       page: filters.page || 0,
       size: filters.size || 50,
+      // ✅ Xác định sortBy và sortDir
+      // Nếu sortBy là 'newest' hoặc 'relevance' → sort theo createdAt desc (mới nhất trước)
       sortBy: filters.sortBy === 'price-asc' || filters.sortBy === 'price-desc' ? 'price' : 
               filters.sortBy === 'name' ? 'name' : 'createdAt',
-      sortDir: filters.sortBy === 'price-asc' ? 'asc' : 'desc',
+      sortDir: filters.sortBy === 'price-asc' ? 'asc' : 'desc', // Mặc định desc (mới nhất trước)
     });
     
     if (result.success) {

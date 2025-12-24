@@ -15,7 +15,7 @@ const SearchResults = () => {
     category: 'all',
     minPrice: '',
     maxPrice: '',
-    sortBy: 'relevance'
+    sortBy: 'newest'
   });
   
   // ✅ DÙNG SWR - Auto cache, tự động search khi filters thay đổi
@@ -29,6 +29,12 @@ const SearchResults = () => {
     // Backend đã sửa: search trả về productVariantId (variant ID để navigate)
     const variantId = product.id || product.productVariantId || product.productId || product.product?.id;
     if (variantId) {
+      // ✅ Prefetch product data trước khi navigate để tránh loading screen chớp
+      // SWR sẽ cache data này và ProductDetail sẽ dùng ngay không cần loading
+      import('../../services/common/productService').then(({ getProductVariantById }) => {
+        getProductVariantById(variantId).catch(() => {}); // Silent fail, chỉ để prefetch
+      });
+      // ✅ Navigate ngay sau khi prefetch
       navigate(`/product/${variantId}`);
     } else {
       console.error('Cannot navigate: variant ID not found', product);

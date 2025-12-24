@@ -129,10 +129,18 @@ const AdminNotifications = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-xl p-6 shadow-lg">
-        <h1 className="text-3xl font-bold text-white mb-2">📬 Thông báo Admin</h1>
-        <p className="text-white/90">Quản lý tất cả thông báo hệ thống</p>
+      {/* Header - đồng bộ tone xanh với các trang admin */}
+      <div className="bg-gradient-to-r from-teal-500 via-cyan-500 to-blue-500 rounded-2xl p-6 shadow-lg text-white">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-2xl">
+            📬
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-[0.15em] text-white/80 font-semibold">Admin dashboard</p>
+            <h1 className="text-3xl font-bold leading-tight">Thông báo Admin</h1>
+            <p className="text-white/90 mt-1">Quản lý tất cả thông báo hệ thống</p>
+          </div>
+        </div>
       </div>
 
       {/* Filter Tabs */}

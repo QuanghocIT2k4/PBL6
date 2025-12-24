@@ -16,6 +16,7 @@ const StoreDetailPage = () => {
   const [activeTab, setActiveTab] = useState('products');
   const [currentPage, setCurrentPage] = useState(0);
   const pageSize = 30;
+  const FALLBACK_IMG = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="%23f3f4f6"/><text x="100" y="100" text-anchor="middle" fill="%239ca3af" font-size="14" font-family="Arial">No Image</text></svg>';
 
   // ✅ SWR for store info (cache 10 minutes)
   const { data: storeData, error: storeError } = useSWR(
@@ -42,6 +43,47 @@ const StoreDetailPage = () => {
 
   const store = storeData?.success ? storeData.data : null;
   const loading = !storeData && !storeError;
+
+  // ✅ Ưu tiên ảnh màu đầu tiên (bao gồm cả attributes.colors), sau đó tới các field ảnh khác
+  const getCoverImage = (product) => {
+    const colors = Array.isArray(product?.colors)
+      ? product.colors
+      : Array.isArray(product?.attributes?.colors)
+        ? product.attributes.colors
+        : [];
+
+    const fromColor = colors.length > 0 && (colors[0].image || colors[0].colorImage || colors[0].imageUrl);
+
+    const fromProduct =
+      product?.primaryImageUrl ||
+      product?.imageUrls?.[0] ||
+      product?.primaryImage ||
+      product?.image ||
+      (product?.images && product.images[0]) ||
+      null;
+
+    return fromColor || fromProduct || null;
+  };
+
+  // ✅ Giá hiển thị: ưu tiên giá trong màu/variant, fallback product.price
+  const getDisplayPrice = (product) => {
+    const prices = [];
+    if (product?.price != null) prices.push(Number(product.price));
+
+    const colors = Array.isArray(product?.colors)
+      ? product.colors
+      : Array.isArray(product?.attributes?.colors)
+        ? product.attributes.colors
+        : [];
+
+    colors.forEach(c => {
+      if (c?.price != null) prices.push(Number(c.price));
+    });
+
+    const valid = prices.filter(p => Number.isFinite(p) && p > 0);
+    if (valid.length === 0) return null;
+    return Math.min(...valid);
+  };
 
   // Parse products data
   let products = [];
@@ -303,15 +345,15 @@ const StoreDetailPage = () => {
                           className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer"
                         >
                           <div className="aspect-square bg-gray-100 rounded-t-lg overflow-hidden flex items-center justify-center">
-                            {(product.images && product.images.length > 0) || product.primaryImageUrl || product.imageUrls?.[0] || product.image ? (
+                            {getCoverImage(product) ? (
                               <img
-                                src={product.images?.[0] || product.primaryImageUrl || product.imageUrls?.[0] || product.image}
+                                src={getCoverImage(product)}
                                 alt={product.name}
                                 loading="lazy"
                                 className="w-full h-full object-cover"
                                 onError={(e) => {
-                                  e.target.style.display = 'none';
-                                  e.target.parentElement.innerHTML = '<div class="text-gray-400 text-center"><svg class="w-16 h-16 mx-auto mb-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"></path></svg><span class="text-sm">Không có ảnh</span></div>';
+                                  e.target.onerror = null;
+                                  e.target.src = FALLBACK_IMG;
                                 }}
                               />
                             ) : (
@@ -329,9 +371,21 @@ const StoreDetailPage = () => {
                             </h3>
                             <div className="space-y-1">
                               <div className="flex items-center justify-between">
-                                <span className="text-lg font-bold text-red-600">
-                                  {product.price?.toLocaleString('vi-VN')}đ
-                                </span>
+                                {(() => {
+                                  const price = getDisplayPrice(product);
+                                  if (price && price > 0) {
+                                    return (
+                                      <span className="text-lg font-bold text-red-600">
+                                        {price.toLocaleString('vi-VN')}đ
+                                      </span>
+                                    );
+                                  }
+                                  return (
+                                    <span className="text-lg font-semibold text-gray-500">
+                                      Liên hệ
+                                    </span>
+                                  );
+                                })()}
                               </div>
                               {product.rating && (
                                 <div className="flex items-center space-x-1">

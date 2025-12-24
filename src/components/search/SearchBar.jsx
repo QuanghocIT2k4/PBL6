@@ -39,12 +39,21 @@ const suggestionsFetcher = async (keyword) => {
           p.store_name ||
           null;
 
+        const coverImage =
+          p.primaryImageUrl ||
+          (p.imageUrls && p.imageUrls[0]) ||
+          p.primaryImage ||
+          p.image ||
+          (p.images && p.images[0]) ||
+          (Array.isArray(p.colors) && p.colors.length > 0 && (p.colors[0].image || p.colors[0].colorImage || p.colors[0].imageUrl)) ||
+          null;
+
         return {
           id: p.id || p.productId || p.product?.id, // ✅ Ưu tiên variant ID (để navigate đến variant detail)
           variantId: p.id, // Giữ variantId
           productId: p.productId || p.product?.id, // Giữ productId nếu cần
           name: p.name || p.productName || 'Sản phẩm không tên',
-          image: p.images?.[0] || p.image || p.primaryImage,
+          image: coverImage,
           storeName,
         };
       });
@@ -107,8 +116,9 @@ const SearchBar = ({ onSearch, className = "" }) => {
 
   // Show/hide suggestions based on query
   useEffect(() => {
-    setShowSuggestions(query.length >= 2 && suggestions.length > 0);
-  }, [query, suggestions]);
+    const hasSuggestions = Array.isArray(suggestions) && suggestions.length > 0;
+    setShowSuggestions(query.length >= 2 && hasSuggestions);
+  }, [query, suggestions.length]);
 
   // Close suggestions when clicking outside
   useEffect(() => {

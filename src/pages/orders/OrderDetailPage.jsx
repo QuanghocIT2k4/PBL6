@@ -13,6 +13,7 @@ import { getPromotionById } from '../../services/admin/adminPromotionService';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { confirmCancelOrder } from '../../utils/sweetalert';
+import { createMoMoPayment, checkMoMoPaymentStatus } from '../../services/buyer/momoPaymentService';
 import SEO from '../../components/seo/SEO';
 
 /**
@@ -226,10 +227,143 @@ const OrderDetailPage = () => {
 
     const result = await cancelOrder(order.id);
     if (result.success) {
-      success(result.message);
+      // ✅ Nếu đơn thanh toán online (MoMo / VNPay), hiển thị thêm thông tin hoàn tiền
+      const payMethod = (order.paymentMethod || paymentMethod || '').toUpperCase?.() || '';
+      if (payMethod === 'MOMO') {
+        success(
+          (result.message || 'Đơn hàng đã được hủy') +
+            '. Nếu bạn đã thanh toán trước đó qua MoMo, hệ thống sẽ tự động hoàn lại tiền về ví MoMo của bạn.'
+        );
+      } else if (payMethod === 'VNPAY') {
+        success(
+          (result.message || 'Đơn hàng đã được hủy') +
+            '. Nếu bạn đã thanh toán trước đó qua VNPay, hệ thống sẽ tự động hoàn lại tiền về tài khoản ngân hàng của bạn.'
+        );
+      } else {
+        success(result.message || 'Đơn hàng đã được hủy');
+      }
       mutate();
     } else {
       showError(result.error);
+    }
+  };
+
+  // Handle MoMo payment
+  const handlePayMoMo = async () => {
+    if (!order) return;
+
+    const orderId = order.id || order._id;
+    const payMethod = (order.paymentMethod || '').toUpperCase();
+    const paymentStatus = order.paymentStatus || '';
+
+    // ✅ Chỉ cho phép thanh toán nếu paymentMethod = MOMO và paymentStatus = UNPAID
+    if (payMethod !== 'MOMO') {
+      showError('Đơn hàng này không sử dụng phương thức thanh toán MoMo.');
+      return;
+    }
+
+    if (paymentStatus === 'PAID') {
+      success('Đơn hàng này đã được thanh toán rồi.');
+      mutate(); // Refresh để cập nhật status
+      return;
+    }
+
+    // ✅ Tính số tiền cần thanh toán
+    const amount = parseFloat(
+      order.finalTotal ||
+      order.totalAmount ||
+      order.totalPrice ||
+      0
+    );
+
+    if (!amount || Number.isNaN(amount) || amount <= 0) {
+      showError('Không xác định được số tiền thanh toán. Vui lòng liên hệ hỗ trợ.');
+      return;
+    }
+
+    try {
+      const orderInfo = `Thanh toán đơn hàng ${getOrderCode(orderId)}`;
+      const momoResult = await createMoMoPayment(amount, orderId, orderInfo, [orderId]);
+
+      if (momoResult.success && momoResult.data?.payUrl) {
+        console.log('✅ [OrderDetail] MoMo payment URL created:', momoResult.data.payUrl);
+        console.log('✅ [OrderDetail] MoMo order ID:', momoResult.data.orderId);
+        console.log('✅ [OrderDetail] MoMo trans ID:', momoResult.data.transId);
+
+        const momoWindow = window.open(momoResult.data.payUrl, '_blank');
+
+        if (momoWindow) {
+          success('Đang mở trang thanh toán MoMo. Vui lòng hoàn tất thanh toán trên tab mới.');
+          
+          // ✅ Sau khi thanh toán xong, tự động refresh order status sau 3 giây
+          setTimeout(() => {
+            mutate();
+            success('Đã kiểm tra lại trạng thái đơn hàng. Nếu đã thanh toán thành công, trạng thái sẽ được cập nhật.');
+          }, 3000);
+        } else {
+          showError('Trình duyệt chặn popup! Vui lòng cho phép popup và thử lại.');
+        }
+      } else {
+        showError(momoResult.error || 'Không thể tạo link thanh toán MoMo. Vui lòng thử lại.');
+        console.error('❌ [OrderDetail] Failed to create MoMo payment:', momoResult);
+      }
+    } catch (err) {
+      console.error('❌ [OrderDetail] Error creating MoMo payment:', err);
+      showError('Có lỗi xảy ra khi tạo thanh toán MoMo. Vui lòng thử lại.');
+    }
+  };
+
+  // ✅ Kiểm tra lại payment status cho đơn MoMo
+  const handleCheckMoMoPayment = async () => {
+    if (!order) return;
+
+    const orderId = order.id || order._id;
+    const payMethod = (order.paymentMethod || '').toUpperCase();
+
+    if (payMethod !== 'MOMO') {
+      showError('Đơn hàng này không sử dụng phương thức thanh toán MoMo.');
+      return;
+    }
+
+    // ⚠️ Backend cần lưu momoOrderId vào order khi tạo payment
+    // Hoặc backend cần có API để check payment status bằng orderId của hệ thống
+    const momoOrderId = order.momoOrderId || order.transactionId || orderId;
+
+    try {
+      warning('Đang kiểm tra trạng thái thanh toán MoMo...');
+      
+      const statusResult = await checkMoMoPaymentStatus(momoOrderId);
+      
+      if (statusResult.success && statusResult.data) {
+        const resultCode = statusResult.data.resultCode;
+        const message = statusResult.data.message || '';
+        
+        console.log('📊 [OrderDetail] MoMo payment status:', {
+          resultCode,
+          message,
+          data: statusResult.data,
+        });
+
+        if (resultCode === 0 || resultCode === '0') {
+          // ✅ Thanh toán thành công
+          success('Thanh toán MoMo đã thành công! Đang cập nhật trạng thái đơn hàng...');
+          
+          // ✅ Refresh order để lấy status mới từ backend
+          setTimeout(() => {
+            mutate();
+            success('Đã cập nhật trạng thái đơn hàng. Nếu backend đã xử lý callback, trạng thái sẽ là PAID.');
+          }, 2000);
+        } else {
+          // ⚠️ Chưa thanh toán hoặc lỗi
+          warning(`Trạng thái thanh toán: ${message || 'Chưa xác nhận thành công'}. Vui lòng thử lại sau hoặc liên hệ hỗ trợ.`);
+        }
+      } else {
+        showError(statusResult.error || 'Không thể kiểm tra trạng thái thanh toán. Vui lòng thử lại.');
+        console.error('❌ [OrderDetail] Failed to check MoMo payment status:', statusResult);
+      }
+    } catch (err) {
+      console.error('❌ [OrderDetail] Error checking MoMo payment status:', err);
+      showError('Có lỗi xảy ra khi kiểm tra trạng thái thanh toán. Vui lòng thử lại.');
     }
   };
 
@@ -1071,7 +1205,22 @@ const OrderDetailPage = () => {
           {/* Payment Info */}
           <div className="bg-white border border-gray-200 rounded-lg p-5 mb-4">
             <h2 className="font-bold text-gray-900 mb-3">Phương thức thanh toán</h2>
-            <p className="text-sm text-gray-700">{getPaymentMethodLabel(paymentMethod)}</p>
+            <div className="space-y-2">
+              <p className="text-sm text-gray-700">{getPaymentMethodLabel(paymentMethod)}</p>
+              {/* ✅ Hiển thị trạng thái thanh toán */}
+              {order.paymentStatus && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">Trạng thái thanh toán:</span>
+                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                    (order.paymentStatus || '').toUpperCase() === 'PAID'
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {(order.paymentStatus || '').toUpperCase() === 'PAID' ? '✅ Đã thanh toán' : '⏳ Chưa thanh toán'}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Order Timeline - Process Tracking (bao gồm cả trả hàng nếu có) */}
@@ -1355,16 +1504,46 @@ const OrderDetailPage = () => {
           </div>
 
           {/* Actions */}
-          {canCancel && (
-            <div className="flex justify-end">
+          <div className="flex justify-end gap-3">
+            {/* ✅ Nút "Thanh toán MoMo" - Hiển thị khi paymentMethod=MOMO và paymentStatus=UNPAID */}
+            {order && 
+             (order.paymentMethod || '').toUpperCase() === 'MOMO' && 
+             (order.paymentStatus || '').toUpperCase() === 'UNPAID' && 
+             status === 'PENDING' && (
+              <>
+              <button
+                onClick={handlePayMoMo}
+                className="px-6 py-2 bg-gradient-to-r from-pink-500 to-pink-600 text-white rounded-md font-semibold hover:from-pink-600 hover:to-pink-700 transition-all shadow-md hover:shadow-lg flex items-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Thanh toán MoMo
+              </button>
+                
+                {/* ✅ Nút "Kiểm tra lại thanh toán" - Cho trường hợp đã thanh toán nhưng status chưa cập nhật */}
+                <button
+                  onClick={handleCheckMoMoPayment}
+                  className="px-6 py-2 bg-blue-500 text-white rounded-md font-semibold hover:bg-blue-600 transition-all shadow-md hover:shadow-lg flex items-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                  </svg>
+                  Kiểm tra lại thanh toán
+                </button>
+              </>
+            )}
+            
+            {/* Nút hủy đơn */}
+            {canCancel && (
               <button
                 onClick={handleCancel}
                 className="px-6 py-2 border border-red-500 text-red-500 rounded-md font-semibold hover:bg-red-50 transition-colors"
               >
                 Hủy đơn hàng
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 

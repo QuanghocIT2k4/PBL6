@@ -15,6 +15,7 @@ import AdminDisputesPage from '../pages/admin/AdminDisputesPage';
 import AdminDisputeDetailPage from '../pages/admin/AdminDisputeDetailPage';
 import AdminRefundsPage from '../pages/admin/AdminRefundsPage';
 import AdminNotifications from '../pages/admin/AdminNotifications';
+import AdminOrderDetailPage from '../pages/admin/AdminOrderDetailPage';
 
 const AdminRoutes = () => {
   return (
@@ -34,6 +35,7 @@ const AdminRoutes = () => {
           <Route path="/disputes" element={<AdminDisputesPage />} />
           <Route path="/disputes/:disputeId" element={<AdminDisputeDetailPage />} />
           <Route path="/refunds" element={<AdminRefundsPage />} />
+          <Route path="/orders/:id" element={<AdminOrderDetailPage />} />
           <Route path="/notifications" element={<AdminNotifications />} />
         </Routes>
       </AdminLayout>

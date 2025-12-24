@@ -5,11 +5,21 @@ import { getProductById, getProductVariantById, getProductVariantsByCategory, ge
  * ✅ SWR Fetchers
  */
 const productDetailFetcher = async (productId) => {
+  if (!productId) {
+    throw new Error('Product ID is required');
+  }
+  
+  console.log('🔍 Fetching product detail for ID:', productId);
+  
   // ✅ Thử gọi variant API trước (vì URL thường là variant ID)
   try {
+    console.log('📡 Calling getProductVariantById with ID:', productId);
     const variantResult = await getProductVariantById(productId);
+    console.log('✅ Variant API response:', variantResult);
+    
     if (variantResult.success && variantResult.data) {
       const variant = variantResult.data;
+      console.log('✅ Variant found:', variant.id || variant.variantId || variant._id);
 
       // Nếu thiếu category/brand → cố gắng lấy từ product cha
       const hasCategory =
@@ -49,17 +59,32 @@ const productDetailFetcher = async (productId) => {
       }
 
       return variant;
+    } else {
+      console.warn('⚠️ Variant API returned success:false', variantResult);
+      // Throw error để fallback sang product API
+      throw new Error(variantResult.error || 'Variant not found');
     }
   } catch (variantError) {
+    console.error('❌ Variant API error:', variantError);
     // Not a variant ID, trying product API
   }
   
   // ✅ Fallback: Thử gọi product API
-  const result = await getProductById(productId);
-  if (result.success && result.data) {
-    return result.data;
+  try {
+    console.log('📡 Calling getProductById with ID:', productId);
+    const result = await getProductById(productId);
+    console.log('✅ Product API response:', result);
+    
+    if (result.success && result.data) {
+      return result.data;
+    } else {
+      console.error('❌ Product API returned success:false', result);
+      throw new Error(result.error || 'Không tìm thấy sản phẩm');
+    }
+  } catch (productError) {
+    console.error('❌ Product API error:', productError);
+    throw new Error(productError.message || 'Không tìm thấy sản phẩm');
   }
-  throw new Error(result.error || 'Không tìm thấy sản phẩm');
 };
 
 const relatedProductsFetcher = async ({ categoryName, brandName, productId }) => {
@@ -142,18 +167,47 @@ const relatedProductsFetcher = async ({ categoryName, brandName, productId }) =>
  * @param {string} productId - ID của sản phẩm
  */
 export const useProductDetail = (productId) => {
+  console.log('🔍 useProductDetail called with productId:', productId);
+  
   // ✅ Fetch product detail
   const { data: product, error: productError, isLoading: productLoading } = useSWR(
     productId ? ['product-detail', productId] : null,
-    () => productDetailFetcher(productId),
+    async () => {
+      console.log('📡 SWR fetcher called for productId:', productId);
+      try {
+        const result = await productDetailFetcher(productId);
+        console.log('✅ Fetcher returned:', result?.id || result?.variantId || result?._id);
+        return result;
+      } catch (error) {
+        console.error('❌ Fetcher error:', error);
+        throw error;
+      }
+    },
     {
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
-      dedupingInterval: 60000,
-      revalidateIfStale: false,
-      shouldRetryOnError: false,
+      dedupingInterval: 10000, // ✅ Giảm xuống 10s để tránh cache quá lâu
+      revalidateIfStale: true, // ✅ Revalidate nếu data stale
+      shouldRetryOnError: true, // ✅ Retry khi có lỗi
+      errorRetryCount: 3, // ✅ Retry tối đa 3 lần
+      errorRetryInterval: 1000, // ✅ Đợi 1s giữa các lần retry
+      keepPreviousData: false, // ✅ TẮT keepPreviousData để đảm bảo fetch mới
+      fallbackData: null, // ✅ Không có fallback data
+      onError: (error) => {
+        console.error('❌ SWR Error in useProductDetail:', error);
+      },
+      onSuccess: (data) => {
+        console.log('✅ SWR Success in useProductDetail:', data?.id || data?.variantId || data?._id);
+      },
     }
   );
+
+  console.log('📊 useProductDetail state:', {
+    productId,
+    hasProduct: !!product,
+    productLoading,
+    productError: productError?.message,
+  });
 
   // ✅ Fetch related products (chỉ sau khi có product)
   // Cố gắng bắt càng nhiều kiểu field nhất có thể để tránh bị null

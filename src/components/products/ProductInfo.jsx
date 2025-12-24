@@ -5,7 +5,7 @@ import { useVariants } from '../../hooks/useVariants';
 import { getAttributeLabel } from '../../utils/attributeLabels';
 import Button from '../ui/Button';
 
-const ProductInfo = ({ product, variantsOverride = [], initialVariantId, isStoreView = false }) => {
+const ProductInfo = ({ product, variantsOverride = [], initialVariantId, isStoreView = false, onVariantChange }) => {
   const navigate = useNavigate();
   const { addToCart, isInCart, getProductQuantityInCart } = useCart();
   
@@ -26,6 +26,19 @@ const ProductInfo = ({ product, variantsOverride = [], initialVariantId, isStore
   const [isAdding, setIsAdding] = useState(false);
   const [isBuying, setIsBuying] = useState(false);
   const addingRef = useRef(false);
+  const isInitializedRef = useRef(false); // ✅ Flag để theo dõi đã khởi tạo chưa
+  const prevInitialVariantIdRef = useRef(initialVariantId);
+  const currentVariantRef = useRef(null); // ✅ Giữ lại variant hiện tại để tránh tự động chuyển
+
+  // ✅ Reset flag khi initialVariantId thay đổi (navigate sang variant khác)
+  useEffect(() => {
+    if (String(prevInitialVariantIdRef.current) !== String(initialVariantId)) {
+      isInitializedRef.current = false;
+      prevInitialVariantIdRef.current = initialVariantId;
+      setSelectedAttributes({}); // Reset để khởi tạo lại
+      setSelectedColor(null);
+    }
+  }, [initialVariantId]);
 
   // ✅ Helper: collect values for an attribute from variantsOverride
   const collectValuesFromVariants = (list, key) => {
@@ -58,99 +71,168 @@ const ProductInfo = ({ product, variantsOverride = [], initialVariantId, isStore
   }, [variantsOverride, getAttributeKeysGenerated]);
 
   // ✅ Chỉ coi là thuộc tính phân loại khi có hơn 1 giá trị trong các variant
+  // ✅ LOẠI BỎ STORAGE KEY - CHỈ GIỮ LẠI MÀU SẮC
   const variationKeys = useMemo(() => {
-    let keys = attributeKeys.filter(key => collectValuesFromVariants(variants, key).length > 1);
+    // ✅ KHÔNG HIỂN THỊ BẤT KỲ ATTRIBUTE NÀO - CHỈ GIỮ MÀU SẮC
+    // Màu sắc sẽ được hiển thị riêng từ colorOptions
+    return [];
+  }, []);
 
-    // ⚡ Ưu tiên phones: luôn hiển thị lựa chọn dung lượng nếu có
-    const categoryKey = product?.categoryKey || product?.category?.toLowerCase();
-    if (categoryKey && categoryKey.includes('phone')) {
-      const storageValues = collectValuesFromVariants(variants, 'storage');
-      if (storageValues.length > 1 && !keys.includes('storage')) {
-        keys = ['storage', ...keys];
-      }
-
-      // ⚡ Nếu có color, cũng hiển thị (đổi ảnh) cho điện thoại
-      const colorValues = collectValuesFromVariants(variants, 'color');
-      if (colorValues.length > 1 && !keys.includes('color')) {
-        keys = [...keys, 'color'];
-      }
-    }
-    return keys;
-  }, [attributeKeys, variants, product]);
-
-  // ✅ KHỞI TẠO SELECTED ATTRIBUTES
+  // ✅ KHỞI TẠO SELECTED COLOR (KHÔNG CÒN SELECTED ATTRIBUTES VÌ ĐÃ XÓA BỘ NHỚ TRONG)
   useEffect(() => {
-    if (variationKeys.length === 0) return;
-
-    if (Object.keys(selectedAttributes).length > 0) return;
+    if (isInitializedRef.current) return; // ✅ Đã khởi tạo rồi thì không làm gì
 
     // Nếu có initialVariantId, ưu tiên variant đó
     let initialVariant =
       variants.find(v => String(v.id) === String(initialVariantId)) ||
       variants.find(v => String(v.variantId) === String(initialVariantId));
 
-    // Nếu không có, chọn rẻ nhất
-    if (!initialVariant && variants.length > 0) {
-      initialVariant = [...variants].sort((a, b) => (a.price || 0) - (b.price || 0))[0];
+    // ✅ Nếu không tìm thấy variant từ initialVariantId, KHÔNG fallback về rẻ nhất
+    // Giữ nguyên để tránh tự động chuyển variant
+    if (!initialVariant) {
+      console.warn(`Không tìm thấy variant với ID: ${initialVariantId}`);
+      isInitializedRef.current = true;
+      return;
     }
 
-    const initialAttrs = initialVariant?.attributes
-      ? { ...initialVariant.attributes }
-      : {};
-
-    // fallback: lấy giá trị đầu của từng attribute nếu thiếu
-    variationKeys.forEach(key => {
-      if (initialAttrs[key]) return;
-      const values = getAttributeValues(key);
-      if (values.length > 0) {
-        initialAttrs[key] = values[0];
-      }
-    });
-
-    setSelectedAttributes(initialAttrs);
-    // Reset color when init
+    // ✅ Chỉ khởi tạo màu sắc từ variant được chọn
     const colors = (initialVariant?.colors && initialVariant.colors.length > 0) ? initialVariant.colors : [];
-    if (colors.length > 0) {
+    if (colors.length > 0 && !selectedColor) {
       setSelectedColor(colors[0]);
     }
-  }, [attributeKeys, variants, selectedAttributes, initialVariantId, variantsOverride, getAttributeValuesGenerated]);
+    
+    isInitializedRef.current = true; // ✅ Đánh dấu đã khởi tạo
+  }, [variants, initialVariantId, selectedColor]);
 
   // ✅ CURRENT OPTIONS CHO CART
   const currentOptions = useMemo(() => selectedAttributes, [selectedAttributes]);
 
   // ✅ TÌM VARIANT HIỆN TẠI
+  // ✅ VÌ ĐÃ XÓA VARIATION KEYS (BỘ NHỚ TRONG), CHỈ GIỮ LẠI VARIANT TỪ INITIALVARIANTID
   const currentVariant = useMemo(() => {
     if (variants.length === 0) return null;
-    // Match chỉ các variation keys
-    const found = variants.find(v =>
-      variationKeys.every(
-        (k) => (v.attributes || {})[k] === (selectedAttributes || {})[k]
-      )
-    );
-    if (found) return found;
-    // fallback: rẻ nhất
+    
+    // ✅ LUÔN ƯU TIÊN TÌM VARIANT TỪ INITIALVARIANTID (từ URL)
+    if (initialVariantId) {
+      const foundById = variants.find(v => 
+        String(v.id) === String(initialVariantId) || 
+        String(v.variantId) === String(initialVariantId)
+      );
+      if (foundById) return foundById;
+    }
+    
+    // ✅ Nếu không có initialVariantId, fallback về variant đầu tiên hoặc rẻ nhất
     return [...variants].sort((a, b) => (a.price || 0) - (b.price || 0))[0];
-  }, [selectedAttributes, variants, variationKeys]);
+  }, [variants, initialVariantId]);
+
+  // Tên hiển thị: ưu tiên tên biến thể đang chọn
+  const displayName = currentVariant?.name || product?.name;
+
+  // ✅ Update UI và navigate khi variant thay đổi (khi người dùng chọn attribute)
+  // CHỈ chạy khi variant ID thay đổi, KHÔNG chạy khi selectedColor thay đổi
+  const prevVariantIdRef = useRef(currentVariant?.id || currentVariant?.variantId);
+  
+  useEffect(() => {
+    if (!isInitializedRef.current) return;
+    if (!currentVariant) return; // Không có variant thì không làm gì
+    
+    const targetId = currentVariant.id || currentVariant.variantId;
+    if (!targetId) return;
+    
+    // ✅ Chỉ navigate khi variant ID thực sự thay đổi (không phải do re-render)
+    const prevId = prevVariantIdRef.current;
+    const isVariantChanged = String(targetId) !== String(prevId);
+    
+    if (!isVariantChanged) return; // Variant không đổi thì không làm gì
+    
+    console.log('🔄 Variant changed:', { from: prevId, to: targetId });
+    prevVariantIdRef.current = targetId;
+    
+    // ✅ Call onVariantChange để update UI ngay lập tức (QUAN TRỌNG: phải gọi TRƯỚC khi navigate)
+    if (typeof onVariantChange === 'function') {
+      // ✅ Đảm bảo có selectedColor từ variant mới nếu chưa có
+      const colorToUse = selectedColor || (currentVariant.colors && currentVariant.colors[0]) || null;
+      console.log('📞 Calling onVariantChange with:', { variantId: targetId, color: colorToUse?.colorName || colorToUse?.name });
+      onVariantChange(currentVariant, colorToUse);
+    }
+    
+    // ✅ Nếu variant khác với initialVariantId → navigate sang URL mới
+    if (String(targetId) !== String(initialVariantId)) {
+      navigate(`/product/${targetId}`, { replace: true });
+    }
+  }, [currentVariant?.id, currentVariant?.variantId, currentVariant, initialVariantId, navigate, onVariantChange, selectedColor]);
 
   const productInCart = isInCart(product?.id, currentOptions);
   const totalQuantityInCart = getProductQuantityInCart(product?.id, currentOptions);
 
   // ✅ GIÁ HIỂN THỊ (ưu tiên giá theo màu nếu có)
-  const displayPrice = (selectedColor?.price) || currentVariant?.price || product?.price;
-
-  // ✅ COLOR OPTIONS (từ variant.colors)
-  const colorOptions = currentVariant?.colors || [];
-
+  // Dùng state để track giá và chỉ update khi giá số thực sự thay đổi (tránh chớp)
+  const [displayPriceFormatted, setDisplayPriceFormatted] = useState(() => {
+    const price = (selectedColor?.price) || (currentVariant?.price) || (product?.price);
+    return price ? price.toLocaleString('vi-VN') : null;
+  });
+  
+  const prevPriceRef = useRef(null);
+  
+  // ✅ Chỉ update state khi giá số thực sự thay đổi
   useEffect(() => {
+    const newPrice = (selectedColor?.price) || (currentVariant?.price) || (product?.price);
+    
+    // Chỉ update khi giá số thực sự thay đổi
+    if (newPrice !== prevPriceRef.current) {
+      prevPriceRef.current = newPrice;
+      const formatted = newPrice ? newPrice.toLocaleString('vi-VN') : null;
+      setDisplayPriceFormatted(formatted);
+    }
+  }, [
+    selectedColor?.price,
+    currentVariant?.price,
+    product?.price,
+  ]);
+
+  // ✅ COLOR OPTIONS (từ variant.colors) - Đảm bảo luôn lấy từ variant hiện tại
+  const colorOptions = useMemo(() => {
+    if (!currentVariant) {
+      console.log('⚠️ No currentVariant for colorOptions');
+      return [];
+    }
+    const colors = Array.isArray(currentVariant.colors) ? currentVariant.colors : [];
+    console.log('🎨 Color options from variant:', {
+      variantId: currentVariant.id || currentVariant.variantId,
+      colorsCount: colors.length,
+      colors: colors.map(c => c.colorName || c.name),
+    });
+    return colors;
+  }, [currentVariant?.id, currentVariant?.variantId, currentVariant?.colors]);
+
+  // ✅ Chỉ update màu khi variant thay đổi, KHÔNG override khi người dùng chọn màu
+  const prevVariantIdForColorRef = useRef(currentVariant?.id || currentVariant?.variantId);
+  
+  useEffect(() => {
+    if (!isInitializedRef.current) return;
+    
+    const currentVariantId = currentVariant?.id || currentVariant?.variantId;
+    const prevVariantId = prevVariantIdForColorRef.current;
+    
+    // ✅ CHỈ update màu khi variant ID thay đổi (không phải khi người dùng chọn màu)
+    if (String(currentVariantId) === String(prevVariantId)) return;
+    
+    prevVariantIdForColorRef.current = currentVariantId;
+    
     // Khi đổi variant, set lại màu đầu tiên nếu có
     if (colorOptions.length > 0) {
       // giữ màu đang chọn nếu vẫn tồn tại trong variant mới
-      const exists = selectedColor && colorOptions.find(c => c.colorName === selectedColor.colorName);
+      const exists = selectedColor && colorOptions.find(c => 
+        c.colorName === selectedColor.colorName || 
+        c.name === selectedColor.name ||
+        c._id === selectedColor._id ||
+        c.id === selectedColor.id
+      );
       setSelectedColor(exists || colorOptions[0]);
     } else {
       setSelectedColor(null);
     }
-  }, [currentVariant?.id, colorOptions.length]);
+  }, [currentVariant?.id, currentVariant?.variantId, colorOptions]);
 
   // ✅ SỬA LẠI - SỬ DỤNG USEMEMO ĐỂ TRÁNH RE-CREATE FUNCTION
   const handleAddToCart = useMemo(() => {
@@ -277,7 +359,7 @@ const ProductInfo = ({ product, variantsOverride = [], initialVariantId, isStore
       <div className="animate-in fade-in duration-700">
         <div className="flex items-center space-x-2 mb-2">
           <h1 className="text-2xl font-bold text-gray-900 transition-all duration-300 ease-in-out hover:text-blue-600">
-            {product?.name}
+            {displayName}
           </h1>
           {product?.badge && (
             <span className={`px-2 py-1 rounded text-xs font-medium text-white transition-all duration-300 ease-in-out transform hover:scale-110 ${
@@ -295,91 +377,91 @@ const ProductInfo = ({ product, variantsOverride = [], initialVariantId, isStore
 
       {/* Price */}
       <div className="space-y-1">
-        <div className="flex items-center space-x-3">
-          <span className="text-3xl font-bold text-red-600">
-            {displayPrice?.toLocaleString('vi-VN')}đ
+        <div className="flex items-center space-x-3 relative h-12">
+          <span className="text-3xl font-bold text-red-600 transition-opacity duration-200 ease-in-out">
+            {displayPriceFormatted ? `${displayPriceFormatted}đ` : '0đ'}
           </span>
         </div>
-        {selectedColor && (
-          <p className="text-sm text-gray-600">Màu: <span className="font-semibold text-gray-800">{selectedColor.colorName}</span></p>
-        )}
+        {/* Không lặp lại label màu ở đây để tránh dư chữ "Màu" */}
       </div>
 
       {/* ✅ DYNAMIC ATTRIBUTES - Tự động theo category */}
       {variantsLoading ? (
         <div className="text-gray-500 text-sm">Đang tải tùy chọn...</div>
-      ) : variationKeys.length > 0 ? (
+      ) : (
         <>
-          {variationKeys.map((attrKey, index) => {
-            const values = getAttributeValues(attrKey);
-            if (values.length === 0) return null;
+          {/* Thuộc tính phân loại (nếu có) */}
+          {variationKeys.length > 0 &&
+            variationKeys.map((attrKey) => {
+              const values = getAttributeValues(attrKey);
+              if (values.length === 0) return null;
 
-            const label = getAttributeLabel(attrKey);
+              const label = getAttributeLabel(attrKey);
 
-            return (
-              <div key={attrKey}>
-                <h3 className="text-sm font-medium text-gray-900 mb-2">
-                  {label}:
-                </h3>
-                <div className={`${values.length > 4 ? 'grid grid-cols-2 gap-2' : 'flex flex-wrap gap-2'}`}>
-                  {values.map((value) => (
-                    <button
-                      key={value}
-                      onClick={() => setSelectedAttributes(prev => ({ ...prev, [attrKey]: value }))}
-                      className={`px-4 py-2 rounded-lg border text-sm ${
-                        selectedAttributes[attrKey] === value
-                          ? 'border-blue-500 bg-blue-50 text-blue-700'
-                          : 'border-gray-300 text-gray-700'
-                      }`}
-                    >
-                      {value}
-                    </button>
-                  ))}
+              return (
+                <div key={attrKey}>
+                  <h3 className="text-sm font-medium text-gray-900 mb-2">
+                    {label}:
+                  </h3>
+                  <div className={`${values.length > 4 ? 'grid grid-cols-2 gap-2' : 'flex flex-wrap gap-2'}`}>
+                    {values.map((value) => (
+                      <button
+                        key={value}
+                        onClick={() => setSelectedAttributes(prev => ({ ...prev, [attrKey]: value }))}
+                        className={`px-4 py-2 rounded-lg border text-sm ${
+                          selectedAttributes[attrKey] === value
+                            ? 'border-blue-500 bg-blue-50 text-blue-700'
+                            : 'border-gray-300 text-gray-700'
+                        }`}
+                      >
+                        {value}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+              );
+            })}
+
+          {/* Color options từ colors array (hiển thị cả khi chỉ có 1 màu) */}
+          {colorOptions.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium text-gray-900 mb-2">Màu sắc:</h3>
+              <div className="flex flex-wrap gap-2">
+                {colorOptions.map((c) => {
+                  const colorKey = c._id ?? c.id ?? c.colorName ?? c.name;
+                  const selectedKey = selectedColor?._id ?? selectedColor?.id ?? selectedColor?.colorName ?? selectedColor?.name;
+                  const isSelected = Boolean(selectedKey && selectedKey === colorKey);
+
+                  return (
+                    <button
+                      key={c._id || c.id || c.colorName}
+                      onClick={() => setSelectedColor(c)}
+                      className={`px-4 py-2 rounded-lg border text-sm flex items-center gap-3 transition-all focus:outline-none focus:ring-0 ${
+                        isSelected
+                          ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm'
+                          : 'border-black bg-white text-gray-900 hover:border-blue-300 hover:text-blue-700'
+                      }`}
+                      title={c.colorName}
+                    >
+                      {c.image ? (
+                        <img src={c.image} alt={c.colorName} className="w-10 h-10 rounded object-cover" />
+                      ) : (
+                        <span className="w-10 h-10 rounded bg-gray-200 inline-block" />
+                      )}
+                      <div className="flex flex-col items-start leading-tight">
+                        <span className="font-semibold text-gray-900">{c.colorName || c.name || 'Không rõ màu'}</span>
+                        <span className="text-xs text-gray-600 font-medium">
+                          {((c.price ?? displayPriceValue)?.toLocaleString('vi-VN') || '0')}đ
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
-            );
-          })}
-
-        {/* Color options từ colors array (hiển thị tên + hình, không hiện giá; click đổi giá) */}
-        {colorOptions.length > 1 && (
-          <div>
-            <h3 className="text-sm font-medium text-gray-900 mb-2">Màu sắc:</h3>
-            <div className="flex flex-wrap gap-2">
-              {colorOptions.map((c) => {
-                const colorKey = c._id ?? c.id ?? c.colorName ?? c.name;
-                const selectedKey = selectedColor?._id ?? selectedColor?.id ?? selectedColor?.colorName ?? selectedColor?.name;
-                const isSelected = Boolean(selectedKey && selectedKey === colorKey);
-
-                return (
-                  <button
-                    key={c._id || c.id || c.colorName}
-                    onClick={() => setSelectedColor(c)}
-                    className={`px-4 py-2 rounded-lg border text-sm flex items-center gap-3 transition-all focus:outline-none focus:ring-0 ${
-                      isSelected
-                        ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm'
-                        : 'border-black bg-white text-gray-900 hover:border-blue-300 hover:text-blue-700'
-                    }`}
-                    title={c.colorName}
-                  >
-                    {c.image ? (
-                      <img src={c.image} alt={c.colorName} className="w-10 h-10 rounded object-cover" />
-                    ) : (
-                      <span className="w-10 h-10 rounded bg-gray-200 inline-block" />
-                    )}
-                    <div className="flex flex-col items-start leading-tight">
-                      <span className="font-semibold text-gray-900">{c.colorName || c.name || 'Không rõ màu'}</span>
-                      <span className="text-xs text-gray-600 font-medium">
-                        {(c.price ?? displayPrice)?.toLocaleString('vi-VN')}đ
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
             </div>
-          </div>
-        )}
+          )}
         </>
-      ) : null}
+      )}
 
       {/* Quantity - Chỉ hiển thị cho buyer */}
       {!isStoreView && (

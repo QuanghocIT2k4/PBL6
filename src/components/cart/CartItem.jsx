@@ -1,14 +1,16 @@
 import { useCart } from '../../context/CartContext';
 import { useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getAttributeLabel } from '../../utils/attributeLabels';
+import { getProductVariantById } from '../../services/common/productService';
 
 const CartItem = ({ item }) => {
   const { updateQuantity, removeFromCart, formatPrice, toggleItemSelected } = useCart();
   const navigate = useNavigate();
   const [isUpdating, setIsUpdating] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
+  const [variantDetail, setVariantDetail] = useState(null); // ✅ Lưu variant detail để lấy ảnh
 
   const handleGoDetail = () => {
     // Backend đã sửa: cart trả về productVariantId
@@ -66,6 +68,35 @@ const CartItem = ({ item }) => {
     return null;
   };
 
+  // ✅ Fetch variant detail để lấy đầy đủ thông tin bao gồm ảnh
+  useEffect(() => {
+    const fetchVariantImage = async () => {
+      const variantId = item?.productVariantId || item?.product?.id;
+      if (!variantId) return;
+      
+      // ✅ Nếu đã có variantDetail rồi thì không fetch lại
+      if (variantDetail) return;
+      
+      // ✅ Nếu đã có ảnh từ item.product thì không cần fetch
+      const variant = item.product || item.variant || item;
+      if (variant?.imageUrl || variant?.image || variant?.primaryImage || (Array.isArray(variant?.images) && variant.images.length > 0)) {
+        return;
+      }
+      
+      try {
+        const result = await getProductVariantById(variantId);
+        if (result?.success && result.data) {
+          setVariantDetail(result.data);
+        }
+      } catch (error) {
+        console.error('Error fetching variant detail:', error);
+      }
+    };
+    
+    fetchVariantImage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item?.productVariantId, item?.product?.id]);
+
   const colorPrice = resolveColorPrice();
   const basePrice = item.product?.price 
     ? (typeof item.product.price === 'number' 
@@ -95,28 +126,67 @@ const CartItem = ({ item }) => {
       <button
         type="button"
         onClick={handleGoDetail}
-        className="w-20 h-20 bg-gray-100 rounded-md flex items-center justify-center flex-shrink-0 hover:ring-2 hover:ring-blue-200 transition"
+        className="w-20 h-20 bg-gray-100 rounded-md flex items-center justify-center flex-shrink-0 hover:ring-2 hover:ring-blue-200 transition overflow-hidden"
         aria-label="Xem chi tiết sản phẩm"
       >
         {(() => {
-          // ✅ Ưu tiên: image > primaryImage > images[0]
-          const imageUrl = item.product.image || item.product.primaryImage || (item.product.images && item.product.images[0]);
+          // ✅ DỮ LIỆU CART LÀ VARIANT, KHÔNG PHẢI PRODUCT
+          // item.product thực ra là variant từ backend
+          // variantDetail là variant đầy đủ được fetch từ API
+          const variant = variantDetail || item.product || item.variant || item;
           
-          if (imageUrl && (imageUrl.startsWith('http') || imageUrl.startsWith('/'))) {
+          // ✅ Ưu tiên lấy hình ảnh từ nhiều nguồn:
+          // 1. Hình ảnh từ màu đã chọn (nếu có)
+          // 2. Hình ảnh từ variant detail (đã fetch)
+          // 3. Hình ảnh từ variant trong cart (imageUrl, image, primaryImage, images[0])
+          let imageUrl = null;
+          
+          // ✅ Tìm hình ảnh từ màu đã chọn
+          if (variant?.colors && Array.isArray(variant.colors)) {
+            const colorKey = item.options?.color || item.options?.colorName || item.options?.color_id || item.options?.colorId;
+            if (colorKey) {
+              const selectedColor = variant.colors.find(
+                (c) =>
+                  c?._id === colorKey ||
+                  c?.id === colorKey ||
+                  c?.colorId === colorKey ||
+                  c?.colorName === colorKey ||
+                  c?.name === colorKey
+              );
+              if (selectedColor) {
+                imageUrl = selectedColor.image || selectedColor.colorImage || selectedColor.imageUrl;
+              }
+            }
+          }
+          
+          // ✅ Nếu không có từ màu, lấy từ variant (ưu tiên variantDetail đã fetch)
+          if (!imageUrl && variant) {
+            imageUrl = variant.imageUrl ||        // Từ backend cart
+                      variant.image || 
+                      variant.primaryImage || 
+                      (Array.isArray(variant.images) && variant.images.length > 0 && variant.images[0]) ||
+                      variant.variantImage;
+          }
+          
+          // ✅ Kiểm tra và hiển thị hình ảnh
+          if (imageUrl && (imageUrl.startsWith('http') || imageUrl.startsWith('/') || imageUrl.startsWith('data:'))) {
             return (
               <img
                 src={imageUrl}
-                alt={item.product.name}
+                alt={variant.name || item.product?.name || 'Sản phẩm'}
                 className="w-full h-full object-cover rounded-md"
                 onError={(e) => {
                   e.target.onerror = null;
                   e.target.style.display = 'none';
-                  e.target.parentElement.innerHTML = '<span class="text-2xl">📦</span>';
+                  const parent = e.target.parentElement;
+                  if (parent) {
+                    parent.innerHTML = '<span class="text-2xl">📦</span>';
+                  }
                 }}
               />
             );
           } else {
-            return <span className="text-2xl">{imageUrl || '📦'}</span>;
+            return <span className="text-2xl">📦</span>;
           }
         })()}
       </button>

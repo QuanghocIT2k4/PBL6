@@ -157,227 +157,250 @@ const AdminDisputesPage = () => {
   }
 
   return (
-    <>
-      {/* Header */}
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">
-          Quản lý khiếu nại
-        </h1>
-        <p className="text-gray-600 mb-4">Giải quyết các khiếu nại giữa người mua và cửa hàng</p>
+    <div className="space-y-6 max-w-6xl mx-auto">
+      {/* Hero header */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-teal-200 via-cyan-200 to-blue-200 p-[1px] shadow-lg">
+        <div className="relative bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/60">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500 to-blue-500 text-white flex items-center justify-center shadow-md">
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm uppercase tracking-wide text-teal-700 font-semibold mb-1">Admin dashboard</p>
+                <h1 className="text-3xl font-bold text-gray-900">Quản lý khiếu nại</h1>
+                <p className="text-gray-700 mt-1">Giải quyết các khiếu nại giữa người mua và cửa hàng với giao diện rõ ràng, dễ quét.</p>
+              </div>
+            </div>
 
-        {/* Tabs phân loại người khởi tạo khiếu nại */}
-        <div className="inline-flex rounded-lg border border-gray-200 bg-white overflow-hidden text-sm mb-2">
-          <button
-            type="button"
-            onClick={() => {
-              setInitiatorTab('BUYER_DISPUTES');
-              setDisputeTypeFilter('RETURN_REJECTION');
-              setCurrentPage(0);
-            }}
-            className={`px-4 py-2 border-r border-gray-200 ${
-              initiatorTab === 'BUYER_DISPUTES'
-                ? 'bg-blue-500 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            Người mua
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setInitiatorTab('STORE_DISPUTES');
-              setDisputeTypeFilter('RETURN_QUALITY');
-              setCurrentPage(0);
-            }}
-            className={`px-4 py-2 ${
-              initiatorTab === 'STORE_DISPUTES'
-                ? 'bg-blue-500 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            Cửa hàng
-          </button>
+            {/* Tabs phân loại người khởi tạo khiếu nại */}
+            <div className="inline-flex rounded-xl border border-gray-200 bg-white/80 shadow-sm overflow-hidden text-sm">
+              <button
+                type="button"
+                onClick={() => {
+                  setInitiatorTab('BUYER_DISPUTES');
+                  setDisputeTypeFilter('RETURN_REJECTION');
+                  setCurrentPage(0);
+                }}
+                className={`px-4 py-2 transition-all ${
+                  initiatorTab === 'BUYER_DISPUTES'
+                    ? 'bg-blue-500 text-white shadow-inner font-semibold'
+                    : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                Người mua
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setInitiatorTab('STORE_DISPUTES');
+                  setDisputeTypeFilter('RETURN_QUALITY');
+                  setCurrentPage(0);
+                }}
+                className={`px-4 py-2 transition-all ${
+                  initiatorTab === 'STORE_DISPUTES'
+                    ? 'bg-blue-500 text-white shadow-inner font-semibold'
+                    : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                Cửa hàng
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
-          {/* Filters */}
-          <div className="mb-6 flex gap-2 flex-wrap">
+      {/* Filters */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+        <p className="text-sm font-semibold text-gray-800 mb-3">Trạng thái xử lý</p>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => {
+              setStatusFilter(null);
+              // Reset dispute type theo tab hiện tại
+              setDisputeTypeFilter(
+                initiatorTab === 'STORE_DISPUTES' ? 'RETURN_QUALITY' : 'RETURN_REJECTION'
+              );
+            }}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-all border ${
+              statusFilter === null && disputeTypeFilter === null
+                ? 'bg-blue-500 text-white border-blue-500 shadow-sm shadow-blue-200'
+                : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+            }`}
+          >
+            Tất cả
+          </button>
+          {['OPEN', 'IN_REVIEW', 'RESOLVED'].map((status) => (
             <button
-              onClick={() => {
-                setStatusFilter(null);
-                // Reset dispute type theo tab hiện tại
-                setDisputeTypeFilter(
-                  initiatorTab === 'STORE_DISPUTES' ? 'RETURN_QUALITY' : 'RETURN_REJECTION'
-                );
-              }}
-              className={`px-4 py-2 rounded-lg transition ${
-                statusFilter === null && disputeTypeFilter === null
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-100'
+              key={status}
+              onClick={() => setStatusFilter(status)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all border ${
+                statusFilter === status
+                  ? 'bg-blue-500 text-white border-blue-500 shadow-sm shadow-blue-200'
+                  : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50'
               }`}
             >
-              Tất cả
+              {getStatusLabel(status)}
             </button>
-            {['OPEN', 'IN_REVIEW', 'RESOLVED'].map((status) => (
-              <button
-                key={status}
-                onClick={() => setStatusFilter(status)}
-                className={`px-4 py-2 rounded-lg transition ${
-                  statusFilter === status
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-white text-gray-700 hover:bg-gray-100'
-                }`}
+          ))}
+        </div>
+      </div>
+
+      {/* Disputes List */}
+      {isLoading ? (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-10 text-center">
+          <div className="inline-block animate-spin rounded-full h-9 w-9 border-b-2 border-blue-500"></div>
+          <p className="mt-3 text-gray-600 font-medium">Đang tải danh sách khiếu nại...</p>
+        </div>
+      ) : disputes.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-12 text-center">
+          <svg
+            className="mx-auto h-12 w-12 text-gray-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+            />
+          </svg>
+          <h3 className="mt-3 text-base font-semibold text-gray-900">Chưa có khiếu nại</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            Hiện tại không có khiếu nại nào cần xử lý.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {disputes.map((dispute) => {
+            const orderId = getIdFromRef(
+              dispute.order ||
+                dispute.orderId ||
+                dispute.orderRef ||
+                dispute.returnRequest?.order
+            );
+            const orderCode = orderId ? getOrderCode(orderId) : null;
+
+            return (
+              <div
+                key={dispute.id || dispute._id}
+                className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all p-6"
               >
-                {getStatusLabel(status)}
-              </button>
-            ))}
-            {/* Không cần nút filter loại khiếu nại nữa vì tab trên đã phân tách */}
-          </div>
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                  <div className="flex-1 space-y-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadge(
+                          dispute.status
+                        )}`}
+                      >
+                        {getStatusLabel(dispute.status)}
+                      </span>
+                      <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-semibold">
+                        {getDisputeTypeLabel(dispute.disputeType)}
+                      </span>
+                      <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-semibold">
+                        {getInitiatorLabel(dispute, initiatorTab)}
+                      </span>
+                      <span className="text-sm text-gray-500 flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-green-400"></span>
+                        {formatDate(dispute.createdAt)}
+                      </span>
+                      <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">
+                        {dispute.messages?.length || 0} tin nhắn
+                      </span>
+                    </div>
 
-          {/* Disputes List */}
-          {isLoading ? (
-            <div className="text-center py-12">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-              <p className="mt-2 text-gray-600">Đang tải...</p>
-            </div>
-          ) : disputes.length === 0 ? (
-            <div className="bg-white rounded-lg shadow p-12 text-center">
-              <svg
-                className="mx-auto h-12 w-12 text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-              <h3 className="mt-2 text-sm font-medium text-gray-900">Chưa có khiếu nại</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                Hiện tại không có khiếu nại nào cần xử lý.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {disputes.map((dispute) => {
-                const orderId = getIdFromRef(
-                  dispute.order ||
-                    dispute.orderId ||
-                    dispute.orderRef ||
-                    dispute.returnRequest?.order
-                );
-                const orderCode = orderId ? getOrderCode(orderId) : null;
-
-                return (
-                  <div
-                    key={dispute.id || dispute._id}
-                    className="bg-white rounded-lg shadow p-6 hover:shadow-md transition"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-3">
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadge(
-                              dispute.status
-                            )}`}
-                          >
-                            {getStatusLabel(dispute.status)}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-700">
+                      <p className="flex items-center gap-2">
+                        <span className="font-semibold text-gray-900">Số tin nhắn:</span>
+                        {dispute.messages?.length || 0}
+                      </p>
+                      <p className="flex items-center gap-2">
+                        <span className="font-semibold text-gray-900">Khởi tạo:</span>
+                        {getInitiatorLabel(dispute, initiatorTab)}
+                      </p>
+                      {orderId && (
+                        <p className="flex items-center gap-2">
+                          <span className="font-semibold text-gray-900">Đơn hàng:</span>
+                          <span className="font-mono text-blue-600">{orderCode}</span>
+                        </p>
+                      )}
+                      {dispute.buyer && (
+                        <p className="flex items-center gap-2">
+                          <span className="font-semibold text-gray-900">Người mua:</span>
+                          {dispute.buyer.name || dispute.buyer.email || 'N/A'}
+                        </p>
+                      )}
+                      {dispute.store && (
+                        <p className="flex items-center gap-2">
+                          <span className="font-semibold text-gray-900">Cửa hàng:</span>
+                          {dispute.store.storeName || dispute.store.name || 'N/A'}
+                        </p>
+                      )}
+                      {dispute.finalDecision && (
+                        <p className="flex items-center gap-2 md:col-span-2">
+                          <span className="font-semibold text-gray-900">Kết quả:</span>
+                          <span className="font-semibold text-green-700">
+                            {getComplaintResult(dispute) || dispute.finalDecision}
                           </span>
-                          <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
-                            {getDisputeTypeLabel(dispute.disputeType)}
-                          </span>
-                          <span className="text-sm text-gray-500">
-                            {formatDate(dispute.createdAt)}
-                          </span>
-                        </div>
-
-                        <div className="mb-3">
-                          <p className="text-sm text-gray-600 mb-1">
-                            <span className="font-medium">Số tin nhắn:</span>{' '}
-                            {dispute.messages?.length || 0}
-                          </p>
-                          <p className="text-sm text-gray-600 mb-1">
-                            <span className="font-medium">Người khởi tạo khiếu nại:</span>{' '}
-                            {getInitiatorLabel(dispute, initiatorTab)}
-                          </p>
-                          {orderId && (
-                            <p className="text-sm text-gray-600 mb-1">
-                              <span className="font-medium">Đơn hàng:</span>{' '}
-                              <span className="font-mono">{orderCode}</span>
-                            </p>
-                          )}
-                          {dispute.buyer && (
-                            <p className="text-sm text-gray-600">
-                              <span className="font-medium">Người mua:</span>{' '}
-                              {dispute.buyer.name || dispute.buyer.email || 'N/A'}
-                            </p>
-                          )}
-                          {dispute.store && (
-                            <p className="text-sm text-gray-600">
-                              <span className="font-medium">Cửa hàng:</span>{' '}
-                              {dispute.store.storeName || dispute.store.name || 'N/A'}
-                            </p>
-                          )}
-                          {dispute.finalDecision && (
-                            <p className="text-sm text-gray-600">
-                              <span className="font-medium">Kết quả:</span>{' '}
-                              <span className="font-semibold">{getComplaintResult(dispute) || dispute.finalDecision}</span>
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-3 mt-2">
-                          <Link
-                            to={`/admin-dashboard/disputes/${dispute.id || dispute._id}`}
-                            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm"
-                          >
-                            Xem & xử lý khiếu nại
-                          </Link>
-                          {/* Button xem chi tiết đơn hàng liên quan (nếu có) */}
-                          {orderId && (
-                            <Link
-                              to={`/orders/${orderId}`}
-                              className="px-4 py-2 text-sm font-semibold bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors"
-                            >
-                              Xem chi tiết đơn hàng #{orderCode}
-                            </Link>
-                          )}
-                        </div>
-                      </div>
+                        </p>
+                      )}
                     </div>
                   </div>
-                );
-              })}
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex justify-center gap-2 mt-6">
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
-                    disabled={currentPage === 0}
-                    className="px-4 py-2 bg-white rounded-lg border disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                  >
-                    Trước
-                  </button>
-                  <span className="px-4 py-2 text-gray-700">
-                    Trang {currentPage + 1} / {totalPages}
-                  </span>
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
-                    disabled={currentPage >= totalPages - 1}
-                    className="px-4 py-2 bg-white rounded-lg border disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                  >
-                    Sau
-                  </button>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Link
+                      to={`/admin-dashboard/disputes/${dispute.id || dispute._id}`}
+                      className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm font-semibold shadow-sm"
+                    >
+                      Xem & xử lý khiếu nại
+                    </Link>
+                    {/* Button xem chi tiết đơn hàng liên quan (nếu có) */}
+                    {orderId && (
+                      <Link
+                        to={`/admin-dashboard/orders/${orderId}`}
+                        state={{ from: 'disputes' }}
+                        className="px-4 py-2 text-sm font-semibold bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors"
+                      >
+                        Xem chi tiết đơn hàng #{orderCode}
+                      </Link>
+                    )}
+                  </div>
                 </div>
-              )}
+              </div>
+            );
+          })}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex justify-center items-center gap-2 mt-2">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+                disabled={currentPage === 0}
+                className="px-4 py-2 bg-white rounded-lg border disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 shadow-sm"
+              >
+                Trước
+              </button>
+              <span className="px-4 py-2 text-gray-800 font-semibold rounded-lg bg-white border border-gray-200 shadow-sm">
+                Trang {currentPage + 1} / {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={currentPage >= totalPages - 1}
+                className="px-4 py-2 bg-white rounded-lg border disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 shadow-sm"
+              >
+                Sau
+              </button>
             </div>
           )}
-
-    </>
+        </div>
+      )}
+    </div>
   );
 };
 

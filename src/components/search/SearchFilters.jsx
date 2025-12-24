@@ -8,7 +8,7 @@ const SearchFilters = ({ onFiltersChange, initialFilters = {}, currentProducts =
     category: 'all',
     minPrice: '',
     maxPrice: '',
-    sortBy: 'relevance',
+    sortBy: 'newest',
     brands: [],
     ...initialFilters
   });
@@ -108,6 +108,7 @@ const SearchFilters = ({ onFiltersChange, initialFilters = {}, currentProducts =
   const categories = apiCategories;
 
   const sortOptions = [
+    { key: 'newest', name: 'Mới nhất' },
     { key: 'relevance', name: 'Liên quan nhất' },
     { key: 'price-asc', name: 'Giá thấp đến cao' },
     { key: 'price-desc', name: 'Giá cao đến thấp' },
@@ -125,7 +126,7 @@ const SearchFilters = ({ onFiltersChange, initialFilters = {}, currentProducts =
       category: 'all',
       minPrice: '',
       maxPrice: '',
-      sortBy: 'relevance',
+      sortBy: 'newest',
       brands: []
     };
     setFilters(defaultFilters);

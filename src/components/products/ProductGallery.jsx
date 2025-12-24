@@ -26,6 +26,15 @@ const ProductGallery = ({ product, images = [] }) => {
     else if (product.images && Array.isArray(product.images) && product.images.length > 0) {
       galleryImages = product.images;
     }
+    // Fallback: ảnh theo màu (nếu có colors)
+    else if (Array.isArray(product.colors) && product.colors.length > 0) {
+      const colorImgs = product.colors
+        .map((c) => c.image || c.colorImage || c.imageUrl)
+        .filter(Boolean);
+      if (colorImgs.length > 0) {
+        galleryImages = colorImgs;
+      }
+    }
     // Last resort: getProductGallery util
     else {
       galleryImages = getProductGallery(product.id, product.category);

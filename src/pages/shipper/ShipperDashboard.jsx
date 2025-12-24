@@ -38,6 +38,8 @@ const ShipperDashboard = () => {
   const [historyPage, setHistoryPage] = useState(0);
   // Lưu trạng thái cục bộ cho đơn đang xử lý (PICKING/PICKED/SHIPPING) để tránh biến mất khi API không trả về
   const [processingLocal, setProcessingLocal] = useState([]);
+  // ✅ Track các shipment đang được xử lý để disable button và hiển thị loading
+  const [processingShipmentIds, setProcessingShipmentIds] = useState(new Set());
 
   // Update tab when URL changes
   useEffect(() => {
@@ -66,10 +68,10 @@ const ShipperDashboard = () => {
       revalidateOnFocus: true, // ✅ Bật lại revalidate khi focus vào tab để shipper thấy đơn mới
       refreshInterval: 0, // Tắt auto refresh
       onError: (error) => {
-        console.error('❌ [ShipperDashboard] Error fetching picking up shipments:', error);
+        // Error handled silently
       },
       onSuccess: (data) => {
-        console.log('✅ [ShipperDashboard] Picking up shipments loaded:', data);
+        // Success handled silently
       }
     }
   );
@@ -192,12 +194,10 @@ const ShipperDashboard = () => {
         // Nếu page hiện tại đã load đủ (có 15 đơn) và còn đơn để load, load page tiếp theo
         if (currentPageSize >= historyPageSize && currentLoadedCount < totalHistoryElements) {
           const nextPage = historyPage + 1;
-          console.log(`🔄 [ShipperDashboard] Tự động load page ${nextPage + 1}... (đã load ${currentLoadedCount}/${totalHistoryElements})`);
           setHistoryPage(nextPage);
         }
       } else if (totalHistoryElements > 0 && currentLoadedCount >= totalHistoryElements) {
         // Đã load hết, tắt auto load và hiển thị tất cả
-        console.log(`✅ [ShipperDashboard] Đã load hết ${currentLoadedCount} đơn`);
         setAutoLoadMore(false);
         setDisplayedHistoryCount(allLoadedHistoryShipments.length);
       } else if (totalHistoryElements === 0 && currentPageSize < historyPageSize) {
@@ -229,20 +229,6 @@ const ShipperDashboard = () => {
     return shipment.status === 'READY_TO_PICK' && !shipment.shipperId && !shipment.shipper;
   });
   
-  // ✅ Debug log để xem data
-  useEffect(() => {
-    console.log('📊 [ShipperDashboard] Picking up data:', {
-      pickingUpData,
-      success: pickingUpData?.success,
-      data: pickingUpData?.data,
-      content: pickingUpData?.data?.content,
-      isArray: Array.isArray(pickingUpData?.data?.content),
-      pickingUpShipments,
-      count: pickingUpShipments.length,
-      error: pickingUpError,
-      isLoading: pickingUpLoading
-    });
-  }, [pickingUpData, pickingUpShipments, pickingUpError, pickingUpLoading]);
   
   // ✅ Dùng allLoadedHistoryShipments thay vì historyData trực tiếp
   const historyShipments = allLoadedHistoryShipments;
@@ -367,40 +353,6 @@ const ShipperDashboard = () => {
       allByStatus[status] = (allByStatus[status] || 0) + 1;
     });
 
-    console.log('📋 [ShipperDashboard] ========== THỐNG KÊ ĐƠN THEO STATUS ==========');
-    console.log('📦 ĐƠN CHỜ NHẬN (pickingUpShipments):', {
-      total: pickingUpShipments.length,
-      byStatus: pickingUpByStatus,
-      shipments: pickingUpShipments.map(s => ({ id: s?.id, status: s?.status, orderCode: s?.order?.orderNumber }))
-    });
-    console.log('🚚 ĐƠN ĐANG NHẬN/GIAO (processingShipments):', {
-      total: processingShipments.length,
-      byStatus: processingByStatus,
-      shipments: processingShipments.map(s => ({ id: s?.id, status: s?.status, orderCode: s?.order?.orderNumber }))
-    });
-    console.log('📜 LỊCH SỬ (historyShipments):', {
-      total: historyShipments.length,
-      byStatus: historyByStatus,
-      filtered: allFilteredHistoryShipments.length,
-      shipments: historyShipments.map(s => ({ id: s?.id, status: s?.status, orderCode: s?.order?.orderNumber }))
-    });
-    console.log('📊 TỔNG HỢP TẤT CẢ ĐƠN:', {
-      total: allShipments.length,
-      byStatus: allByStatus,
-      summary: {
-        'READY_TO_PICK': allByStatus['READY_TO_PICK'] || 0,
-        'PICKING_UP': allByStatus['PICKING_UP'] || 0,
-        'PICKING': allByStatus['PICKING'] || 0,
-        'PICKED': allByStatus['PICKED'] || 0,
-        'SHIPPING': allByStatus['SHIPPING'] || 0,
-        'RETURNING': allByStatus['RETURNING'] || 0,
-        'DELIVERED': allByStatus['DELIVERED'] || 0,
-        'RETURNED': allByStatus['RETURNED'] || 0,
-        'FAILED': allByStatus['FAILED'] || 0,
-        'DELIVERED_FAIL': allByStatus['DELIVERED_FAIL'] || 0,
-      }
-    });
-    console.log('📋 [ShipperDashboard] ============================================');
   }, [pickingUpShipments, processingShipments, historyShipments, allFilteredHistoryShipments]);
   
   const stats = {
@@ -423,133 +375,412 @@ const ShipperDashboard = () => {
   };
 
   // Handle pickup shipment (shipper nhận đơn)
+  // ✅ Tối ưu: Optimistic update để UI phản hồi ngay
   const handlePickupShipment = async (shipment) => {
     const shipmentId = shipment?.id || shipment;
-    console.log('🔍 [handlePickupShipment] Called with shipmentId:', shipmentId);
 
-    const result = await pickupShipment(shipmentId);
-    if (result.success) {
-      showToast('Nhận đơn hàng thành công!', 'success');
-      // ✅ Đưa đơn vừa nhận sang danh sách đang nhận/giao (PICKING_UP)
-      setProcessingLocal((prev) => {
-        const next = prev.filter((s) => s.id !== shipmentId);
-        const baseShipment =
-          typeof shipment === 'object' && shipment
-            ? shipment
-            : { id: shipmentId, status: 'PICKING_UP' };
-        next.push({ ...baseShipment, status: 'PICKING_UP' });
-        return next;
-      });
+    // ✅ OPTIMISTIC UPDATE: Cập nhật UI ngay lập tức
+    const baseShipment =
+      typeof shipment === 'object' && shipment
+        ? shipment
+        : { id: shipmentId, status: 'PICKING_UP' };
+    
+    // ✅ Đưa đơn vừa nhận sang danh sách đang nhận/giao (PICKING_UP) ngay
+    setProcessingLocal((prev) => {
+      const next = prev.filter((s) => s.id !== shipmentId);
+      next.push({ ...baseShipment, status: 'PICKING_UP' });
+      return next;
+    });
+    mutatePickingUp();
+    mutateHistory();
+    mutateLatestHistory();
+    
+    // ✅ Gọi API trong background
+    try {
+      const result = await pickupShipment(shipmentId);
+      if (result.success) {
+        showToast('Nhận đơn hàng thành công!', 'success');
+        mutatePickingUp();
+        mutateHistory();
+        mutateLatestHistory();
+      } else {
+        // ✅ Rollback nếu API fail
+        setProcessingLocal((prev) => prev.filter((s) => s.id !== shipmentId));
+        showToast(result.error || 'Không thể nhận đơn hàng', 'error');
+        mutatePickingUp();
+        mutateHistory();
+        mutateLatestHistory();
+      }
+    } catch (error) {
+      // ✅ Rollback nếu có lỗi
+      setProcessingLocal((prev) => prev.filter((s) => s.id !== shipmentId));
+      showToast('Có lỗi xảy ra khi nhận đơn hàng', 'error');
       mutatePickingUp();
-      // ✅ Refresh history để backend trả về đơn với status mới
       mutateHistory();
-    } else {
-      showToast(result.error, 'error');
+      mutateLatestHistory();
     }
   };
 
   // Handle start shipping
+  // ✅ Tối ưu: Optimistic update với loading state
   const handleStartShipping = async (shipment) => {
-    if (shipment?.isReturnShipment) {
+    // ✅ Xử lý cả trường hợp nhận shipment object hoặc shipmentId
+    const shipmentObj = typeof shipment === 'object' ? shipment : { id: shipment };
+    const shipmentId = shipmentObj.id || shipment;
+    
+    if (shipmentObj?.isReturnShipment) {
       showToast('Đơn trả hàng về shop: dùng nút "Bắt đầu trả hàng", không dùng nút giao hàng thường.', 'warning');
       return;
     }
-    const result = await startShipping(shipment.id);
-    if (result.success) {
-      showToast('Bắt đầu giao hàng thành công!', 'success');
-      setProcessingLocal((prev) => {
-        const next = prev.filter((s) => s.id !== shipment.id);
-        next.push({ ...shipment, status: 'SHIPPING' });
-        return next;
-      });
+    
+    // ✅ Set loading state
+    setProcessingShipmentIds(prev => new Set(prev).add(shipmentId));
+    
+    // ✅ Delay nhỏ để UI mượt mà hơn (300ms)
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    // ✅ OPTIMISTIC UPDATE: Cập nhật UI ngay lập tức
+    const originalProcessingLocal = [...processingLocal];
+    setProcessingLocal((prev) => {
+      const next = prev.filter((s) => s.id !== shipmentId);
+      next.push({ ...shipmentObj, status: 'SHIPPING' });
+      return next;
+    });
+    mutatePickingUp();
+    mutateHistory();
+    mutateLatestHistory();
+    
+    // ✅ Gọi API trong background
+    try {
+      const result = await startShipping(shipmentId);
+      if (result.success) {
+        showToast('Bắt đầu giao hàng thành công!', 'success');
+        mutatePickingUp();
+        mutateHistory();
+        mutateLatestHistory();
+      } else {
+        // ✅ Rollback nếu API fail
+        setProcessingLocal(originalProcessingLocal);
+        showToast(result.error || 'Không thể bắt đầu giao hàng', 'error');
+        mutatePickingUp();
+        mutateHistory();
+        mutateLatestHistory();
+      }
+    } catch (error) {
+      // ✅ Rollback nếu có lỗi
+      setProcessingLocal(originalProcessingLocal);
+      showToast('Có lỗi xảy ra khi bắt đầu giao hàng', 'error');
       mutatePickingUp();
       mutateHistory();
-    } else {
-      showToast(result.error, 'error');
+      mutateLatestHistory();
+    } finally {
+      // ✅ Remove loading state
+      setProcessingShipmentIds(prev => {
+        const next = new Set(prev);
+        next.delete(shipmentId);
+        return next;
+      });
     }
   };
 
   // Handle start returning (for return shipments)
+  // ✅ Tối ưu: Optimistic update với loading state
   const handleStartReturning = async (shipment) => {
-    const result = await startReturning(shipment.id);
-    if (result.success) {
-      showToast(result.message || 'Bắt đầu trả hàng thành công!', 'success');
-      setProcessingLocal((prev) => {
-        const next = prev.filter((s) => s.id !== shipment.id);
-        next.push({ ...shipment, status: 'RETURNING' });
-        return next;
-      });
+    const shipmentId = shipment.id;
+    
+    // ✅ Set loading state
+    setProcessingShipmentIds(prev => new Set(prev).add(shipmentId));
+    
+    // ✅ Delay nhỏ để UI mượt mà hơn (300ms)
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    // ✅ OPTIMISTIC UPDATE: Cập nhật UI ngay lập tức
+    const originalProcessingLocal = [...processingLocal];
+    setProcessingLocal((prev) => {
+      const next = prev.filter((s) => s.id !== shipmentId);
+      next.push({ ...shipment, status: 'RETURNING' });
+      return next;
+    });
+    mutatePickingUp();
+    mutateHistory();
+    mutateLatestHistory();
+    
+    // ✅ Gọi API trong background
+    try {
+      const result = await startReturning(shipmentId);
+      if (result.success) {
+        showToast(result.message || 'Bắt đầu trả hàng thành công!', 'success');
+        mutatePickingUp();
+        mutateHistory();
+        mutateLatestHistory();
+      } else {
+        // ✅ Rollback nếu API fail
+        setProcessingLocal(originalProcessingLocal);
+        showToast(result.error || 'Không thể bắt đầu trả hàng', 'error');
+        mutatePickingUp();
+        mutateHistory();
+        mutateLatestHistory();
+      }
+    } catch (error) {
+      // ✅ Rollback nếu có lỗi
+      setProcessingLocal(originalProcessingLocal);
+      showToast('Có lỗi xảy ra khi bắt đầu trả hàng', 'error');
       mutatePickingUp();
       mutateHistory();
-    } else {
-      showToast(result.error, 'error');
+      mutateLatestHistory();
+    } finally {
+      // ✅ Remove loading state
+      setProcessingShipmentIds(prev => {
+        const next = new Set(prev);
+        next.delete(shipmentId);
+        return next;
+      });
     }
   };
 
   // Handle complete shipment
+  // ✅ Tối ưu: Optimistic update với loading state
   const handleCompleteShipment = async (shipment) => {
-    if (shipment?.isReturnShipment) {
+    // ✅ Xử lý cả trường hợp nhận shipment object hoặc shipmentId
+    const shipmentObj = typeof shipment === 'object' ? shipment : { id: shipment };
+    const shipmentId = shipmentObj.id || shipment;
+    
+    if (shipmentObj?.isReturnShipment) {
       showToast('Đơn trả hàng: dùng nút "Xác nhận đã trả hàng", không dùng nút hoàn thành giao hàng.', 'warning');
       return;
     }
-    const result = await completeShipment(shipment.id);
-    if (result.success) {
-      showToast('Hoàn thành giao hàng thành công!', 'success');
-      setProcessingLocal((prev) => prev.filter((s) => s.id !== shipment.id));
+    
+    // ✅ Set loading state
+    setProcessingShipmentIds(prev => new Set(prev).add(shipmentId));
+    
+    // ✅ Delay nhỏ để UI mượt mà hơn (300ms)
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    // ✅ OPTIMISTIC UPDATE: Remove shipment khỏi UI ngay (vì đã hoàn thành)
+    const originalProcessingLocal = [...processingLocal];
+    setProcessingLocal((prev) => prev.filter((s) => s.id !== shipmentId));
+    mutatePickingUp();
+    mutateHistory();
+    mutateLatestHistory();
+    
+    // ✅ Gọi API trong background
+    try {
+      const result = await completeShipment(shipmentId);
+      if (result.success) {
+        showToast('Hoàn thành giao hàng thành công!', 'success');
+        mutatePickingUp();
+        mutateHistory();
+        mutateLatestHistory();
+      } else {
+        // ✅ Rollback nếu API fail
+        setProcessingLocal(originalProcessingLocal);
+        showToast(result.error || 'Không thể hoàn thành giao hàng', 'error');
+        mutatePickingUp();
+        mutateHistory();
+        mutateLatestHistory();
+      }
+    } catch (error) {
+      // ✅ Rollback nếu có lỗi
+      setProcessingLocal(originalProcessingLocal);
+      showToast('Có lỗi xảy ra khi hoàn thành giao hàng', 'error');
       mutatePickingUp();
       mutateHistory();
-    } else {
-      showToast(result.error, 'error');
+      mutateLatestHistory();
+    } finally {
+      // ✅ Remove loading state
+      setProcessingShipmentIds(prev => {
+        const next = new Set(prev);
+        next.delete(shipmentId);
+        return next;
+      });
     }
   };
 
   // Handle confirm returned (for return shipments)
+  // ✅ Tối ưu: Optimistic update với loading state và force refresh history
   const handleConfirmReturned = async (shipment) => {
-    const result = await confirmReturned(shipment.id);
-    if (result.success) {
-      showToast(result.message || 'Đã xác nhận trả hàng thành công!', 'success');
-      setProcessingLocal((prev) => prev.filter((s) => s.id !== shipment.id));
+    const shipmentId = shipment.id;
+    
+    // ✅ Set loading state
+    setProcessingShipmentIds(prev => new Set(prev).add(shipmentId));
+    
+    // ✅ Delay nhỏ để UI mượt mà hơn (300ms)
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    // ✅ OPTIMISTIC UPDATE: Remove shipment khỏi UI ngay
+    const originalProcessingLocal = [...processingLocal];
+    setProcessingLocal((prev) => prev.filter((s) => s.id !== shipmentId));
+    mutatePickingUp();
+    
+    // ✅ Gọi API trong background
+    try {
+      const result = await confirmReturned(shipmentId);
+      if (result.success) {
+        showToast(result.message || 'Đã xác nhận trả hàng thành công!', 'success');
+        
+        // ✅ FORCE REFRESH HISTORY NGAY LẬP TỨC - Reset và reload từ đầu
+        setHistoryPage(0);
+        setAllLoadedHistoryShipments([]);
+        setDisplayedHistoryCount(15);
+        
+        // ✅ Force revalidate tất cả history queries
+        await Promise.all([
+          mutateHistory({ revalidate: true }),
+          mutateLatestHistory({ revalidate: true }),
+          mutatePickingUp({ revalidate: true })
+        ]);
+        
+        // ✅ Nếu đang ở tab history, chuyển sang tab history để thấy đơn mới
+        if (activeTab !== 'history') {
+          setActiveTab('history');
+          navigate('/shipper/history');
+        }
+      } else {
+        // ✅ Rollback nếu API fail
+        setProcessingLocal(originalProcessingLocal);
+        showToast(result.error || 'Không thể xác nhận trả hàng', 'error');
+        mutatePickingUp();
+        mutateHistory();
+        mutateLatestHistory();
+      }
+    } catch (error) {
+      // ✅ Rollback nếu có lỗi
+      setProcessingLocal(originalProcessingLocal);
+      showToast('Có lỗi xảy ra khi xác nhận trả hàng', 'error');
       mutatePickingUp();
       mutateHistory();
-    } else {
-      showToast(result.error, 'error');
+      mutateLatestHistory();
+    } finally {
+      // ✅ Remove loading state
+      setProcessingShipmentIds(prev => {
+        const next = new Set(prev);
+        next.delete(shipmentId);
+        return next;
+      });
     }
   };
 
   // Handle fail shipment
+  // ✅ Tối ưu: Optimistic update với loading state
   const handleFailShipment = async (shipment) => {
-    if (shipment?.isReturnShipment) {
+    // ✅ Xử lý cả trường hợp nhận shipment object hoặc shipmentId
+    const shipmentObj = typeof shipment === 'object' ? shipment : { id: shipment };
+    const shipmentId = shipmentObj.id || shipment;
+    
+    if (shipmentObj?.isReturnShipment) {
       showToast('Đơn trả hàng: không dùng nút "Giao thất bại" của đơn thường.', 'warning');
       return;
     }
     const reason = window.prompt('Nhập lý do giao hàng thất bại:');
     if (!reason) return;
     
-    const result = await failShipment(shipment.id, reason);
-    if (result.success) {
-      showToast('Đã đánh dấu giao hàng thất bại', 'success');
-      setProcessingLocal((prev) => prev.filter((s) => s.id !== shipment.id));
+    // ✅ Set loading state
+    setProcessingShipmentIds(prev => new Set(prev).add(shipmentId));
+    
+    // ✅ Delay nhỏ để UI mượt mà hơn (300ms)
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    // ✅ OPTIMISTIC UPDATE: Remove shipment khỏi UI ngay (vì đã fail)
+    const originalProcessingLocal = [...processingLocal];
+    setProcessingLocal((prev) => prev.filter((s) => s.id !== shipmentId));
+    mutatePickingUp();
+    mutateHistory();
+    mutateLatestHistory();
+    
+    // ✅ Gọi API trong background
+    try {
+      const result = await failShipment(shipmentId, reason);
+      if (result.success) {
+        showToast('Đã đánh dấu giao hàng thất bại', 'success');
+        mutatePickingUp();
+        mutateHistory();
+        mutateLatestHistory();
+      } else {
+        // ✅ Rollback nếu API fail
+        setProcessingLocal(originalProcessingLocal);
+        showToast(result.error || 'Không thể đánh dấu giao hàng thất bại', 'error');
+        mutatePickingUp();
+        mutateHistory();
+        mutateLatestHistory();
+      }
+    } catch (error) {
+      // ✅ Rollback nếu có lỗi
+      setProcessingLocal(originalProcessingLocal);
+      showToast('Có lỗi xảy ra khi đánh dấu giao hàng thất bại', 'error');
       mutatePickingUp();
       mutateHistory();
-    } else {
-      showToast(result.error, 'error');
+      mutateLatestHistory();
+    } finally {
+      // ✅ Remove loading state
+      setProcessingShipmentIds(prev => {
+        const next = new Set(prev);
+        next.delete(shipmentId);
+        return next;
+      });
     }
   };
 
   // Handle confirm picked (đã lấy xong hàng)
+  // ⚠️ QUAN TRỌNG: Khi confirm picked, shipment phải chuyển status thành PICKED
+  // KHÔNG được remove khỏi processingLocal, vì shipper còn cần click "Bắt đầu giao hàng"
+  // ✅ Tối ưu: Optimistic update với loading state
   const handleConfirmPicked = async (shipment) => {
-    const result = await confirmPicked(shipment.id);
-    if (result.success) {
-      showToast('Đã xác nhận lấy hàng thành công!', 'success');
-      setProcessingLocal((prev) => {
-        const next = prev.filter((s) => s.id !== shipment.id);
-        next.push({ ...shipment, status: 'PICKED' });
-        return next;
-      });
+    const shipmentId = shipment.id;
+    
+    // ✅ Set loading state
+    setProcessingShipmentIds(prev => new Set(prev).add(shipmentId));
+    
+    // ✅ Delay nhỏ để UI mượt mà hơn (300ms)
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    // ✅ OPTIMISTIC UPDATE: Update status thành PICKED ngay (KHÔNG remove)
+    const originalProcessingLocal = [...processingLocal];
+    
+    // ✅ Update status thành PICKED (vẫn giữ trong processingLocal)
+    setProcessingLocal((prev) => {
+      const next = prev.filter((s) => s.id !== shipmentId);
+      next.push({ ...shipment, status: 'PICKED' });
+      return next;
+    });
+    
+    // ✅ Refresh data ngay lập tức (không đợi API response)
+    mutatePickingUp();
+    mutateHistory();
+    mutateLatestHistory();
+    
+    // ✅ Gọi API trong background
+    try {
+      const result = await confirmPicked(shipmentId);
+      if (result.success) {
+        showToast('Đã xác nhận lấy hàng thành công!', 'success');
+        // ✅ Refresh lại để đảm bảo data đồng bộ
+        mutatePickingUp();
+        mutateHistory();
+        mutateLatestHistory();
+      } else {
+        // ✅ Rollback nếu API fail
+        setProcessingLocal(originalProcessingLocal);
+        showToast(result.error || 'Không thể xác nhận lấy hàng', 'error');
+        // ✅ Refresh lại để lấy data đúng
+        mutatePickingUp();
+        mutateHistory();
+        mutateLatestHistory();
+      }
+    } catch (error) {
+      // ✅ Rollback nếu có lỗi
+      setProcessingLocal(originalProcessingLocal);
+      showToast('Có lỗi xảy ra khi xác nhận lấy hàng', 'error');
+      // ✅ Refresh lại để lấy data đúng
       mutatePickingUp();
       mutateHistory();
-    } else {
-      showToast(result.error, 'error');
+      mutateLatestHistory();
+    } finally {
+      // ✅ Remove loading state
+      setProcessingShipmentIds(prev => {
+        const next = new Set(prev);
+        next.delete(shipmentId);
+        return next;
+      });
     }
   };
 
@@ -880,28 +1111,58 @@ const ShipperDashboard = () => {
                           )}
                           {shipment.status === 'PICKING_UP' && shipment.shipperId && (
                             <button
-                              onClick={() => handleStartShipping(shipment.id)}
-                              className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+                              onClick={() => handleStartShipping(shipment)}
+                              disabled={processingShipmentIds.has(shipment.id)}
+                              className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              <span>🚛</span>
-                              <span>Bắt đầu giao hàng</span>
+                              {processingShipmentIds.has(shipment.id) ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                  <span>Đang xử lý...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span>🚛</span>
+                                  <span>Bắt đầu giao hàng</span>
+                                </>
+                              )}
                             </button>
                           )}
                           {shipment.status === 'SHIPPING' && (
                             <>
                               <button
-                                onClick={() => handleCompleteShipment(shipment.id)}
-                                className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+                                onClick={() => handleCompleteShipment(shipment)}
+                                disabled={processingShipmentIds.has(shipment.id)}
+                                className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
-                                <span>✅</span>
-                                <span>Hoàn thành</span>
+                                {processingShipmentIds.has(shipment.id) ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                    <span>Đang xử lý...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span>✅</span>
+                                    <span>Hoàn thành</span>
+                                  </>
+                                )}
                               </button>
                               <button
-                                onClick={() => handleFailShipment(shipment.id)}
-                                className="px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl hover:from-red-700 hover:to-red-800 font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+                                onClick={() => handleFailShipment(shipment)}
+                                disabled={processingShipmentIds.has(shipment.id)}
+                                className="px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl hover:from-red-700 hover:to-red-800 font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
-                                <span>❌</span>
-                                <span>Giao thất bại</span>
+                                {processingShipmentIds.has(shipment.id) ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                    <span>Đang xử lý...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span>❌</span>
+                                    <span>Giao thất bại</span>
+                                  </>
+                                )}
                               </button>
                             </>
                           )}
@@ -1072,28 +1333,58 @@ const ShipperDashboard = () => {
                                 {['PICKING_UP', 'PICKING'].includes(shipment.status) && (
                                   <button
                                     onClick={() => handleConfirmPicked(shipment)}
-                                    className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+                                    disabled={processingShipmentIds.has(shipment.id)}
+                                    className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
-                                    <span>📦</span>
-                                    <span>Đã lấy hàng (trả)</span>
+                                    {processingShipmentIds.has(shipment.id) ? (
+                                      <>
+                                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                        <span>Đang xử lý...</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span>📦</span>
+                                        <span>Đã lấy hàng (trả)</span>
+                                      </>
+                                    )}
                                   </button>
                                 )}
                                 {shipment.status === 'PICKED' && (
                                   <button
                                     onClick={() => handleStartReturning(shipment)}
-                                    className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+                                    disabled={processingShipmentIds.has(shipment.id)}
+                                    className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
-                                    <span>🔁</span>
-                                    <span>Bắt đầu trả hàng</span>
+                                    {processingShipmentIds.has(shipment.id) ? (
+                                      <>
+                                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                        <span>Đang xử lý...</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span>🔁</span>
+                                        <span>Bắt đầu trả hàng</span>
+                                      </>
+                                    )}
                                   </button>
                                 )}
                                 {shipment.status === 'RETURNING' && (
                                   <button
                                     onClick={() => handleConfirmReturned(shipment)}
-                                    className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+                                    disabled={processingShipmentIds.has(shipment.id)}
+                                    className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
-                                    <span>✅</span>
-                                    <span>Xác nhận đã trả hàng</span>
+                                    {processingShipmentIds.has(shipment.id) ? (
+                                      <>
+                                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                        <span>Đang xử lý...</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span>✅</span>
+                                        <span>Xác nhận đã trả hàng</span>
+                                      </>
+                                    )}
                                   </button>
                                 )}
                               </>
@@ -1102,10 +1393,20 @@ const ShipperDashboard = () => {
                                 {['PICKING_UP', 'PICKING'].includes(shipment.status) && (
                                   <button
                                     onClick={() => handleConfirmPicked(shipment)}
-                                    className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-700 text-white rounded-xl hover:from-indigo-700 hover:to-blue-800 font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+                                    disabled={processingShipmentIds.has(shipment.id)}
+                                    className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-700 text-white rounded-xl hover:from-indigo-700 hover:to-blue-800 font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
-                                    <span>📦</span>
-                                    <span>Đã lấy hàng</span>
+                                    {processingShipmentIds.has(shipment.id) ? (
+                                      <>
+                                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                        <span>Đang xử lý...</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span>📦</span>
+                                        <span>Đã lấy hàng</span>
+                                      </>
+                                    )}
                                   </button>
                                 )}
                                 {shipment.status === 'PICKED' && (
@@ -1121,17 +1422,37 @@ const ShipperDashboard = () => {
                                   <>
                                     <button
                                       onClick={() => handleCompleteShipment(shipment)}
-                                      className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+                                      disabled={processingShipmentIds.has(shipment.id)}
+                                      className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                      <span>✅</span>
-                                      <span>Hoàn thành</span>
+                                      {processingShipmentIds.has(shipment.id) ? (
+                                        <>
+                                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                          <span>Đang xử lý...</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span>✅</span>
+                                          <span>Hoàn thành</span>
+                                        </>
+                                      )}
                                     </button>
                                     <button
                                       onClick={() => handleFailShipment(shipment)}
-                                      className="px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl hover:from-red-700 hover:to-red-800 font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+                                      disabled={processingShipmentIds.has(shipment.id)}
+                                      className="px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl hover:from-red-700 hover:to-red-800 font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                      <span>❌</span>
-                                      <span>Giao thất bại</span>
+                                      {processingShipmentIds.has(shipment.id) ? (
+                                        <>
+                                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                          <span>Đang xử lý...</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span>❌</span>
+                                          <span>Giao thất bại</span>
+                                        </>
+                                      )}
                                     </button>
                                   </>
                                 )}

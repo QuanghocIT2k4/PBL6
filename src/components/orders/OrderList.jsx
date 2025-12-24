@@ -19,7 +19,8 @@ const OrderList = () => {
   const pageSize = 10;
 
   // Fetch orders
-  const { data: ordersData, error: ordersError, mutate } = useSWR(
+  // ✅ Tối ưu SWR config để load nhanh hơn
+  const { data: ordersData, error: ordersError, isLoading, mutate } = useSWR(
     ['my-orders', currentPage, statusFilter],
     () => getMyOrders({
       page: currentPage,
@@ -28,7 +29,10 @@ const OrderList = () => {
     }),
     {
       revalidateOnFocus: false,
+      revalidateOnReconnect: false,
       keepPreviousData: true,
+      dedupingInterval: 2000, // ✅ Cache 2 giây để tránh duplicate requests
+      loadingTimeout: 5000, // ✅ Timeout sau 5 giây
     }
   );
 
@@ -36,37 +40,11 @@ const OrderList = () => {
   const totalPages = ordersData?.data?.page?.totalPages || ordersData?.data?.totalPages || 1;
   const totalOrders = ordersData?.data?.page?.totalElements || ordersData?.data?.totalElements || orders.length;
   
-  // ✅ DEBUG: Log đơn hàng gần nhất (đơn hàng đầu tiên)
-  if (orders.length > 0) {
-    const latestOrder = orders[0];
-    console.log('🔍 [OrderList] ===== ĐƠN HÀNG GẦN NHẤT =====');
-    console.log('🔍 [OrderList] Order ID:', latestOrder.id || latestOrder._id);
-    console.log('🔍 [OrderList] Full Order Object:', latestOrder);
-    console.log('🔍 [OrderList] Order Keys:', Object.keys(latestOrder));
-    console.log('🔍 [OrderList] platformDiscountAmount:', latestOrder.platformDiscountAmount);
-    console.log('🔍 [OrderList] storeDiscountAmount:', latestOrder.storeDiscountAmount);
-    console.log('🔍 [OrderList] totalDiscountAmount:', latestOrder.totalDiscountAmount);
-    console.log('🔍 [OrderList] promotions:', latestOrder.promotions);
-    console.log('🔍 [OrderList] promotions type:', typeof latestOrder.promotions);
-    console.log('🔍 [OrderList] promotions isArray:', Array.isArray(latestOrder.promotions));
-    if (latestOrder.promotions && Array.isArray(latestOrder.promotions)) {
-      latestOrder.promotions.forEach((promo, index) => {
-        console.log(`🔍 [OrderList] Promotion ${index}:`, promo);
-        console.log(`🔍 [OrderList] Promotion ${index} type:`, typeof promo);
-        if (promo && typeof promo === 'object') {
-          console.log(`🔍 [OrderList] Promotion ${index} keys:`, Object.keys(promo));
-          console.log(`🔍 [OrderList] Promotion ${index} $id:`, promo.$id);
-          console.log(`🔍 [OrderList] Promotion ${index} _id:`, promo._id);
-          console.log(`🔍 [OrderList] Promotion ${index} issuer:`, promo.issuer);
-          console.log(`🔍 [OrderList] Promotion ${index} code:`, promo.code);
-        }
-      });
-    }
-    console.log('🔍 [OrderList] platformPromotions:', latestOrder.platformPromotions);
-    console.log('🔍 [OrderList] promotionCode:', latestOrder.promotionCode);
-    console.log('🔍 [OrderList] appliedPromotion:', latestOrder.appliedPromotion);
-    console.log('🔍 [OrderList] ====================================');
-  }
+  // ✅ DEBUG: Chỉ log khi cần debug (comment lại để tăng performance)
+  // if (orders.length > 0 && process.env.NODE_ENV === 'development') {
+  //   const latestOrder = orders[0];
+  //   console.log('🔍 [OrderList] Latest Order ID:', latestOrder.id || latestOrder._id);
+  // }
 
   // Handle cancel order
   const handleCancel = async (order) => {
@@ -101,10 +79,14 @@ const OrderList = () => {
     { value: 'RETURNED', label: 'Đã trả hàng / Hoàn tiền', icon: '↩️' },
   ];
 
-  // Loading state
-  if (!ordersData && !ordersError) {
+  // Loading state - ✅ Hiển thị ngay lập tức để UX tốt hơn
+  if (isLoading || (!ordersData && !ordersError)) {
     return (
       <div className="space-y-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
+          <p className="text-gray-600">Đang tải danh sách đơn hàng...</p>
+        </div>
         {[1, 2, 3].map((i) => (
           <div key={i} className="bg-white rounded-lg border border-gray-200 p-6">
             <div className="animate-pulse space-y-4">

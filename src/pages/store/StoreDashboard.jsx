@@ -7,7 +7,6 @@ import { useStoreContext } from '../../context/StoreContext';
 import { useToast } from '../../context/ToastContext';
 import { getOrderCode } from '../../utils/displayCodeUtils';
 import Chart from '../../components/charts/Chart';
-import { getDashboardAnalytics } from '../../services/b2c/b2cAnalyticsService';
 import { getStoreOrders } from '../../services/b2c/b2cOrderService';
 import { countPromotionsByStatus } from '../../services/b2c/b2cPromotionService';
 import { countShipmentsByStatus } from '../../services/b2c/shipmentService';
@@ -25,26 +24,31 @@ import {
 const StoreDashboard = () => {
   const { currentStore, loading: storeLoading } = useStoreContext();
   
-  // ✅ Fetch dashboard analytics từ API
-  const { data: analyticsData, error: analyticsError, isLoading: analyticsLoading } = useSWR(
-    currentStore?.id ? ['dashboard-analytics', currentStore.id] : null,
-    () => getDashboardAnalytics(currentStore.id),
-    { revalidateOnFocus: false }
-  );
 
   // ✅ Fetch overview + revenue chart (new statistics APIs)
-  const { data: overviewData } = useSWR(
+  const { data: overviewData, error: overviewError } = useSWR(
     currentStore?.id ? ['overview-stats', currentStore.id] : null,
     () => getOverviewStatistics(currentStore.id),
-    { revalidateOnFocus: false }
+    { 
+      revalidateOnFocus: false,
+      onError: (error) => {
+        // Log error để debug
+        console.error('❌ [OVERVIEW API] Error:', error);
+        console.error('❌ [OVERVIEW API] Response:', error.response?.data);
+      }
+    }
   );
   const [bestSellingPeriod, setBestSellingPeriod] = useState('MONTH');
 
   // ✅ Fetch best-selling variants
-  const { data: bestSellingData, error: bestSellingError, isLoading: bestSellingLoading } = useSWR(
+  const { data: bestSellingData, error: bestSellingError, isLoading: bestSellingLoading, mutate: mutateBestSelling } = useSWR(
     currentStore?.id ? ['best-selling-variants', currentStore.id, bestSellingPeriod] : null,
     () => getBestSellingVariants(currentStore.id, 10, bestSellingPeriod),
-    { revalidateOnFocus: false }
+    { 
+      revalidateOnFocus: false,
+      revalidateIfStale: true, // ✅ Revalidate khi period thay đổi
+      dedupingInterval: 0, // ✅ Tắt deduping để luôn fetch khi period thay đổi
+    }
   );
   
   // TODO: Uncomment khi backend implement API /api/v1/b2c/statistics/products/chart-data
@@ -95,9 +99,21 @@ const StoreDashboard = () => {
     { revalidateOnFocus: false }
   );
 
-  const analytics = analyticsData?.success ? analyticsData.data : null;
+  // ✅ Đã xóa analytics vì API /api/v1/b2c/analytics/dashboard/{storeId} không tồn tại
+  // ✅ Sử dụng API /api/v1/b2c/statistics/overview thay thế
   const overview = overviewData?.success ? overviewData.data : {};
   const revenueTotal = overview?.totalRevenue ?? 0;
+  
+  // Debug: Log overview data để kiểm tra
+  if (overviewError) {
+    console.error('❌ [OVERVIEW] API Error:', overviewError);
+  }
+  if (overviewData && !overviewData.success) {
+    console.error('❌ [OVERVIEW] API returned error:', overviewData.error);
+  }
+  if (overview && Object.keys(overview).length > 0) {
+    console.log('✅ [OVERVIEW] Data received:', overview);
+  }
   const recentOrders = ordersData?.success ? (ordersData.data?.content || ordersData.data || []) : [];
   const orderCounts = orderCountData?.success ? orderCountData.data : {};
   const variantStockCounts = variantCountData?.success ? variantCountData.data : {}; // Stock status: IN_STOCK, LOW_STOCK, OUT_OF_STOCK
@@ -107,8 +123,19 @@ const StoreDashboard = () => {
   const bestSellingVariants = bestSellingData?.success ? (Array.isArray(bestSellingData.data) ? bestSellingData.data : []) : [];
 
   // Helper functions - phải định nghĩa trước khi sử dụng
-  const sumCounts = (obj = {}) =>
-    Object.values(obj).reduce((acc, val) => acc + (Number.isFinite(Number(val)) ? Number(val) : 0), 0);
+  // ✅ Sửa: Chỉ tính tổng các status thực tế, loại bỏ key "total", "TOTAL", "all", "ALL"
+  const sumCounts = (obj = {}, excludeKeys = ['total', 'TOTAL', 'all', 'ALL', 'sum', 'SUM']) => {
+    return Object.entries(obj).reduce((acc, [key, val]) => {
+      // ✅ Bỏ qua các key không phải status (total, all, sum, etc.)
+      const lowerKey = key.toLowerCase();
+      if (excludeKeys.includes(lowerKey)) {
+        return acc;
+      }
+      // ✅ Chỉ cộng các giá trị số hợp lệ
+      const numVal = Number.isFinite(Number(val)) ? Number(val) : 0;
+      return acc + numVal;
+    }, 0);
+  };
   
   const formatPrice = (price) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -183,11 +210,17 @@ const StoreDashboard = () => {
       SHIPPING: 'Đang giao',
       DELIVERED: 'Đã giao',
       FAILED: 'Thất bại',
+      RETURNED: 'Đã trả hàng',
+      PICKING: 'Đang lấy hàng',
+      READY_TO_PICK: 'Sẵn sàng lấy hàng',
       // Các key từ API có thể có
       pickingUp: 'Đang lấy hàng',
       shipping: 'Đang giao',
       delivered: 'Đã giao',
       failed: 'Thất bại',
+      returned: 'Đã trả hàng',
+      picking: 'Đang lấy hàng',
+      readyToPick: 'Sẵn sàng lấy hàng',
     },
   };
 
@@ -237,9 +270,11 @@ const StoreDashboard = () => {
       }
       
       if (type === 'shipments' || map[key]?.includes('vận chuyển')) {
-        if (upperKey.includes('PICKING_UP') || upperKey.includes('LẤY HÀNG')) return 'bg-blue-100 text-blue-800 border-blue-200';
+        if (upperKey.includes('PICKING_UP') || upperKey.includes('PICKING') || upperKey.includes('LẤY HÀNG')) return 'bg-blue-100 text-blue-800 border-blue-200';
+        if (upperKey.includes('READY_TO_PICK') || upperKey.includes('SẴN SÀNG')) return 'bg-cyan-100 text-cyan-800 border-cyan-200';
         if (upperKey.includes('SHIPPING') || upperKey.includes('ĐANG GIAO')) return 'bg-purple-100 text-purple-800 border-purple-200';
         if (upperKey.includes('DELIVERED') || upperKey.includes('ĐÃ GIAO')) return 'bg-green-100 text-green-800 border-green-200';
+        if (upperKey.includes('RETURNED') || upperKey.includes('TRẢ HÀNG')) return 'bg-orange-100 text-orange-800 border-orange-200';
         if (upperKey.includes('FAILED') || upperKey.includes('THẤT BẠI')) return 'bg-red-100 text-red-800 border-red-200';
       }
       
@@ -281,8 +316,12 @@ const StoreDashboard = () => {
         'upcoming': 'Sắp chạy',
         // Shipments
         'pickingup': 'Đang lấy hàng',
+        'picking': 'Đang lấy hàng',
+        'readytopick': 'Sẵn sàng lấy hàng',
+        'ready_to_pick': 'Sẵn sàng lấy hàng',
         'shipping': 'Đang giao',
         'delivered': 'Đã giao',
+        'returned': 'Đã trả hàng',
         'failed': 'Thất bại',
       };
       
@@ -309,7 +348,7 @@ const StoreDashboard = () => {
   };
 
   // Loading state
-  if (analyticsLoading || ordersLoading || storeLoading) {
+  if (ordersLoading || storeLoading) {
     return (
       <StoreStatusGuard currentStore={currentStore} pageName="bảng điều khiển" loading={true}>
         <StoreLayout>
@@ -324,8 +363,15 @@ const StoreDashboard = () => {
     );
   }
 
-  const displayCount = (val) => (val && val > 0 ? val : '');
-  const displayPrice = (val) => (val && val > 0 ? formatPrice(val) : '');
+  // ✅ Hiển thị số kể cả khi là 0 (không ẩn)
+  const displayCount = (val) => {
+    const num = Number(val) || 0;
+    return num > 0 ? num : 0; // Hiển thị 0 nếu không có dữ liệu
+  };
+  const displayPrice = (val) => {
+    const num = Number(val) || 0;
+    return num > 0 ? formatPrice(num) : formatPrice(0); // Hiển thị 0đ nếu không có dữ liệu
+  };
 
   const getOrderItems = (order) => order?.items || order?.orderItems || [];
   const getFirstItem = (order) => {
@@ -414,91 +460,22 @@ const StoreDashboard = () => {
                   </h1>
                   <p className="text-gray-600 text-base">Tổng quan về hoạt động của hàng</p>
                 </div>
-                {analytics?.revenueGrowth !== undefined && (
+                {overview?.revenueGrowth !== undefined && (
                   <div className="text-right bg-gradient-to-br from-green-50 to-emerald-50 px-4 py-3 rounded-xl border border-green-200">
                     <div className="text-sm text-gray-600 mb-1">Tăng trưởng:</div>
-                    <div className={`text-2xl font-bold ${analytics.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatGrowth(analytics.revenueGrowth)}
+                    <div className={`text-2xl font-bold ${overview.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatGrowth(overview.revenueGrowth)}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">So với tháng trước</div>
                   </div>
                 )}
               </div>
               
-              {/* Stats Cards - 4 Cards in Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-5">
-                {/* Tổng doanh thu */}
-                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border-2 border-green-200 hover:shadow-lg transition-all flex flex-col justify-center p-4">
-                  <div className="text-center">
-                    <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-emerald-400 rounded-xl flex items-center justify-center shadow-md mx-auto mb-3">
-                      <span className="text-3xl">💰</span>
-                    </div>
-                    <div className="text-sm font-medium text-gray-600 mb-1">Tổng doanh thu</div>
-                    {displayPrice(revenueTotal || 0) && (
-                      <div className="text-xl font-bold text-gray-900 mb-1">
-                        {displayPrice(revenueTotal || 0)}
-                      </div>
-                    )}
-                    {overview?.revenueGrowth !== undefined && (
-                      <div className={`text-xs font-medium ${overview.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {formatGrowth(overview.revenueGrowth)}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Đơn hàng mới */}
-                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl border-2 border-blue-200 hover:shadow-lg transition-all flex flex-col justify-center p-4">
-                  <div className="text-center">
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-cyan-400 rounded-xl flex items-center justify-center shadow-md mx-auto mb-3">
-                      <span className="text-3xl">📋</span>
-                    </div>
-                    <div className="text-sm font-medium text-gray-600 mb-1">Đơn hàng mới</div>
-                    {displayCount(analytics?.pendingOrders || 0) && (
-                      <div className="text-xl font-bold text-gray-900 mb-1">
-                        {displayCount(analytics?.pendingOrders || 0)}
-                      </div>
-                    )}
-                    <div className="text-xs text-blue-600 font-medium"></div>
-                  </div>
-                </div>
-
-                {/* Sản phẩm đang bán */}
-                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl border-2 border-purple-200 hover:shadow-lg transition-all flex flex-col justify-center p-4">
-                  <div className="text-center">
-                    <div className="w-12 h-12 bg-gradient-to-br from-purple-400 to-pink-400 rounded-xl flex items-center justify-center shadow-md mx-auto mb-3">
-                      <span className="text-3xl">📦</span>
-                    </div>
-                    <div className="text-sm font-medium text-gray-600 mb-1">Sản phẩm đang bán</div>
-                    {displayCount(analytics?.activeProducts || 0) && (
-                      <div className="text-xl font-bold text-gray-900 mb-1">
-                        {displayCount(analytics?.activeProducts || 0)}
-                      </div>
-                    )}
-                    <div className="text-xs text-purple-600 font-medium"></div>
-                  </div>
-                </div>
-
-                {/* Khách hàng */}
-                <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl border-2 border-orange-200 hover:shadow-lg transition-all flex flex-col justify-center p-4">
-                  <div className="text-center">
-                    <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-amber-400 rounded-xl flex items-center justify-center shadow-md mx-auto mb-3">
-                      <span className="text-3xl">👥</span>
-                    </div>
-                    <div className="text-sm font-medium text-gray-600 mb-1">Khách hàng mới</div>
-                    {displayCount(analytics?.totalCustomers || 0) && (
-                      <div className="text-xl font-bold text-gray-900 mb-1">
-                        {displayCount(analytics?.totalCustomers || 0)}
-                      </div>
-                    )}
-                    <div className="text-xs text-orange-600 font-medium"></div>
-                  </div>
-                </div>
-              </div>
+              {/* Tắt các card tổng hợp (doanh thu/đơn mới/sản phẩm/khách) theo yêu cầu */}
             </div>
           </div>
 
-          {/* Thống kê trạng thái nhanh */}
+          {/* Thống kê trạng thái nhanh (đưa lên gần đầu trang) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Đơn hàng */}
             <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl border-2 border-blue-200 p-6 shadow-lg hover:shadow-xl transition-all">
@@ -634,7 +611,11 @@ const StoreDashboard = () => {
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => setBestSellingPeriod('WEEK')}
+                  onClick={() => {
+                    setBestSellingPeriod('WEEK');
+                    // ✅ Force revalidate khi period thay đổi
+                    setTimeout(() => mutateBestSelling(), 100);
+                  }}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     bestSellingPeriod === 'WEEK'
                       ? 'bg-amber-500 text-white'
@@ -644,7 +625,11 @@ const StoreDashboard = () => {
                   Tuần
                 </button>
                 <button
-                  onClick={() => setBestSellingPeriod('MONTH')}
+                  onClick={() => {
+                    setBestSellingPeriod('MONTH');
+                    // ✅ Force revalidate khi period thay đổi
+                    setTimeout(() => mutateBestSelling(), 100);
+                  }}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     bestSellingPeriod === 'MONTH'
                       ? 'bg-amber-500 text-white'
@@ -654,7 +639,11 @@ const StoreDashboard = () => {
                   Tháng
                 </button>
                 <button
-                  onClick={() => setBestSellingPeriod('YEAR')}
+                  onClick={() => {
+                    setBestSellingPeriod('YEAR');
+                    // ✅ Force revalidate khi period thay đổi
+                    setTimeout(() => mutateBestSelling(), 100);
+                  }}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     bestSellingPeriod === 'YEAR'
                       ? 'bg-amber-500 text-white'
@@ -664,7 +653,11 @@ const StoreDashboard = () => {
                   Năm
                 </button>
                 <button
-                  onClick={() => setBestSellingPeriod('ALL')}
+                  onClick={() => {
+                    setBestSellingPeriod('ALL');
+                    // ✅ Force revalidate khi period thay đổi
+                    setTimeout(() => mutateBestSelling(), 100);
+                  }}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     bestSellingPeriod === 'ALL'
                       ? 'bg-amber-500 text-white'
